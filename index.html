@@ -126,6 +126,7 @@
         <span class="label">Sonido al fallar</span>
         <div class="seg" id="missSeg"><button data-v="on">Activado</button><button data-v="off">Apagado</button></div>
       </div>
+      <button class="link" id="openAdmin">Subir canciones a la biblioteca</button>
     </div>
   </section>
 
@@ -164,6 +165,24 @@
       </div>
       <p class="hint" id="lobbyStatus"></p>
       <button class="primary" id="startRound">Empezar</button>
+    </div>
+  </section>
+
+  <!-- ===== ADMIN UPLOAD ===== -->
+  <section class="screen panel-screen" id="s-admin" hidden>
+    <div class="panel wide">
+      <header class="bar"><button class="back" data-back>Volver</button><h2>Subir canciones</h2></header>
+      <p class="hint">Elige una carpeta con canciones de Clone Hero (puede tener muchas subcarpetas). Tu navegador convierte cada una y la sube a la biblioteca; no hace falta instalar nada.</p>
+      <div class="field">
+        <label class="label" for="adminCode">Código de administrador</label>
+        <input type="text" id="adminCode" autocomplete="off" spellcheck="false" placeholder="rock-xxxxxxxx">
+      </div>
+      <div class="row">
+        <label class="btn">Elegir carpeta<input type="file" id="adminFolder" webkitdirectory multiple></label>
+        <button id="adminUpload" disabled>Subir</button>
+      </div>
+      <ul class="uploads" id="adminList"></ul>
+      <p class="hint" id="adminStatus"></p>
     </div>
   </section>
 

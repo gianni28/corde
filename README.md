@@ -29,6 +29,8 @@ src/
   main.js       menús, HUD, input, flujo multijugador
 scripts/upload-songs.mjs   convierte y sube canciones
 supabase/schema.sql        tabla + bucket
+supabase/functions/admin-upload   Edge Function que firma subidas (protegida con código)
+src/admin.js               conversión de canciones en el navegador
 ```
 
 ## Puesta en marcha
@@ -40,7 +42,9 @@ supabase/schema.sql        tabla + bucket
    npm install
    npm run dev
    ```
-4. **Subir canciones** (convierte con ffmpeg, no hace falta instalarlo):
+4. **Subir canciones desde el navegador:** en Ajustes → *Subir canciones a la biblioteca* (o abre la página con `#admin`), escribe el código de administrador y elige una carpeta de canciones de Clone Hero. El navegador convierte cada canción (mezcla de pistas y MP3 con lamejs) y la sube a través de la Edge Function `admin-upload`, que firma las subidas con la service role sin exponerla.
+
+   **O con el script** (convierte con ffmpeg, no hace falta instalarlo):
    ```bash
    npm run upload-songs -- "C:\Users\TU_USUARIO\Documents\Clone Hero\Songs"
    ```

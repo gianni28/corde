@@ -11,6 +11,7 @@
     "upload-songs": "node scripts/upload-songs.mjs"
   },
   "dependencies": {
+    "@breezystack/lamejs": "^1.2.7",
     "@fontsource/barlow-condensed": "^5.3.0",
     "@fontsource/new-rocker": "^5.3.0",
     "@fontsource/oswald": "^5.3.0",

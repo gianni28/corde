@@ -1,8 +1,9 @@
 // Supabase: song library (Postgres + Storage) and multiplayer rooms (Realtime).
 import { createClient } from "@supabase/supabase-js";
 
-const URL = import.meta.env.VITE_SUPABASE_URL || "";
-const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+// The project URL and the public (anon) key are safe to ship in the browser; writes go through the admin-upload function.
+const URL = import.meta.env.VITE_SUPABASE_URL || "https://chnghmzybfnaktqsaveo.supabase.co";
+const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNobmdobXp5YmZuYWt0cXNhdmVvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4ODExNjgsImV4cCI6MjEwNjQ1NzE2OH0.Q5r388ra-TBC5dZ4_tKBF8LZuqpx4P_eSsLJoT3wzIE";
 export const BUCKET = "songs";
 
 export const supabase = URL && KEY ? createClient(URL, KEY, { realtime: { params: { eventsPerSecond: 20 } } }) : null;
@@ -79,4 +80,29 @@ export function joinRoom(code, me, h) {
     send: (event, payload) => ch.send({ type: "broadcast", event, payload: { ...payload, from: id } }),
     leave: () => supabase.removeChannel(ch),
   };
+}
+
+/* ---------------- admin uploads ---------------- */
+export async function adminCall(body) {
+  const { data, error } = await supabase.functions.invoke("admin-upload", { body });
+  if (error) {
+    let msg = error.message;
+    try { const j = await error.context.json(); msg = j.error || msg; } catch {}
+    throw new Error(msg);
+  }
+  return data;
+}
+
+/** Uploads a converted song: signed URLs for each file, then the catalog row. */
+export async function uploadSong(code, { id, row, files }, onProgress) {
+  const names = Object.keys(files);
+  const { uploads } = await adminCall({ code, action: "sign", id, files: names });
+  let done = 0;
+  for (const u of uploads) {
+    const blob = files[u.name];
+    const { error } = await supabase.storage.from(BUCKET).uploadToSignedUrl(u.path, u.token, blob, { contentType: blob.type, upsert: true });
+    if (error) throw new Error(`subiendo ${u.name}: ${error.message}`);
+    onProgress && onProgress(++done / uploads.length);
+  }
+  await adminCall({ code, action: "save", row });
 }

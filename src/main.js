@@ -9,7 +9,8 @@ import { DIFFS, midiToChart, chartTextToChart, parseIni, iniMeta, notesFor } fro
 import { decodeStems, Player, audioCtx } from "./audio.js";
 import { Game } from "./game.js";
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
-import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode } from "./net.js";
+import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong } from "./net.js";
+import { findSongs, convertSong } from "./admin.js";
 
 const $ = (id) => document.getElementById(id);
 const LANE_CSS = ["--g", "--r", "--y", "--b", "--o"];
@@ -42,7 +43,7 @@ const app = {
 };
 
 /* ================= navigation ================= */
-const SCREENS = ["home", "library", "setup", "settings", "mp", "lobby", "pause", "results", "loading"];
+const SCREENS = ["home", "library", "setup", "settings", "mp", "lobby", "pause", "results", "loading", "admin"];
 function show(name, push = true) {
   const transient = ["pause", "loading", "play", "results"];
   if (push && !transient.includes(name)) {
@@ -423,6 +424,7 @@ function renderSettings() {
     box.appendChild(b);
   });
   $("keysField").hidden = touch;
+  $("openAdmin").hidden = !online || touch || !!app.game;
   document.querySelectorAll("#laneSeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === settings.laneMode));
   document.querySelectorAll("#qualitySeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === settings.gfx));
   document.querySelectorAll("#missSeg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === "on") === String(settings.missSfx)));
@@ -596,3 +598,53 @@ function renderRanking() {
 
 // expose for debugging / tests
 window.__corde = { app, R };
+
+/* ================= admin uploads ================= */
+const adm = { songs: [], busy: false };
+const ADMIN_KEY = "corde.adminCode";
+try { $("adminCode").value = localStorage.getItem(ADMIN_KEY) || ""; } catch {}
+$("openAdmin").hidden = !online || touch || !!app.game;
+$("openAdmin").onclick = () => { if (app.game) return; show("admin"); };
+if (location.hash === "#admin") setTimeout(() => show("admin"), 0);
+
+function renderAdmin() {
+  const ul = $("adminList"); ul.innerHTML = "";
+  adm.songs.forEach((s, i) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<input type="checkbox" ${s.on ? "checked" : ""} ${adm.busy ? "disabled" : ""} aria-label="Incluir"><span class="n"></span><span class="st ${s.cls || ""}"></span><span class="bar2"><i style="transform:scaleX(${s.p || 0})"></i></span>`;
+    li.querySelector(".n").textContent = s.label;
+    li.querySelector(".st").textContent = s.status || "";
+    li.querySelector("input").onchange = (e) => { s.on = e.target.checked; renderAdmin(); };
+    ul.appendChild(li);
+  });
+  const n = adm.songs.filter((s) => s.on && s.cls !== "ok").length;
+  $("adminUpload").textContent = adm.busy ? "Subiendo…" : n ? `Subir ${n} canción${n > 1 ? "es" : ""}` : "Subir";
+  $("adminUpload").disabled = adm.busy || !n;
+}
+$("adminFolder").onchange = (e) => {
+  adm.songs = findSongs(e.target.files).map((s, i) => ({ ...s, on: true }));
+  $("adminStatus").textContent = adm.songs.length
+    ? `Encontré ${adm.songs.length} canción${adm.songs.length > 1 ? "es" : ""}. Desmarca las que no quieras subir.`
+    : "No encontré canciones en esa carpeta. Cada canción necesita song.ini, notes.mid o notes.chart, y sus audios.";
+  renderAdmin();
+};
+$("adminUpload").onclick = async () => {
+  const code = $("adminCode").value.trim();
+  if (!code) { $("adminStatus").textContent = "Escribe el código de administrador."; return; }
+  try { await adminCall({ code, action: "check" }); } catch (e) { $("adminStatus").textContent = e.message; return; }
+  try { localStorage.setItem(ADMIN_KEY, code); } catch {}
+  adm.busy = true; renderAdmin();
+  let ok = 0, bad = 0;
+  for (const s of adm.songs) {
+    if (!s.on || s.cls === "ok") continue;
+    const set = (status, p, cls) => { s.status = status; s.p = p; if (cls) s.cls = cls; renderAdmin(); };
+    try {
+      const conv = await convertSong(s, (txt, p) => set(txt, p * 0.85));
+      await uploadSong(code, conv, (p) => set("Subiendo", 0.85 + p * 0.15));
+      set("Lista", 1, "ok"); ok++;
+    } catch (e) { set(e.message || "Error", 0, "bad"); bad++; }
+  }
+  adm.busy = false; renderAdmin();
+  app.songs = []; // reload the library next time
+  $("adminStatus").textContent = `Listo: ${ok} subida${ok === 1 ? "" : "s"}${bad ? `, ${bad} con error` : ""}. Ya aparecen en Jugar.`;
+};
