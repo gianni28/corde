@@ -9,7 +9,7 @@ import { DIFFS, midiToChart, chartTextToChart, parseIni, iniMeta, notesFor } fro
 import { decodeStems, Player, audioCtx } from "./audio.js";
 import { Game } from "./game.js";
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
-import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong } from "./net.js";
+import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, topScores, submitScore } from "./net.js";
 import { findSongs, convertSong } from "./admin.js";
 
 const $ = (id) => document.getElementById(id);
@@ -194,7 +194,8 @@ function openSetup() {
   const cov = s.coverUrl || coverOf(s);
   $("setupCover").hidden = !cov; if (cov) $("setupCover").src = cov;
   app.diff = defaultDiff(app.chart, lanes);
-  const draw = () => renderDiffChips($("setupDiffs"), app.chart, lanes, app.diff, (k) => { app.diff = k; settings.lastDiff = k; save(); draw(); });
+  app.boardLanes = lanes;
+  const draw = () => { renderDiffChips($("setupDiffs"), app.chart, lanes, app.diff, (k) => { app.diff = k; settings.lastDiff = k; save(); draw(); }); showBoard($("setupBoard"), 5); };
   draw();
   const keys = settings.keys.slice(0, lanes).map(keyLabel).join(" ");
   $("setupHint").textContent = touch
@@ -272,7 +273,62 @@ function finishGame() {
   renderRanking();
   app.game = null;
   R.setLanes(5);
+  $("newRecord").hidden = true; $("boardMe").hidden = true; $("nameAsk").hidden = true; $("resultsBoard").hidden = true;
+  app.boardLanes = app.lanes;
+  if (app.mode !== "mp" && hasBoard()) {
+    if (settings.name) sendScore(sum); else { $("nameAsk").hidden = false; $("boardName").value = ""; app.pendingScore = sum; }
+  }
   show("results");
+}
+
+/* ================= leaderboard ================= */
+const hasBoard = () => online && app.song && app.song.id && app.song.id !== "local";
+function playerSecret() {
+  try {
+    let s = localStorage.getItem("corde.player");
+    if (!s) { s = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)) + "-" + Date.now().toString(36); localStorage.setItem("corde.player", s); }
+    return s;
+  } catch { return "anon-" + Math.random().toString(36).slice(2) + Date.now(); }
+}
+async function sendScore(sum) {
+  try {
+    const r = await submitScore({ song_id: app.song.id, diff: app.diff, lanes: app.lanes, secret: playerSecret(), name: settings.name,
+      score: sum.score, acc: sum.acc, max_combo: sum.maxCombo, stars: sum.stars });
+    $("newRecord").hidden = !r.newRecord;
+    $("boardMe").textContent = `Tu mejor puesto: #${r.rank}`; $("boardMe").hidden = false;
+    showBoard($("resultsBoard"), 10, r.rank);
+  } catch (e) { console.warn("leaderboard:", e.message); showBoard($("resultsBoard"), 10); }
+}
+$("nameAsk").onsubmit = (e) => {
+  e.preventDefault();
+  const name = $("boardName").value.trim().replace(/\s+/g, " ").slice(0, 16);
+  if (!name) { $("boardName").focus(); return; }
+  settings.name = name; save();
+  $("nameAsk").hidden = true;
+  if (app.pendingScore) { sendScore(app.pendingScore); app.pendingScore = null; }
+};
+let boardReq = 0;
+async function showBoard(el, limit, myRank) {
+  if (!hasBoard()) { el.hidden = true; return; }
+  el.hidden = false;
+  const lanes = app.boardLanes || deviceLanes();
+  el.querySelectorAll(".board-tabs button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(+b.dataset.l === lanes));
+    b.onclick = () => { app.boardLanes = +b.dataset.l; showBoard(el, limit, +b.dataset.l === app.lanes ? myRank : undefined); };
+  });
+  const req = ++boardReq;
+  let rows = [];
+  try { rows = await topScores(app.song.id, app.diff, lanes, limit); } catch (e) { console.warn("leaderboard:", e.message); }
+  if (req !== boardReq) return;
+  const ol = el.querySelector(".board-list"); ol.innerHTML = "";
+  rows.forEach((r, i) => {
+    const li = document.createElement("li");
+    if (myRank && i + 1 === myRank) li.className = "me";
+    li.innerHTML = `<span class="pos">${i + 1}</span><span class="n"></span><span class="a">${Math.round((r.acc || 0) * 100)}%</span><span class="s">${r.score.toLocaleString("es-CO")}</span>`;
+    li.querySelector(".n").textContent = r.name;
+    ol.appendChild(li);
+  });
+  el.querySelector(".board-empty").hidden = rows.length > 0;
 }
 $("againBtn").onclick = () => startGame({ lanes: app.lanes, diff: app.diff });
 $("menuBtn").onclick = () => { if (app.mode === "mp") { renderLobby(); show("lobby", false); } else { app.history = ["home"]; show("library", false); } };

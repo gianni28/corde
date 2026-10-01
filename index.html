@@ -82,6 +82,11 @@
         <div class="diffs" id="setupDiffs"></div>
       </div>
       <p class="hint" id="setupHint"></p>
+      <div class="board" id="setupBoard" hidden>
+        <div class="board-head"><span class="label">Clasificación</span><div class="seg board-tabs"><button type="button" data-l="5">5 cuerdas</button><button type="button" data-l="4">4 cuerdas</button></div></div>
+        <ol class="board-list"></ol>
+        <p class="hint board-empty" hidden>Nadie ha tocado esta dificultad todavía.</p>
+      </div>
       <button class="primary" id="playBtn">Tocar</button>
     </div>
   </section>
@@ -210,6 +215,17 @@
         <div><span class="label">Mejor racha</span><b id="resCombo"></b></div>
       </div>
       <ol class="ranking" id="ranking" hidden></ol>
+      <p class="record" id="newRecord" hidden>¡Nuevo récord!</p>
+      <form class="name-ask" id="nameAsk" hidden>
+        <label class="label" for="boardName">¿Con qué nombre quieres aparecer?</label>
+        <div class="join"><input type="text" id="boardName" maxlength="16" autocomplete="nickname"><button type="submit">Guardar</button></div>
+      </form>
+      <div class="board" id="resultsBoard" hidden>
+        <div class="board-head"><span class="label">Clasificación</span><div class="seg board-tabs"><button type="button" data-l="5">5 cuerdas</button><button type="button" data-l="4">4 cuerdas</button></div></div>
+        <ol class="board-list"></ol>
+        <p class="hint board-empty" hidden>Nadie ha tocado esta dificultad todavía.</p>
+      </div>
+      <p class="hint board-me" id="boardMe" hidden></p>
       <div class="row">
         <button class="primary" id="againBtn">Otra vez</button>
         <button id="menuBtn">Menú</button>

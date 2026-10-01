@@ -82,6 +82,24 @@ export function joinRoom(code, me, h) {
   };
 }
 
+/* ---------------- leaderboard ---------------- */
+export async function topScores(songId, diff, lanes, limit = 10) {
+  if (!supabase) return [];
+  const { data, error } = await supabase.from("scores").select("name, score, acc, max_combo").match({ song_id: songId, diff, lanes }).order("score", { ascending: false }).order("updated_at").limit(limit);
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function submitScore(body) {
+  const { data, error } = await supabase.functions.invoke("submit-score", { body });
+  if (error) {
+    let msg = error.message;
+    try { const j = await error.context.json(); msg = j.error || msg; } catch {}
+    throw new Error(msg);
+  }
+  return data; // { best, rank, newRecord }
+}
+
 /* ---------------- admin uploads ---------------- */
 export async function adminCall(body) {
   const { data, error } = await supabase.functions.invoke("admin-upload", { body });
