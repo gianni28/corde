@@ -6,7 +6,7 @@ import "@fontsource/barlow-condensed/latin-500.css";
 import "@fontsource/barlow-condensed/latin-600.css";
 import { createRenderer, LANE_HEX } from "./renderer.js";
 import { DIFFS, midiToChart, chartTextToChart, parseIni, iniMeta, notesFor } from "./chart.js";
-import { decodeStems, Player, audioCtx } from "./audio.js";
+import { decodeStems, Player, audioCtx, unlockAudio } from "./audio.js";
 import { Game } from "./game.js";
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, topScores, submitScore } from "./net.js";
@@ -15,6 +15,9 @@ import { findSongs, convertSong } from "./admin.js";
 const $ = (id) => document.getElementById(id);
 const LANE_CSS = ["--g", "--r", "--y", "--b", "--o"];
 const touch = isTouchDevice();
+
+// iPhone: every tap/keypress re-asserts "music playback" so the silent switch doesn't mute the game.
+["pointerdown", "touchend", "keydown"].forEach((t) => addEventListener(t, unlockAudio, { capture: true, passive: true }));
 
 /* ================= renderer + attract mode ================= */
 const canvas = $("stage");
@@ -220,6 +223,7 @@ function startGame({ lanes, diff }) {
   for (const k in hudCache) delete hudCache[k];
   $("rivals").hidden = app.mode !== "mp";
   show("play");
+  unlockAudio();
   app.game.start();
   try { navigator.wakeLock?.request("screen").then((l) => (app.wake = l)).catch(() => {}); } catch {}
 }

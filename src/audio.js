@@ -1,7 +1,45 @@
 // Audio engine: decodes stems, plays them in sync, mutes the guitar on misses.
 let ctx = null;
+
+/* ---------- iPhone silent switch ----------
+   Safari treats Web Audio as "ambient" sound, which the ring/silent switch mutes.
+   1) iOS 17+: the Audio Session API lets the page declare itself as music playback.
+   2) Older iOS: a looping silent <audio> element switches the page into playback mode too. */
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+let silentEl = null;
+function silentWavUrl() {
+  const rate = 8000, n = rate; // 1 s of silence, 8-bit mono
+  const b = new ArrayBuffer(44 + n), v = new DataView(b);
+  const w = (o, str) => [...str].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, "RIFF"); v.setUint32(4, 36 + n, true); w(8, "WAVE"); w(12, "fmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+  w(36, "data"); v.setUint32(40, n, true);
+  for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+  return URL.createObjectURL(new Blob([b], { type: "audio/wav" }));
+}
+/** Call from a tap/keypress: makes sound play even with the iPhone on silent. */
+export function unlockAudio() {
+  try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch {}
+  if (isIOS && !navigator.audioSession) {
+    if (!silentEl) {
+      silentEl = document.createElement("audio");
+      silentEl.src = silentWavUrl(); silentEl.loop = true; silentEl.setAttribute("playsinline", ""); silentEl.preload = "auto";
+    }
+    if (silentEl.paused) silentEl.play().catch(() => {});
+  }
+  if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
+}
+document.addEventListener("visibilitychange", () => {
+  if (!silentEl) return;
+  if (document.hidden) silentEl.pause(); else if (ctx) silentEl.play().catch(() => {});
+});
+
 export function audioCtx() {
-  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "interactive" });
+  if (!ctx) {
+    try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch {}
+    ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "interactive" });
+  }
   return ctx;
 }
 
