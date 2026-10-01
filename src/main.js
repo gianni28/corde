@@ -87,7 +87,6 @@ const coverOf = (s) => (s.has_cover ? fileUrl(s.id, "cover.jpg") : "");
 
 async function openLibrary() {
   $("libTitle").textContent = app.mode === "pick" ? "Elige la canción" : "Canciones";
-  $("localBox").hidden = app.mode === "pick";
   $("localFolderBtn").hidden = touch;
   show("library");
   renderSongs();
@@ -167,6 +166,33 @@ async function loadLocal(fileList) {
   } catch (e) { toast(e.message); show("library", false); }
 }
 $("localFiles").onchange = (e) => loadLocal(e.target.files);
+
+// Hidden feature for people who know Clone Hero: drop a song folder (or its files) onto the song list.
+async function filesFromDrop(dt) {
+  const entries = [...dt.items].map((it) => it.webkitGetAsEntry && it.webkitGetAsEntry()).filter(Boolean);
+  if (!entries.length) return [...dt.files];
+  const out = [];
+  const walk = (entry) => new Promise((res) => {
+    if (entry.isFile) entry.file((f) => { out.push(f); res(); }, () => res());
+    else if (entry.isDirectory) {
+      const reader = entry.createReader(), all = [];
+      const next = () => reader.readEntries(async (batch) => {
+        if (!batch.length) { for (const e of all) await walk(e); res(); }
+        else { all.push(...batch); next(); }
+      }, () => res());
+      next();
+    } else res();
+  });
+  for (const e of entries) await walk(e);
+  return out;
+}
+addEventListener("dragover", (e) => { if (app.screen === "library" && app.mode !== "pick") e.preventDefault(); });
+addEventListener("drop", async (e) => {
+  if (app.screen !== "library" || app.mode === "pick") return;
+  e.preventDefault();
+  const files = await filesFromDrop(e.dataTransfer);
+  if (files.length) loadLocal(files);
+});
 $("localFolder").onchange = (e) => loadLocal(e.target.files);
 
 /* ================= difficulty chips ================= */
