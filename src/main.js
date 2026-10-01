@@ -10,7 +10,7 @@ import { decodeStems, Player, audioCtx, unlockAudio } from "./audio.js";
 import { Game } from "./game.js";
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, topScores, submitScore } from "./net.js";
-import { findSongs, convertSong } from "./admin.js";
+import { findSongs, convertSong, findMp3Songs, convertMp3Song } from "./admin.js";
 
 const $ = (id) => document.getElementById(id);
 const LANE_CSS = ["--g", "--r", "--y", "--b", "--o"];
@@ -687,6 +687,12 @@ $("adminFolder").onchange = (e) => {
     : "No encontré canciones en esa carpeta. Cada canción necesita song.ini, notes.mid o notes.chart, y sus audios.";
   renderAdmin();
 };
+$("adminMp3").onchange = (e) => {
+  const found = findMp3Songs(e.target.files).map((s) => ({ ...s, on: true }));
+  adm.songs = [...adm.songs.filter((s) => s.cls !== "ok"), ...found];
+  $("adminStatus").textContent = "";
+  renderAdmin();
+};
 $("adminUpload").onclick = async () => {
   const code = $("adminCode").value.trim();
   if (!code) { $("adminStatus").textContent = "Escribe el código de administrador."; return; }
@@ -698,7 +704,7 @@ $("adminUpload").onclick = async () => {
     if (!s.on || s.cls === "ok") continue;
     const set = (status, p, cls) => { s.status = status; s.p = p; if (cls) s.cls = cls; renderAdmin(); };
     try {
-      const conv = await convertSong(s, (txt, p) => set(txt, p * 0.85));
+      const conv = await (s.kind === "mp3" ? convertMp3Song : convertSong)(s, (txt, p) => set(txt, p * 0.85));
       await uploadSong(code, conv, (p) => set("Subiendo", 0.85 + p * 0.15));
       set("Lista", 1, "ok"); ok++;
     } catch (e) { set(e.message || "Error", 0, "bad"); bad++; }

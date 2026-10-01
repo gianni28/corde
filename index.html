@@ -183,8 +183,10 @@
       </div>
       <div class="row">
         <label class="btn">Elegir carpeta<input type="file" id="adminFolder" webkitdirectory multiple></label>
+        <label class="btn">Elegir MP3<input type="file" id="adminMp3" multiple accept=".mp3,.m4a,.ogg,.opus,.wav,.flac,audio/*,image/*"></label>
         <button id="adminUpload" disabled>Subir</button>
       </div>
+      <p class="hint">Si el archivo se llama «Artista - Canción.mp3», uso ese nombre. La portada la saco del mismo MP3 o de una imagen con el mismo nombre.</p>
       <ul class="uploads" id="adminList"></ul>
       <p class="hint" id="adminStatus"></p>
     </div>

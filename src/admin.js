@@ -2,6 +2,7 @@
 // chart → chart.json, every non-guitar stem mixed → backing.mp3, guitar stem → guitar.mp3, album art → cover.jpg.
 import { Mp3Encoder } from "@breezystack/lamejs";
 import { midiToChart, chartTextToChart, parseIni, iniMeta, diffSummary } from "./chart.js";
+import { autoChart } from "./autochart.js";
 
 const RATE = 44100;
 const AUDIO = /\.(opus|ogg|mp3|wav|m4a|flac)$/i;
@@ -125,6 +126,99 @@ export async function convertSong(song, onStatus) {
     charter: stripTags(chart.meta.charter || "") || null, genre: ini.genre || null,
     duration_ms: +ini.song_length || Math.round(seconds * 1000), diffs: summary,
     has_guitar: hasGuitar, has_cover: !!out["cover.jpg"],
+  };
+  return { id, row, files: out };
+}
+
+/* ================= MP3 → auto-generated chart ================= */
+
+const AUDIO_ONLY = /\.(mp3|m4a|ogg|opus|wav|flac)$/i;
+const IMAGE = /\.(jpe?g|png|webp)$/i;
+const base = (n) => n.replace(/\.[^.]+$/, "").toLowerCase();
+
+/** Each audio file is a song; an image with the same name becomes its cover. */
+export function findMp3Songs(fileList) {
+  const files = [...fileList];
+  const images = files.filter((f) => IMAGE.test(f.name));
+  return files.filter((f) => AUDIO_ONLY.test(f.name)).map((audio) => ({
+    kind: "mp3", audio, label: audio.name.replace(/\.[^.]+$/, ""),
+    image: images.find((im) => base(im.name) === base(audio.name)) || (images.length === 1 ? images[0] : null),
+  })).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/** Minimal ID3v2 reader: title, artist, album, year and embedded cover. */
+async function readId3(file) {
+  const head = new Uint8Array(await file.slice(0, 10).arrayBuffer());
+  if (head[0] !== 0x49 || head[1] !== 0x44 || head[2] !== 0x33) return {};
+  const ver = head[3];
+  const size = ((head[6] & 127) << 21) | ((head[7] & 127) << 14) | ((head[8] & 127) << 7) | (head[9] & 127);
+  const b = new Uint8Array(await file.slice(10, 10 + size).arrayBuffer());
+  const out = {};
+  const text = (bytes) => {
+    const enc = bytes[0], body = bytes.subarray(1);
+    const dec = enc === 1 || enc === 2 ? new TextDecoder(enc === 2 ? "utf-16be" : "utf-16") : new TextDecoder(enc === 3 ? "utf-8" : "latin1");
+    return dec.decode(body).replace(/\u0000+$/g, "").replace(/\u0000/g, " ").trim();
+  };
+  let p = 0;
+  while (p + 10 <= b.length && ver >= 3) {
+    const id = String.fromCharCode(b[p], b[p + 1], b[p + 2], b[p + 3]);
+    if (!/^[A-Z0-9]{4}$/.test(id)) break;
+    const len = ver === 4
+      ? ((b[p + 4] & 127) << 21) | ((b[p + 5] & 127) << 14) | ((b[p + 6] & 127) << 7) | (b[p + 7] & 127)
+      : (b[p + 4] << 24) | (b[p + 5] << 16) | (b[p + 6] << 8) | b[p + 7];
+    const data = b.subarray(p + 10, p + 10 + len);
+    if (id === "TIT2") out.title = text(data);
+    else if (id === "TPE1") out.artist = text(data);
+    else if (id === "TALB") out.album = text(data);
+    else if (id === "TYER" || id === "TDRC") out.year = parseInt(text(data)) || undefined;
+    else if (id === "APIC") {
+      const enc = data[0];
+      let q = 1; while (q < data.length && data[q] !== 0) q++;
+      const mime = new TextDecoder("latin1").decode(data.subarray(1, q)) || "image/jpeg";
+      q += 2; // terminator + picture type
+      if (enc === 1 || enc === 2) { while (q + 1 < data.length && !(data[q] === 0 && data[q + 1] === 0)) q += 2; q += 2; }
+      else { while (q < data.length && data[q] !== 0) q++; q += 1; }
+      out.cover = new Blob([data.subarray(q)], { type: mime.includes("/") ? mime : "image/" + mime.toLowerCase() });
+    }
+    p += 10 + len;
+  }
+  return out;
+}
+
+export async function convertMp3Song(song, onStatus) {
+  onStatus("Analizando ritmo", 0.03);
+  const tags = await readId3(song.audio).catch(() => ({}));
+  const m = song.label.match(/^(.+?)\s+-\s+(.+)$/);
+  const name = stripTags(tags.title || (m ? m[2] : song.label));
+  const artist = stripTags(tags.artist || (m ? m[1] : ""));
+
+  // decode at 22.05 kHz for analysis
+  const ctx = new OfflineAudioContext(1, 1, 22050);
+  let buf;
+  try { buf = await ctx.decodeAudioData(await song.audio.arrayBuffer()); }
+  catch { throw new Error(`no se pudo leer el audio ${song.audio.name}`); }
+  const mono = new Float32Array(buf.length);
+  for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++) mono[i] += d[i] / buf.numberOfChannels; }
+  await tick();
+  const chart = autoChart(mono, 22050, { name, artist, album: tags.album, year: tags.year }, (stage, p) => onStatus(stage === "analyze" ? "Analizando ritmo" : "Generando notas", 0.05 + 0.5 * p));
+  onStatus("Generando notas", 0.6);
+  await tick();
+
+  const out = {};
+  if (/\.mp3$/i.test(song.audio.name)) out["backing.mp3"] = new Blob([song.audio], { type: "audio/mpeg" });
+  else {
+    const full = await decode(song.audio);
+    const L = full.getChannelData(0), R = full.numberOfChannels > 1 ? full.getChannelData(1) : L;
+    out["backing.mp3"] = await encodeMp3({ L, R }, (p) => onStatus("Convirtiendo a MP3", 0.6 + 0.25 * p));
+  }
+  const coverSrc = song.image || tags.cover;
+  if (coverSrc) { try { out["cover.jpg"] = await makeCover(coverSrc); } catch {} }
+  out["chart.json"] = new Blob([JSON.stringify(chart)], { type: "application/json" });
+
+  const id = slug(`${artist}-${name}`) || slug(song.label);
+  const row = {
+    id, name, artist, album: tags.album || null, year: tags.year || null, charter: "Corde (automático)", genre: null,
+    duration_ms: Math.round((buf.length / 22050) * 1000), diffs: diffSummary(chart), has_guitar: false, has_cover: !!out["cover.jpg"],
   };
   return { id, row, files: out };
 }

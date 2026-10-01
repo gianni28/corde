@@ -13,6 +13,7 @@ Juego de ritmo multijugador en el navegador, inspirado en Guitar Hero. Se toca c
 - **Teclas configurables** en Ajustes (por defecto `D F J K L`, también `1`–`5`).
 - **Biblioteca en línea:** canciones guardadas en Supabase Storage, catálogo en Postgres.
 - **Multijugador en tiempo real:** salas con código de 4 letras sobre Supabase Realtime (presence + broadcast). El anfitrión elige canción y dificultad, todos descargan, y el marcador de los rivales se ve en vivo. Si alguien juega desde el celular, la sala entera toca con 4 cuerdas para que sea justo.
+- **Niveles automáticos desde un MP3:** para canciones que no tienen chart, el panel de subida acepta un MP3 y genera las 4 dificultades: detección de golpes (spectral flux), tempo por autocorrelación, seguimiento del pulso con programación dinámica (Ellis 2007), selección de notas por densidad y carriles que siguen el contorno melódico (`src/autochart.js`). Contra el chart hecho a mano de *Kryptonite*, el 82–86 % de las notas generadas en Fácil, Media y Difícil caen donde el humano puso una.
 - **Canciones locales:** también puedes cargar una carpeta de Clone Hero (`notes.mid` o `notes.chart`) sin subir nada.
 - Sincronía calibrable, la guitarra se silencia cuando fallas, multiplicador ×4, secciones de la canción, resultados con estrellas.
 
@@ -30,7 +31,8 @@ src/
 scripts/upload-songs.mjs   convierte y sube canciones
 supabase/schema.sql        tabla + bucket
 supabase/functions/admin-upload   Edge Function que firma subidas (protegida con código)
-src/admin.js               conversión de canciones en el navegador
+src/admin.js               conversión de canciones en el navegador (carpetas de Clone Hero o MP3 con etiquetas ID3)
+src/autochart.js           generador automático de niveles
 ```
 
 ## Puesta en marcha
