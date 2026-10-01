@@ -315,11 +315,9 @@ let boardReq = 0;
 async function showBoard(el, limit, myRank) {
   if (!hasBoard()) { el.hidden = true; return; }
   el.hidden = false;
+  // Each player only sees the board of the mode they play (5 strings on PC, 4 on phones).
   const lanes = app.boardLanes || deviceLanes();
-  el.querySelectorAll(".board-tabs button").forEach((b) => {
-    b.setAttribute("aria-pressed", String(+b.dataset.l === lanes));
-    b.onclick = () => { app.boardLanes = +b.dataset.l; showBoard(el, limit, +b.dataset.l === app.lanes ? myRank : undefined); };
-  });
+  el.querySelector(".board-tag").textContent = `${lanes} cuerdas`;
   const req = ++boardReq;
   let rows = [];
   try { rows = await topScores(app.song.id, app.diff, lanes, limit); } catch (e) { console.warn("leaderboard:", e.message); }

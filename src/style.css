@@ -268,8 +268,7 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 /* leaderboard */
 .board { display: flex; flex-direction: column; gap: 8px; }
 .board-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-.board-tabs { min-width: 210px; }
-.board-tabs button { padding: 6px 8px; font-size: 13px; }
+.board-tag { font: 600 12px var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--ink); border: 1px solid #4a433e; padding: 3px 8px; }
 .board-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
 .board-list li { display: grid; grid-template-columns: 28px 1fr auto auto; gap: 10px; align-items: center; padding: 7px 12px; background: rgba(0,0,0,.35); }
 .board-list li:nth-child(1) .pos { color: var(--gold); }
