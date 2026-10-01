@@ -126,6 +126,8 @@ export async function convertSong(song, onStatus) {
     charter: stripTags(chart.meta.charter || "") || null, genre: ini.genre || null,
     duration_ms: +ini.song_length || Math.round(seconds * 1000), diffs: summary,
     has_guitar: hasGuitar, has_cover: !!out["cover.jpg"],
+    // the MP3 encoder pads ~25 ms at the start; song.ini "delay" (ms, positive = notes later) shifts the chart
+    audio_offset_ms: 25 + (Math.round(+ini.delay) || 0),
   };
   return { id, row, files: out };
 }
@@ -219,6 +221,7 @@ export async function convertMp3Song(song, onStatus) {
   const row = {
     id, name, artist, album: tags.album || null, year: tags.year || null, charter: "Corde (automático)", genre: null,
     duration_ms: Math.round((buf.length / 22050) * 1000), diffs: diffSummary(chart), has_guitar: false, has_cover: !!out["cover.jpg"],
+    audio_offset_ms: /\.mp3$/i.test(song.audio.name) ? 0 : 25, // original MP3 is analysed and played as-is
   };
   return { id, row, files: out };
 }

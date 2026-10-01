@@ -53,6 +53,7 @@ Deno.serve(async (req) => {
       charter: r.charter ? String(r.charter).slice(0, 200) : null, genre: r.genre ? String(r.genre).slice(0, 100) : null,
       duration_ms: Number.isFinite(r.duration_ms) ? Math.round(r.duration_ms) : null, diffs: r.diffs,
       has_guitar: !!r.has_guitar, has_cover: !!r.has_cover, backing_file: "backing.mp3", guitar_file: r.has_guitar ? "guitar.mp3" : null,
+      audio_offset_ms: Number.isFinite(r.audio_offset_ms) ? Math.max(-3000, Math.min(3000, Math.round(r.audio_offset_ms))) : 0,
     };
     const { error } = await admin.from("songs").upsert(row);
     if (error) return json({ error: error.message }, 500);

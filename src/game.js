@@ -5,12 +5,15 @@ export const WINDOW = 0.1; // ±100 ms to hit a note
 export const PERFECT = 0.045;
 
 export class Game {
-  constructor({ chart, diff, lanes, player, offsetMs = 0, look = 1.5, autoSync = true }) {
+  // offsetMs: the player's latency compensation (learned/adjustable). songOffsetMs: how much later the song's audio
+  // runs than its chart (MP3 encoder padding, song.ini "delay"); fixed per song.
+  constructor({ chart, diff, lanes, player, offsetMs = 0, songOffsetMs = 0, look = 1.5, autoSync = true }) {
     this.chart = chart;
     this.diff = diff;
     this.lanes = lanes;
     this.player = player;
     this.offset = offsetMs / 1000;
+    this.songOffset = songOffsetMs / 1000;
     this.autoSync = autoSync;
     this.errs = []; // recent hit errors (s), used to learn the player's latency
     this.lastHit = new Array(5).fill(-9);
@@ -31,7 +34,7 @@ export class Game {
   get multiplier() { return Math.min(4, 1 + Math.floor(this.combo / 10)); }
   get accuracy() { const judged = this.hits + this.missed; return judged ? this.hits / judged : 1; }
 
-  time() { return this.player.time() + this.offset; }
+  time() { return this.player.time() + this.offset - this.songOffset; }
 
   start() {
     const first = this.notes.length ? this.notes[0].t : 0;
@@ -70,12 +73,15 @@ export class Game {
   learn(err) {
     this.errs.push(err);
     if (this.errs.length > 32) this.errs.shift();
-    if (!this.autoSync || this.errs.length < 8) return;
+    if (!this.autoSync || this.errs.length < 16) return;
     const sorted = [...this.errs].sort((a, b) => a - b);
     const med = sorted[sorted.length >> 1];
     if (Math.abs(med) < 0.008) return;
-    const step = Math.max(-0.006, Math.min(0.006, med * 0.25));
-    this.offset = Math.max(-0.3, Math.min(0.3, this.offset - step));
+    // only learn from consistent timing (a player tapping randomly has a wide spread and teaches nothing)
+    const mad = [...sorted.map((e) => Math.abs(e - med))].sort((a, b) => a - b)[sorted.length >> 1];
+    if (mad > 0.04) return;
+    const step = Math.max(-0.004, Math.min(0.004, med * 0.2));
+    this.offset = Math.max(-0.2, Math.min(0.2, this.offset - step));
     for (let i = 0; i < this.errs.length; i++) this.errs[i] -= step; // past errors as if measured with the new offset
   }
 

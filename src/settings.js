@@ -19,6 +19,8 @@ function load() {
 }
 
 export const settings = load();
+// v2: the first auto-sync could drift after a sloppy game; start everyone's latency from zero once.
+if ((settings.syncV || 1) < 2) { settings.offsetMs = 0; settings.syncV = 2; try { localStorage.setItem(KEY, JSON.stringify(settings)); } catch {} }
 
 export function save() {
   try { localStorage.setItem(KEY, JSON.stringify(settings)); } catch {}

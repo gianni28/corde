@@ -138,6 +138,7 @@ async function loadLibrarySong(s) {
   audioCtx();
   app.decoded = await decodeStems(stems);
   app.chart = chart; app.song = s; app.loadedSongId = s.id;
+  app.songOffsetMs = s.audio_offset_ms || 0;
   loading("Listo", 1);
 }
 
@@ -153,7 +154,9 @@ async function loadLocal(fileList) {
   if (!auds.length) return toast("Falta el audio (song.opus, guitar.opus…).");
   try {
     show("loading"); loading("Leyendo canción", 0.1);
-    const meta = ini ? iniMeta(parseIni(await ini.text())) : {};
+    const iniData = ini ? parseIni(await ini.text()) : {};
+    const meta = iniMeta(iniData);
+    app.songOffsetMs = +iniData.delay || 0; // song.ini "delay": positive = notes later
     const chart = mid ? midiToChart(await mid.arrayBuffer(), meta) : chartTextToChart(await cht.text(), meta);
     loading("Preparando audio", 0.4);
     audioCtx();
@@ -239,7 +242,7 @@ function startGame({ lanes, diff }) {
   stopGame();
   const player = new Player(app.decoded);
   player.missSfx = settings.missSfx;
-  app.game = new Game({ chart: app.chart, diff, lanes, player, offsetMs: settings.offsetMs, look: +settings.speed, autoSync: settings.autoSync });
+  app.game = new Game({ chart: app.chart, diff, lanes, player, offsetMs: settings.offsetMs, songOffsetMs: app.songOffsetMs || 0, look: +settings.speed, autoSync: settings.autoSync });
   app.lanes = lanes;
   app.diff = diff;
   R.setLanes(lanes);
@@ -253,8 +256,11 @@ function startGame({ lanes, diff }) {
   app.game.start();
   try { navigator.wakeLock?.request("screen").then((l) => (app.wake = l)).catch(() => {}); } catch {}
 }
+// Keep what auto-sync learned only after a solid run, and move at most 30 ms per song so one bad game can't wreck the next.
 function keepLearnedSync(g) {
-  if (g && settings.autoSync && g.hits >= 8 && g.offsetMs !== settings.offsetMs) { settings.offsetMs = g.offsetMs; save(); }
+  if (!g || !settings.autoSync || g.hits < 40 || g.accuracy < 0.6) return;
+  const target = Math.max(settings.offsetMs - 30, Math.min(settings.offsetMs + 30, g.offsetMs));
+  if (target !== settings.offsetMs) { settings.offsetMs = target; save(); }
 }
 function stopGame() {
   if (!app.game) return;
@@ -589,6 +595,7 @@ async function syncConfig() {
       audioCtx();
       app.decoded = await decodeStems(stems);
       app.chart = chart; app.loadedSongId = song.id;
+      app.songOffsetMs = song.audio_offset_ms || 0;
     }
     app.song = song; app.loadedRoomSong = song.id;
     app.room.update({ ready: true, songId: song.id });
