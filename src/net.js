@@ -1,0 +1,82 @@
+// Supabase: song library (Postgres + Storage) and multiplayer rooms (Realtime).
+import { createClient } from "@supabase/supabase-js";
+
+const URL = import.meta.env.VITE_SUPABASE_URL || "";
+const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+export const BUCKET = "songs";
+
+export const supabase = URL && KEY ? createClient(URL, KEY, { realtime: { params: { eventsPerSecond: 20 } } }) : null;
+export const online = !!supabase;
+
+/* ---------------- library ---------------- */
+export async function listSongs() {
+  if (!supabase) return [];
+  const { data, error } = await supabase.from("songs").select("*").order("artist").order("name");
+  if (error) throw new Error("No se pudo cargar la biblioteca: " + error.message);
+  return data;
+}
+
+export function fileUrl(songId, file) {
+  return supabase.storage.from(BUCKET).getPublicUrl(`${songId}/${file}`).data.publicUrl;
+}
+
+async function fetchBuf(url, onProgress) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`No se pudo descargar ${url.split("/").pop()} (${res.status}).`);
+  if (!onProgress || !res.body) return res.arrayBuffer();
+  const total = +res.headers.get("content-length") || 0;
+  const reader = res.body.getReader();
+  const chunks = []; let got = 0;
+  for (;;) { const { done, value } = await reader.read(); if (done) break; chunks.push(value); got += value.length; onProgress(got, total); }
+  const out = new Uint8Array(got); let o = 0; for (const c of chunks) { out.set(c, o); o += c.length; }
+  return out.buffer;
+}
+
+/** Downloads chart + stems of a library song. */
+export async function downloadSong(song, onProgress) {
+  const files = [{ name: "backing", file: song.backing_file || "backing.mp3", guitar: false }];
+  if (song.has_guitar) files.push({ name: "guitar", file: song.guitar_file || "guitar.mp3", guitar: true });
+  const prog = new Array(files.length + 1).fill(0), tot = new Array(files.length + 1).fill(1);
+  const report = () => onProgress && onProgress(prog.reduce((a, b) => a + b, 0) / Math.max(1, tot.reduce((a, b) => a + b, 0)));
+  const [chartBuf, ...stems] = await Promise.all([
+    fetchBuf(fileUrl(song.id, "chart.json"), (g, t) => { prog[0] = g; tot[0] = t || g; report(); }),
+    ...files.map((f, i) => fetchBuf(fileUrl(song.id, f.file), (g, t) => { prog[i + 1] = g; tot[i + 1] = t || g * 2; report(); })),
+  ]);
+  const chart = JSON.parse(new TextDecoder().decode(chartBuf));
+  return { chart, stems: stems.map((data, i) => ({ name: files[i].name, guitar: files[i].guitar, data })) };
+}
+
+/* ---------------- rooms ---------------- */
+export function newRoomCode() {
+  const A = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  return Array.from({ length: 4 }, () => A[Math.floor(Math.random() * A.length)]).join("");
+}
+
+/**
+ * Joins a room. Everyone in the channel shares presence {name, lanes, ready, joinedAt}.
+ * The host (earliest joinedAt) picks the song and starts the round.
+ */
+export function joinRoom(code, me, h) {
+  if (!supabase) throw new Error("El multijugador necesita Supabase configurado.");
+  const id = me.id;
+  const ch = supabase.channel(`corde:${code}`, { config: { presence: { key: id }, broadcast: { self: false, ack: false } } });
+  let state = { ...me, ready: false, joinedAt: Date.now() };
+  const peers = () => {
+    const ps = ch.presenceState();
+    return Object.entries(ps).map(([k, arr]) => ({ id: k, ...arr[arr.length - 1] })).sort((a, b) => a.joinedAt - b.joinedAt);
+  };
+  ch.on("presence", { event: "sync" }, () => h.onPeers(peers()));
+  ["config", "start", "score", "final", "abort"].forEach((ev) => ch.on("broadcast", { event: ev }, ({ payload }) => h.onEvent(ev, payload)));
+  ch.subscribe(async (status) => {
+    if (status === "SUBSCRIBED") { await ch.track(state); h.onStatus && h.onStatus("ok"); }
+    else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") h.onStatus && h.onStatus("error");
+  });
+  return {
+    code,
+    peers,
+    isHost: () => { const p = peers(); return p.length ? p[0].id === id : true; },
+    update: (patch) => { state = { ...state, ...patch }; return ch.track(state); },
+    send: (event, payload) => ch.send({ type: "broadcast", event, payload: { ...payload, from: id } }),
+    leave: () => supabase.removeChannel(ch),
+  };
+}

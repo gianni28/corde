@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Corde</title>
+<meta name="description" content="Corde — juego de ritmo multijugador en el navegador. Toca la guitarra con el teclado o la pantalla táctil.">
+<meta name="theme-color" content="#07050a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2307050a'/%3E%3Cg stroke-width='2.4'%3E%3Cpath d='M5 8h22' stroke='%232ee65a'/%3E%3Cpath d='M5 12h22' stroke='%23ff2e3c'/%3E%3Cpath d='M5 16h22' stroke='%23ffd21f'/%3E%3Cpath d='M5 20h22' stroke='%232a84ff'/%3E%3Cpath d='M5 24h22' stroke='%23ff8a1a'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+<canvas id="stage" aria-label="Escenario"></canvas>
+
+<!-- ===== HUD ===== -->
+<div id="hud" hidden>
+  <div class="hud-score">
+    <div class="mult" id="mult">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><g id="multRing"></g></svg>
+      <b id="multText">×1</b>
+    </div>
+    <div>
+      <div class="score" id="score">0</div>
+      <div class="combo"><span id="combo">0</span> racha</div>
+    </div>
+  </div>
+  <div class="hud-top">
+    <div class="section" id="section"></div>
+    <div class="progress"><i id="progress"></i></div>
+  </div>
+  <button class="icon-btn" id="pauseBtn" aria-label="Pausar"><svg viewBox="0 0 24 24"><path d="M7 5h3v14H7zM14 5h3v14h-3z"/></svg></button>
+  <ol class="rivals" id="rivals" hidden></ol>
+  <div class="judge" id="judge"></div>
+  <div class="countdown" id="countdown"></div>
+</div>
+
+<div id="ui">
+  <!-- ===== HOME ===== -->
+  <section class="screen home" id="s-home">
+    <div class="logo">
+      <h1>Corde</h1>
+      <div class="strings" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+    <nav class="menu">
+      <button data-go="library" data-mode="solo">Jugar</button>
+      <button data-go="mp">Multijugador</button>
+      <button data-go="settings">Ajustes</button>
+    </nav>
+    <p class="foot" id="homeFoot"></p>
+  </section>
+
+  <!-- ===== LIBRARY ===== -->
+  <section class="screen panel-screen" id="s-library" hidden>
+    <div class="panel wide">
+      <header class="bar"><button class="back" data-back>Volver</button><h2 id="libTitle">Canciones</h2></header>
+      <input type="search" id="libSearch" placeholder="Buscar canción o artista" autocomplete="off">
+      <div class="songs" id="songList"></div>
+      <div class="local" id="localBox">
+        <div>
+          <b>Canción desde tu dispositivo</b>
+          <p>Elige notes.mid o notes.chart y los audios de una carpeta de Clone Hero.</p>
+        </div>
+        <div class="row">
+          <label class="btn">Archivos<input type="file" id="localFiles" multiple accept=".mid,.midi,.chart,.opus,.ogg,.mp3,.wav,.m4a,.ini,.jpg,.jpeg,.png"></label>
+          <label class="btn" id="localFolderBtn">Carpeta<input type="file" id="localFolder" webkitdirectory multiple></label>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== SONG SETUP ===== -->
+  <section class="screen panel-screen" id="s-setup" hidden>
+    <div class="panel">
+      <header class="bar"><button class="back" data-back>Volver</button></header>
+      <div class="song-head">
+        <img id="setupCover" alt="">
+        <div><h2 id="setupName"></h2><p id="setupArtist"></p></div>
+      </div>
+      <div class="field">
+        <span class="label">Dificultad</span>
+        <div class="diffs" id="setupDiffs"></div>
+      </div>
+      <p class="hint" id="setupHint"></p>
+      <button class="primary" id="playBtn">Tocar</button>
+    </div>
+  </section>
+
+  <!-- ===== SETTINGS ===== -->
+  <section class="screen panel-screen" id="s-settings" hidden>
+    <div class="panel">
+      <header class="bar"><button class="back" data-back>Volver</button><h2>Ajustes</h2></header>
+      <div class="field" id="keysField">
+        <div class="top"><span class="label">Teclas</span><button class="link" id="resetKeys">Restablecer</button></div>
+        <div class="keycaps" id="keycaps"></div>
+        <p class="hint" id="keysHint">Haz clic en un botón y presiona la tecla que quieras.</p>
+      </div>
+      <div class="field">
+        <span class="label">Cuerdas</span>
+        <div class="seg" id="laneSeg">
+          <button data-v="auto">Automático</button><button data-v="5">5</button><button data-v="4">4</button>
+        </div>
+        <p class="hint" id="laneHint"></p>
+      </div>
+      <div class="field">
+        <div class="top"><label class="label" for="speed">Velocidad de la autopista</label><output id="speedOut"></output></div>
+        <input type="range" id="speed" min="0.8" max="2.6" step="0.1">
+      </div>
+      <div class="field">
+        <div class="top"><label class="label" for="offset">Sincronía</label><output id="offsetOut"></output></div>
+        <input type="range" id="offset" min="-250" max="250" step="5">
+        <p class="hint">Si tienes que tocar antes de que la nota llegue, sube el valor. Si tienes que tocar después, bájalo.</p>
+      </div>
+      <div class="field">
+        <span class="label">Gráficos</span>
+        <div class="seg" id="qualitySeg"><button data-v="high">Altos</button><button data-v="low">Rápidos</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== MULTIPLAYER ENTRY ===== -->
+  <section class="screen panel-screen" id="s-mp" hidden>
+    <div class="panel">
+      <header class="bar"><button class="back" data-back>Volver</button><h2>Multijugador</h2></header>
+      <div class="field">
+        <label class="label" for="mpName">Tu nombre</label>
+        <input type="text" id="mpName" maxlength="16" placeholder="Ej. Gianni" autocomplete="nickname">
+      </div>
+      <button class="primary" id="createRoom">Crear sala</button>
+      <div class="or"><span>o únete con un código</span></div>
+      <div class="join">
+        <input type="text" id="joinCode" maxlength="4" placeholder="ABCD" autocomplete="off" autocapitalize="characters">
+        <button id="joinRoom">Unirme</button>
+      </div>
+      <p class="err" id="mpErr" hidden></p>
+    </div>
+  </section>
+
+  <!-- ===== LOBBY ===== -->
+  <section class="screen panel-screen" id="s-lobby" hidden>
+    <div class="panel">
+      <header class="bar"><button class="back" id="leaveRoom">Salir</button><h2>Sala</h2></header>
+      <button class="code" id="roomCode" title="Copiar código"></button>
+      <p class="hint center">Comparte este código. Todos tocan la misma canción a la vez.</p>
+      <ul class="players" id="players"></ul>
+      <div class="field">
+        <span class="label">Canción</span>
+        <div class="pick" id="lobbySong"></div>
+      </div>
+      <div class="field" id="lobbyDiffField">
+        <span class="label">Dificultad</span>
+        <div class="diffs" id="lobbyDiffs"></div>
+      </div>
+      <p class="hint" id="lobbyStatus"></p>
+      <button class="primary" id="startRound">Empezar</button>
+    </div>
+  </section>
+
+  <!-- ===== PAUSE ===== -->
+  <section class="screen panel-screen" id="s-pause" hidden>
+    <div class="panel narrow">
+      <h2 class="huge">Pausa</h2>
+      <div class="stack">
+        <button class="primary" id="resumeBtn">Seguir</button>
+        <button id="restartBtn">Reiniciar</button>
+        <button id="quitBtn">Salir</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== RESULTS ===== -->
+  <section class="screen panel-screen" id="s-results" hidden>
+    <div class="panel">
+      <span class="label" id="resSong"></span>
+      <div class="res-score" id="resScore">0</div>
+      <div class="stars" id="resStars"></div>
+      <div class="stats">
+        <div><span class="label">Notas</span><b id="resHit"></b></div>
+        <div><span class="label">Precisión</span><b id="resAcc"></b></div>
+        <div><span class="label">Mejor racha</span><b id="resCombo"></b></div>
+      </div>
+      <ol class="ranking" id="ranking" hidden></ol>
+      <div class="row">
+        <button class="primary" id="againBtn">Otra vez</button>
+        <button id="menuBtn">Menú</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== LOADING ===== -->
+  <section class="screen panel-screen" id="s-loading" hidden>
+    <div class="panel narrow">
+      <span class="label" id="loadLabel">Cargando</span>
+      <div class="loadbar"><i id="loadBar"></i></div>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
