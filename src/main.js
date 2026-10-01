@@ -280,7 +280,11 @@ function resumeGame() {
   app.game.look = +settings.speed;
   app.game.offset = settings.offsetMs / 1000;
   app.game.player.missSfx = settings.missSfx;
-  app.game.player.resume().then(() => { app.paused = false; });
+  const g = app.game, pausedAt = g.lastT;
+  if (pausedAt <= 0) { g.player.resume().then(() => { app.paused = false; }); show("play", false); return; }
+  // rewind animation: the highway runs backwards ~10 s, then the music restarts there
+  g.hidePlayed();
+  app.rewinding = { from: pausedAt, to: Math.max(0, g.resumeAt - 10), start: performance.now(), dur: 1100 };
   show("play", false);
 }
 $("pauseBtn").onclick = pauseGame;
@@ -444,7 +448,19 @@ function updateHUD(g, t) {
   setHud("prog", Math.round(Math.max(0, Math.min(1, t / g.end)) * 400), (v) => ($("progress").style.transform = `scaleX(${v / 400})`));
   const si = g.section(t);
   if (si !== lastSection) { lastSection = si; $("section").textContent = si >= 0 ? g.sections[si][1] : ""; R.setSection(Math.max(0, si)); }
-  setHud("cd", t < 0 && t > -3.2 ? Math.ceil(-t) : "", (v) => ($("countdown").textContent = v));
+  const left = (g.countdownUntil || 0) - t;
+  setHud("cd", left > 0 && left <= 3.2 ? Math.ceil(left) : "", (v) => ($("countdown").textContent = v));
+  // timers: after a pause (until the notes come back) and in long stretches without notes.
+  // Both disappear before the next notes reach the top of the highway so they never cover them.
+  let until = null, from = 0, label = false;
+  if (g.resumeAt != null && t < g.resumeAt) { until = g.resumeAt; from = g.resumeFromT; }
+  else { const gap = g.gapAt(t); if (gap && t >= gap[0] + 1) { until = gap[1]; from = gap[0]; label = true; } }
+  const showT = until != null && until - t > g.look + 0.4 && left <= 0;
+  setHud("gap", showT ? Math.ceil(until - t) + (label ? "g" : "r") : "", (v) => {
+    $("gap").hidden = !v;
+    if (v) { $("gapSecs").textContent = parseInt(v); $("gapLabel").hidden = !v.endsWith("g"); }
+  });
+  if (showT) $("gapBar").style.transform = `scaleX(${Math.max(0, (until - t) / Math.max(1, until - from))})`;
 }
 
 /* ================= main loop ================= */
@@ -464,6 +480,17 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - prev) / 1000); prev = now;
   const g = app.game;
+  if (g && app.rewinding) {
+    const rw = app.rewinding, k = Math.min(1, (now - rw.start) / rw.dur);
+    const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; // ease in-out
+    const t = rw.from + (rw.to - rw.from) * e;
+    R.render({ t, look: g.look, notes: g.notes, from: 0, pressed: g.pressed, beats: visibleBeats(g.beats, t, g.look), dt });
+    if (k >= 1 && !rw.done) {
+      rw.done = true;
+      g.player.resume().then(() => { g.resumeFrom(rw.to); app.rewinding = null; app.paused = false; });
+    }
+    return;
+  }
   if (g) {
     const t = g.time();
     if (!app.paused) g.update(t);

@@ -280,3 +280,11 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .board-me { margin-top: -4px; }
 .record { margin: 0; font: 400 34px/1 var(--rock); background: linear-gradient(180deg, #fff6c0, #ffd23a 40%, #ff7a1a 75%, #c4161c); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-stroke: 1px #2a0805; filter: drop-shadow(0 3px 0 #000) drop-shadow(0 0 16px rgba(255,110,20,.5)); }
 .name-ask { display: flex; flex-direction: column; gap: 8px; }
+
+/* no-notes stretch */
+.gap { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 26px 16px;
+  background: linear-gradient(180deg, rgba(44,39,36,.85), rgba(19,16,16,.85)); box-shadow: 0 0 0 1px #000, inset 0 0 0 1px #4a433e, 0 10px 30px rgba(0,0,0,.5); }
+.gap .label { color: var(--ink); font-size: 14px; }
+.gap b { font: 700 54px/1 var(--display); font-variant-numeric: tabular-nums; background: var(--chrome); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 2px 0 #000); }
+.gap-bar { width: 140px; height: 5px; background: #0a0808; box-shadow: 0 0 0 1px #000; overflow: hidden; }
+.gap-bar i { display: block; height: 100%; width: 100%; transform-origin: left; background: linear-gradient(90deg, #7a0a0a, var(--red-hi), var(--fire)); }

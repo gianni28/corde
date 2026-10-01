@@ -76,16 +76,37 @@ export class Player {
       this.sources.push(src);
     }
   }
+  /** Restart playback from songTime (seconds) after `delay` seconds. Negative songTime = play later. */
+  seek(songTime, delay) {
+    const c = audioCtx();
+    this.sources.forEach((s) => { try { s.stop(); } catch {} });
+    this.sources = [];
+    const when = c.currentTime + delay;
+    this.startAt = when - songTime;
+    for (const s of this.stems) {
+      const src = c.createBufferSource(); src.buffer = s.buffer;
+      src.connect(s.guitar ? this.guitarGain : this.master);
+      if (songTime >= 0) src.start(when, songTime); else src.start(when - songTime);
+      this.sources.push(src);
+    }
+    this.guitar(true);
+  }
   /** Song position as the player hears it (accounts for output latency). */
   time() {
     const c = audioCtx();
     if (this.paused) return this.lastHeard - this.startAt;
-    let t;
+    // Two clocks: the precise output timestamp, and currentTime minus the reported latency.
+    // Right after a suspend/resume the output timestamp can be stale (seconds off), so it is only trusted when the two agree.
+    const fallback = c.currentTime - (c.outputLatency || c.baseLatency || 0);
+    let t = fallback;
     if (c.getOutputTimestamp) {
       const ts = c.getOutputTimestamp();
-      if (ts.contextTime > 0 && ts.performanceTime > 0) t = ts.contextTime + (performance.now() - ts.performanceTime) / 1000;
+      if (ts.contextTime > 0 && ts.performanceTime > 0) {
+        const precise = ts.contextTime + (performance.now() - ts.performanceTime) / 1000;
+        if (Math.abs(precise - fallback) < 0.15) t = precise;
+      }
     }
-    if (t == null) t = c.currentTime - (c.outputLatency || c.baseLatency || 0);
+    if (t < this.lastHeard && this.lastHeard - t < 0.05) t = this.lastHeard; // never step backwards by jitter
     this.lastHeard = t;
     return t - this.startAt;
   }

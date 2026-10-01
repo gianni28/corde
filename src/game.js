@@ -29,6 +29,16 @@ export class Game {
     this.end = Math.max(player.duration, lastNote.t + lastNote.dur + 1);
     this.events = []; // {type:'hit'|'miss'|'ghost', lane, sustain, err}
     this.ended = false;
+    this.countdownUntil = 0;        // show 3-2-1 until this song time (song start)
+    this.practiceUntil = -Infinity; // stray presses before this time (lead-in after a pause) are ignored
+    this.resumeAt = null;           // after a pause: notes come back at this song time
+    // long stretches without notes (≥ 6 s), including a long intro
+    this.gaps = [];
+    let prevEnd = 0;
+    for (const n of this.notes) {
+      if (n.t - prevEnd >= 6) this.gaps.push([prevEnd, n.t]);
+      prevEnd = Math.max(prevEnd, n.t + n.dur);
+    }
   }
 
   get multiplier() { return Math.min(4, 1 + Math.floor(this.combo / 10)); }
@@ -62,7 +72,7 @@ export class Game {
       this.score += 50 * this.multiplier;
       this.player.guitar(true);
       this.events.push({ type: "hit", lane, sustain: best.holding, err });
-    } else if (t > -0.5) {
+    } else if (t > -0.5 && t >= this.practiceUntil) {
       // Forgive double taps and presses that are just outside the window of a nearby note in this lane.
       const near = t - this.lastHit[lane] < 0.18 || this.notes.some((n, i) => i >= this.next - 4 && i < this.next + 24 && n.lane === lane && Math.abs(n.t - t) < 0.22);
       if (!near) { this.breakCombo(false); this.events.push({ type: "ghost", lane }); }
@@ -122,6 +132,28 @@ export class Game {
       }
     }
     if (t > this.end + 0.5) this.ended = true;
+  }
+
+  /** After a pause: the music restarts at `toT` (a few seconds before the pause) so the player can find the beat.
+      Notes already played stay hidden; the notes come back at the moment the game was paused. */
+  hidePlayed() {
+    const pausedAt = this.lastT;
+    for (const n of this.notes) { n.holding = false; if (n.t < pausedAt && n.state !== 0) n.hide = true; }
+    // pausing again during a lead-in keeps the original comeback point
+    this.resumeAt = Math.max(this.resumeAt ?? -Infinity, pausedAt);
+  }
+  resumeFrom(toT) {
+    this.pressed.fill(false);
+    this.practiceUntil = this.resumeAt;
+    this.resumeFromT = toT;
+    this.lastT = toT;
+    this.player.seek(toT - this.offset + this.songOffset, 0.05);
+  }
+
+  /** The no-notes stretch the song is in right now, if any: [start, end]. */
+  gapAt(t) {
+    for (const g of this.gaps) if (t >= g[0] && t < g[1]) return g;
+    return null;
   }
 
   section(t) {

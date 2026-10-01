@@ -639,6 +639,7 @@ export function createRenderer(canvas) {
       for (let i = from; i < notes.length; i++) {
         const n = notes[i];
         if (n.t - t > look * 1.02) break;
+        if (n.hide) continue;
         const x = laneX(n.lane);
         if (n.dur > 0 && n.t + n.dur > t && ti < MAX_GEMS) {
           const z0 = n.holding ? 0 : Math.min(0.4, zOf(n.t));
