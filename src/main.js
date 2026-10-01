@@ -424,7 +424,7 @@ function renderSettings() {
     box.appendChild(b);
   });
   $("keysField").hidden = touch;
-  $("openAdmin").hidden = !online || touch || !!app.game;
+  $("openAdmin").hidden = !isAdminBrowser() || !online || touch || !!app.game;
   document.querySelectorAll("#laneSeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === settings.laneMode));
   document.querySelectorAll("#qualitySeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === settings.gfx));
   document.querySelectorAll("#missSeg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === "on") === String(settings.missSfx)));
@@ -602,8 +602,9 @@ window.__corde = { app, R };
 /* ================= admin uploads ================= */
 const adm = { songs: [], busy: false };
 const ADMIN_KEY = "corde.adminCode";
+// The upload screen is hidden for everyone; the admin opens it once with /#admin and it stays visible in that browser.
+function isAdminBrowser() { try { return !!localStorage.getItem(ADMIN_KEY); } catch { return false; } }
 try { $("adminCode").value = localStorage.getItem(ADMIN_KEY) || ""; } catch {}
-$("openAdmin").hidden = !online || touch || !!app.game;
 $("openAdmin").onclick = () => { if (app.game) return; show("admin"); };
 if (location.hash === "#admin") setTimeout(() => show("admin"), 0);
 
