@@ -52,10 +52,11 @@ function show(name, push = true) {
   if (!transient.includes(name)) app.stable = name;
   app.screen = name;
   SCREENS.forEach((s) => ($("s-" + s).hidden = s !== name));
-  $("hud").hidden = !(name === "pause" || (app.game && name === "play"));
+  $("hud").hidden = !(app.game && ["play", "pause", "settings"].includes(name));
   if (name === "play") $("hud").hidden = false;
 }
 function back() {
+  if (app.screen === "settings" && app.settingsFromPause) { backToPause(); return; }
   const prev = app.history.pop() || "home";
   if (app.screen === "library" && app.mode === "pick") { app.mode = "mp"; show("lobby", false); return; }
   show(prev, false);
@@ -197,7 +198,7 @@ function openSetup() {
   const keys = settings.keys.slice(0, lanes).map(keyLabel).join(" ");
   $("setupHint").textContent = touch
     ? `Juegas con ${lanes} cuerdas. Toca la columna de cada color cuando la nota llegue a los botones y mantén el dedo en las notas largas.`
-    : `Juegas con ${lanes} cuerdas: ${keys}. Presiona cuando la nota llegue a los botones y mantén en las largas. Esc para pausar.`;
+    : `Juegas con ${lanes} cuerdas: ${keys}. Presiona cuando la nota llegue a los botones y mantén en las largas. Espacio o Esc para pausar.`;
   show("setup");
 }
 $("playBtn").onclick = () => startGame({ lanes: deviceLanes(), diff: app.diff });
@@ -206,20 +207,26 @@ $("playBtn").onclick = () => startGame({ lanes: deviceLanes(), diff: app.diff })
 function startGame({ lanes, diff }) {
   stopGame();
   const player = new Player(app.decoded);
-  app.game = new Game({ chart: app.chart, diff, lanes, player, offsetMs: settings.offsetMs, look: +settings.speed });
+  player.missSfx = settings.missSfx;
+  app.game = new Game({ chart: app.chart, diff, lanes, player, offsetMs: settings.offsetMs, look: +settings.speed, autoSync: settings.autoSync });
   app.lanes = lanes;
   app.diff = diff;
   R.setLanes(lanes);
   app.paused = false;
   app.finals = {}; app.rivals = {};
   lastSection = -2;
+  for (const k in hudCache) delete hudCache[k];
   $("rivals").hidden = app.mode !== "mp";
   show("play");
   app.game.start();
   try { navigator.wakeLock?.request("screen").then((l) => (app.wake = l)).catch(() => {}); } catch {}
 }
+function keepLearnedSync(g) {
+  if (g && settings.autoSync && g.hits >= 8 && g.offsetMs !== settings.offsetMs) { settings.offsetMs = g.offsetMs; save(); }
+}
 function stopGame() {
   if (!app.game) return;
+  keepLearnedSync(app.game);
   app.game.player.stop();
   app.game = null;
   try { app.wake?.release(); } catch {}
@@ -232,10 +239,15 @@ function pauseGame() {
 function resumeGame() {
   if (!app.game || !app.paused) return;
   app.game.pressed.fill(false);
+  app.game.look = +settings.speed;
+  app.game.offset = settings.offsetMs / 1000;
+  app.game.player.missSfx = settings.missSfx;
   app.game.player.resume().then(() => { app.paused = false; });
   show("play", false);
 }
 $("pauseBtn").onclick = pauseGame;
+$("pauseSettingsBtn").onclick = () => { app.settingsFromPause = true; renderSettings(); show("settings", false); };
+function backToPause() { app.settingsFromPause = false; show("pause", false); }
 $("resumeBtn").onclick = resumeGame;
 $("restartBtn").onclick = () => startGame({ lanes: app.lanes, diff: app.diff });
 $("quitBtn").onclick = () => { stopGame(); R.setLanes(5); show("setup", false); };
@@ -245,6 +257,7 @@ function finishGame() {
   const g = app.game; if (!g) return;
   const sum = g.summary();
   g.player.stop();
+  keepLearnedSync(g);
   app.lastSummary = sum;
   $("resSong").textContent = `${app.song.name} · ${DIFFS.find((d) => d.key === app.diff).name} · ${app.lanes} cuerdas`;
   $("resScore").textContent = sum.score.toLocaleString("es-CO");
@@ -277,7 +290,12 @@ addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   if (rebinding >= 0) { e.preventDefault(); finishRebind(k === "escape" ? null : k); return; }
   if (!app.game) return;
-  if (k === "escape") { e.preventDefault(); app.paused ? resumeGame() : pauseGame(); return; }
+  const pauseKey = k === "escape" || (k === " " && !settings.keys.slice(0, app.lanes).includes(" "));
+  if (pauseKey) {
+    e.preventDefault();
+    if (app.screen === "settings" && app.settingsFromPause) { backToPause(); return; }
+    app.paused ? resumeGame() : pauseGame(); return;
+  }
   if (e.repeat || app.paused) return;
   const lane = laneForKey(k);
   if (lane >= 0) { e.preventDefault(); app.game.press(lane, evTime(e)); }
@@ -319,23 +337,37 @@ function judge(text, color) {
   j.style.top = Math.max(80, R.strikeScreenY() - 130) + "px";
   j.classList.add("show"); clearTimeout(judgeT); judgeT = setTimeout(() => j.classList.remove("show"), 60);
 }
+// Only touch the DOM when a value actually changed (keeps layout/paint out of most frames).
+const hudCache = {};
+const setHud = (k, v, fn) => { if (hudCache[k] !== v) { hudCache[k] = v; fn(v); } };
 function updateHUD(g, t) {
-  $("score").textContent = Math.round(g.score).toLocaleString("es-CO");
-  $("combo").textContent = g.combo;
+  setHud("score", Math.round(g.score), (v) => ($("score").textContent = v.toLocaleString("es-CO")));
+  setHud("combo", g.combo, (v) => ($("combo").textContent = v));
   const m = g.multiplier;
-  $("multText").textContent = "×" + m;
-  $("mult").className = "mult x" + m;
+  setHud("mult", m, (v) => { $("multText").textContent = "×" + v; $("mult").className = "mult x" + v; });
   const fill = m >= 4 ? 10 : g.combo % 10;
-  const col = ["#f2e8d8", "#f5c518", "#1fd14a", "#ff7a1a"][m - 1];
-  ringSegs.forEach((s, i) => s.setAttribute("stroke", i < fill ? col : "rgba(255,255,255,.1)"));
-  $("progress").style.width = Math.max(0, Math.min(100, (t / g.end) * 100)) + "%";
+  setHud("ring", m * 100 + fill, () => {
+    const col = ["#f2e8d8", "#f5c518", "#1fd14a", "#ff7a1a"][m - 1];
+    ringSegs.forEach((s, i) => s.setAttribute("stroke", i < fill ? col : "rgba(255,255,255,.1)"));
+  });
+  setHud("prog", Math.round(Math.max(0, Math.min(1, t / g.end)) * 400), (v) => ($("progress").style.transform = `scaleX(${v / 400})`));
   const si = g.section(t);
   if (si !== lastSection) { lastSection = si; $("section").textContent = si >= 0 ? g.sections[si][1] : ""; R.setSection(Math.max(0, si)); }
-  const cd = $("countdown");
-  cd.textContent = t < 0 && t > -3.2 ? Math.ceil(-t) : "";
+  setHud("cd", t < 0 && t > -3.2 ? Math.ceil(-t) : "", (v) => ($("countdown").textContent = v));
 }
 
 /* ================= main loop ================= */
+// Beats on screen, found by moving a cursor instead of filtering the whole list every frame.
+let beatCursor = { arr: null, i: 0 };
+function visibleBeats(beats, t, look) {
+  if (beatCursor.arr !== beats) beatCursor = { arr: beats, i: 0 };
+  let i = beatCursor.i;
+  while (i > 0 && beats[i - 1][0] > t - 0.5) i--;
+  while (i < beats.length && beats[i][0] <= t - 0.5) i++;
+  beatCursor.i = i;
+  let j = i; while (j < beats.length && beats[j][0] < t + look) j++;
+  return beats.slice(i, j);
+}
 let prev = performance.now(), lastNet = 0;
 function frame(now) {
   requestAnimationFrame(frame);
@@ -347,14 +379,14 @@ function frame(now) {
     for (const ev of g.events) {
       if (ev.type === "hit") {
         R.hit(ev.lane, ev.sustain);
-        judge(Math.abs(ev.err) <= 0.045 ? "Perfecto" : ev.err < 0 ? "Temprano" : "Tarde", Math.abs(ev.err) <= 0.045 ? "#f5c518" : "#f2e8d8");
+        if (Math.abs(ev.err) <= 0.045) judge("Perfecto", "#f5c518");
         if (g.combo > 0 && g.combo % 50 === 0) { streak(`¡Racha de ${g.combo}!`); if (g.combo % 100 === 0) R.pyro(); }
       }
       else if (ev.type === "hold") R.holdSpark(ev.lane);
       else if (ev.type === "miss" || ev.type === "ghost") judge("Fallo", "#ff2a22");
     }
     g.events.length = 0;
-    R.render({ t, look: g.look, notes: g.notes, from: g.next, pressed: g.pressed, beats: g.beats.filter((b) => b[0] > t - 0.5 && b[0] < t + g.look), dt });
+    R.render({ t, look: g.look, notes: g.notes, from: g.next, pressed: g.pressed, beats: visibleBeats(g.beats, t, g.look), dt });
     updateHUD(g, t);
     if (app.mode === "mp" && app.room && now - lastNet > 300) {
       lastNet = now;
@@ -371,9 +403,9 @@ function frame(now) {
     while (demoNext < demo.notes.length && demo.notes[demoNext].t <= t) {
       const n = demo.notes[demoNext++]; n.state = 1; R.hit(n.lane, false);
     }
-    demo.notes.forEach((n, i) => { if (i < demoNext && n.dur && t < n.t + n.dur) { n.holding = true; pressed[n.lane] = true; } else n.holding = false; });
     const from = Math.max(0, demoNext - 8);
-    R.render({ t, look: 1.6, notes: demo.notes, from, pressed, beats: demo.beats.filter((b) => b[0] > t - 0.5 && b[0] < t + 1.6), dt });
+    for (let i = from; i < demoNext; i++) { const n = demo.notes[i]; n.holding = !!(n.dur && t < n.t + n.dur); if (n.holding) pressed[n.lane] = true; }
+    R.render({ t, look: 1.6, notes: demo.notes, from, pressed, beats: visibleBeats(demo.beats, t, 1.6), dt });
   }
 }
 requestAnimationFrame(frame);
@@ -392,7 +424,9 @@ function renderSettings() {
   });
   $("keysField").hidden = touch;
   document.querySelectorAll("#laneSeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === settings.laneMode));
-  document.querySelectorAll("#qualitySeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === settings.quality));
+  document.querySelectorAll("#qualitySeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === settings.gfx));
+  document.querySelectorAll("#missSeg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === "on") === String(settings.missSfx)));
+  document.querySelectorAll("#syncSeg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === "on") === String(settings.autoSync)));
   const n = deviceLanes();
   $("laneHint").textContent = settings.laneMode === "auto"
     ? `En este dispositivo juegas con ${n} cuerdas. Automático usa 5 en PC y 4 en celular.`
@@ -413,10 +447,12 @@ function finishRebind(k) {
 }
 $("resetKeys").onclick = () => { resetKeys(); renderSettings(); };
 document.querySelectorAll("#laneSeg button").forEach((b) => (b.onclick = () => { settings.laneMode = b.dataset.v; save(); renderSettings(); }));
-document.querySelectorAll("#qualitySeg button").forEach((b) => (b.onclick = () => { settings.quality = b.dataset.v; save(); R.setQualityLevel(settings.quality); renderSettings(); }));
+document.querySelectorAll("#qualitySeg button").forEach((b) => (b.onclick = () => { settings.gfx = b.dataset.v; save(); R.setQualityLevel(settings.gfx); renderSettings(); }));
+document.querySelectorAll("#missSeg button").forEach((b) => (b.onclick = () => { settings.missSfx = b.dataset.v === "on"; save(); renderSettings(); }));
+document.querySelectorAll("#syncSeg button").forEach((b) => (b.onclick = () => { settings.autoSync = b.dataset.v === "on"; save(); if (app.game) app.game.autoSync = settings.autoSync; renderSettings(); }));
 $("speed").oninput = (e) => { settings.speed = +e.target.value; save(); renderSettings(); };
 $("offset").oninput = (e) => { settings.offsetMs = +e.target.value; save(); renderSettings(); };
-R.setQualityLevel(settings.quality);
+R.setQualityLevel(settings.gfx);
 
 /* ================= multiplayer ================= */
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));

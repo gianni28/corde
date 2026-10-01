@@ -24,6 +24,7 @@ export class Player {
     this.startAt = 0;
     this.lastHeard = 0;
     this.paused = false;
+    this.missSfx = true;
   }
   start(delay) {
     const c = audioCtx();
@@ -55,15 +56,18 @@ export class Player {
     const c = audioCtx();
     this.guitarGain.gain.setTargetAtTime(on ? 1 : 0, c.currentTime, on ? 0.01 : 0.03);
   }
-  /** Botched strum: detuned, palm-muted power chord through distortion (Guitar Hero style miss). */
+  /** Miss: a short, quiet muted-string "chk" (well under the song), rate-limited. */
   missSound() {
+    if (!this.missSfx) return;
     const c = audioCtx();
-    const bufs = missBuffers(c);
+    if (c.currentTime - (this._lastMiss || 0) < 0.12) return;
+    this._lastMiss = c.currentTime;
     const src = c.createBufferSource();
-    src.buffer = bufs[Math.floor(Math.random() * bufs.length)];
-    src.playbackRate.value = 0.94 + Math.random() * 0.12;
-    const g = c.createGain(); g.gain.value = 0.55;
-    src.connect(g).connect(this.master || c.destination);
+    src.buffer = missBuffer(c);
+    src.playbackRate.value = 0.92 + Math.random() * 0.16;
+    const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 2400;
+    const g = c.createGain(); g.gain.value = 0.12;
+    src.connect(lp).connect(g).connect(this.master || c.destination);
     src.start();
   }
   async pause() { this.paused = true; await audioCtx().suspend(); }
@@ -77,50 +81,24 @@ export class Player {
   }
 }
 
-/* ---------- miss sound synthesis (Karplus-Strong + overdrive) ---------- */
+/* ---------- miss sound: muted string scrape + soft body thump ---------- */
 let _miss = null;
-function missBuffers(c) {
-  if (_miss && _miss.rate === c.sampleRate) return _miss.list;
-  const rate = c.sampleRate, len = Math.floor(rate * 0.55);
-  const list = [];
-  const chords = [
-    [82.4, 116.5, 174.6, 233.1],  // E2 A#2 F3 A#3 (tritone mess)
-    [87.3, 123.5, 164.8, 246.9],  // F2 B2 E3 B3
-    [77.8, 110.0, 155.6, 220.0],  // D#2 A2 D#3 A3
-  ];
-  for (const chord of chords) {
-    const out = new Float32Array(len);
-    chord.forEach((f, si) => {
-      const freq = f * (1 + (Math.random() - 0.5) * 0.03);
-      const N = Math.max(2, Math.round(rate / freq));
-      const ring = new Float32Array(N);
-      for (let i = 0; i < N; i++) ring[i] = Math.random() * 2 - 1;
-      const start = Math.floor(si * rate * 0.014); // strum spread
-      const damp = 0.982; // palm-muted: dies fast
-      let idx = 0;
-      for (let i = start; i < len; i++) {
-        const nxt = (idx + 1) % N;
-        const v = ring[idx];
-        ring[idx] = damp * 0.5 * (ring[idx] + ring[nxt]);
-        out[i] += v * 0.5;
-        idx = nxt;
-      }
-    });
-    // pick scrape at the attack
-    for (let i = 0; i < rate * 0.04; i++) out[i] += (Math.random() * 2 - 1) * 0.35 * (1 - i / (rate * 0.04));
-    // overdrive + envelope
-    const drive = 6, norm = Math.tanh(drive);
-    let peak = 0;
-    for (let i = 0; i < len; i++) {
-      const env = Math.min(1, i / (rate * 0.002)) * Math.exp(-i / (rate * 0.16));
-      out[i] = (Math.tanh(out[i] * drive) / norm) * env;
-      peak = Math.max(peak, Math.abs(out[i]));
-    }
-    for (let i = 0; i < len; i++) out[i] = (out[i] / (peak || 1)) * 0.8;
-    const b = c.createBuffer(1, len, rate);
-    b.copyToChannel(out, 0);
-    list.push(b);
+function missBuffer(c) {
+  if (_miss && _miss.sampleRate === c.sampleRate) return _miss;
+  const rate = c.sampleRate, len = Math.floor(rate * 0.12);
+  const out = new Float32Array(len);
+  let lp = 0, peak = 0;
+  for (let i = 0; i < len; i++) {
+    const t = i / rate;
+    lp += (Math.random() * 2 - 1 - lp) * 0.35; // softened noise
+    const scrape = lp * Math.exp(-t / 0.016);
+    const f = 70 + 50 * Math.exp(-t / 0.02);
+    const thump = Math.sin(2 * Math.PI * f * t) * Math.exp(-t / 0.03) * 0.8;
+    out[i] = (scrape + thump) * Math.min(1, i / (rate * 0.0015));
+    peak = Math.max(peak, Math.abs(out[i]));
   }
-  _miss = { rate, list };
-  return list;
+  for (let i = 0; i < len; i++) out[i] /= peak || 1;
+  _miss = c.createBuffer(1, len, rate);
+  _miss.copyToChannel(out, 0);
+  return _miss;
 }

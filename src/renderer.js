@@ -5,6 +5,7 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 export const LANE_HEX = [0x1fd14a, 0xe8202c, 0xf5c518, 0x1f6fe0, 0xf57a12];
 const HL = 24; // highway length (world units)
@@ -165,11 +166,27 @@ function fireFrames(n = 6) {
   return frames;
 }
 
+// Merge every static mesh in a group into one mesh per material (hundreds of draw calls -> a handful).
+function bake(group) {
+  group.updateMatrixWorld(true);
+  const byMat = new Map(), keep = [];
+  group.traverse((o) => {
+    if (!o.isMesh || Array.isArray(o.material)) { if (o !== group && (o.isMesh || o.isSprite || o.isPoints) && o.parent === group) keep.push(o); return; }
+    const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    for (const k of Object.keys(g.attributes)) if (!["position", "normal", "uv"].includes(k)) g.deleteAttribute(k);
+    g.applyMatrix4(o.matrixWorld);
+    if (!byMat.has(o.material)) byMat.set(o.material, []);
+    byMat.get(o.material).push(g);
+  });
+  const out = new THREE.Group();
+  for (const [mat, geos] of byMat) out.add(new THREE.Mesh(mergeGeometries(geos), mat));
+  for (const o of keep) { o.updateMatrixWorld(true); o.matrix.copy(o.matrixWorld); o.matrix.decompose(o.position, o.quaternion, o.scale); out.add(o); }
+  return out;
+}
+
 /* ================= renderer ================= */
 export function createRenderer(canvas) {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile, powerPreference: "high-performance" });
-  const DPR = Math.min(devicePixelRatio || 1, isMobile ? 1.5 : 2);
-  renderer.setPixelRatio(DPR);
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
 
@@ -177,6 +194,14 @@ export function createRenderer(canvas) {
   scene.background = new THREE.Color(0x070403);
   scene.fog = new THREE.Fog(0x0d0705, 22, 75);
   const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 220);
+  // The venue lives in its own scene, rendered into a low-res target and shown as the highway's background.
+  const bg = new THREE.Scene();
+  bg.background = new THREE.Color(0x070403);
+  bg.fog = scene.fog;
+  const bgRT = new THREE.WebGLRenderTarget(16, 16, { type: THREE.HalfFloatType });
+  scene.background = bgRT.texture;
+  bg.add(new THREE.HemisphereLight(0xffd9b0, 0x120604, 0.35));
+  const bgKey = new THREE.DirectionalLight(0xffe2c4, 0.7); bgKey.position.set(2, 9, 7); bg.add(bgKey);
 
   /* --- lights: warm tungsten club rig --- */
   const hemi = new THREE.HemisphereLight(0xffd9b0, 0x120604, 0.28); scene.add(hemi);
@@ -186,14 +211,14 @@ export function createRenderer(canvas) {
   [[-16, 0xffa040], [0, 0xff3b1a], [16, 0xffc070]].forEach(([x, c]) => {
     const s = new THREE.SpotLight(c, 260, 80, 0.42, 0.7, 1.4);
     s.position.set(x, 22, -30); s.target.position.set(x * 0.8, 6, -58);
-    scene.add(s, s.target); wallSpots.push(s);
+    bg.add(s, s.target); wallSpots.push(s);
   });
   const stageWash = new THREE.SpotLight(0xffb070, 140, 60, 0.6, 0.8, 1.5);
-  stageWash.position.set(0, 20, -20); stageWash.target.position.set(0, 0, -40); scene.add(stageWash, stageWash.target);
-  const pyroLight = new THREE.PointLight(0xff7a20, 0, 40, 1.5); pyroLight.position.set(0, 4, -22); scene.add(pyroLight);
+  stageWash.position.set(0, 20, -20); stageWash.target.position.set(0, 0, -40); bg.add(stageWash, stageWash.target);
+  const pyroLight = new THREE.PointLight(0xff7a20, 0, 40, 1.5); pyroLight.position.set(0, 4, -22); bg.add(pyroLight);
 
   /* --- venue --- */
-  const stage = new THREE.Group(); scene.add(stage);
+  const stage = new THREE.Group();
   const brick = brickTex(); brick.repeat.set(4, 2);
   const wall = new THREE.Mesh(new THREE.PlaneGeometry(140, 60), new THREE.MeshStandardMaterial({ map: brick, roughness: 0.95, metalness: 0 }));
   wall.position.set(0, 24, -60); stage.add(wall);
@@ -256,47 +281,55 @@ export function createRenderer(canvas) {
     }
   };
   mkTruss(-28, 15); mkTruss(-48, 19);
-  const cans = [];
-  const coneGeo = new THREE.ConeGeometry(2.6, 24, 32, 1, true); coneGeo.translate(0, -12, 0);
+  const coneGeo = new THREE.ConeGeometry(2.6, 24, 24, 1, true); coneGeo.translate(0, -12, 0);
   const coneMat = () => new THREE.ShaderMaterial({
     uniforms: { uColor: { value: new THREE.Color() }, uI: { value: 0.12 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
     vertexShader: `varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main(){ vUv=uv; vec4 mv=modelViewMatrix*vec4(position,1.); vN=normalize(normalMatrix*normal); vV=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
     fragmentShader: `varying vec2 vUv; varying vec3 vN; varying vec3 vV; uniform vec3 uColor; uniform float uI;
       void main(){ float e=pow(abs(dot(vN,vV)),2.); float l=pow(vUv.y,2.2); gl_FragColor=vec4(uColor*uI*e*l,1.); }`,
   });
-  const lensTex = softDotTex();
+  const coneMats = [coneMat(), coneMat()];
   const canBody = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.7, roughness: 0.4 });
-  const canGeo = new THREE.CylinderGeometry(0.42, 0.5, 1.1, 14);
-  for (const [z, y, n] of [[-28, 14.3, 9], [-48, 18.3, 11]]) for (let i = 0; i < n; i++) {
-    const x = (i - (n - 1) / 2) * (z === -28 ? 4.4 : 4.8);
-    const g = new THREE.Group(); g.position.set(x, y, z + 0.4);
-    const body = new THREE.Mesh(canGeo, canBody); g.add(body);
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: lensTex, color: 0xffc080, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }));
-    glow.scale.setScalar(2.2); glow.position.y = -0.6; g.add(glow);
-    const cone = new THREE.Mesh(coneGeo, coneMat()); cone.position.y = -0.5; g.add(cone);
-    const aim = rnd(-0.35, 0.35);
-    g.rotation.set(0.28, 0, aim);
-    truss.add(g); cans.push({ g, glow, cone, aim, phase: Math.random() * 6, row: z });
-  }
+  const canGeo = new THREE.CylinderGeometry(0.42, 0.5, 1.1, 12);
+  const glowPts = [[], []];
+  const coneGroup = new THREE.Group();
+  [[-28, 14.3, 9], [-48, 18.3, 11]].forEach(([z, y, n], row) => {
+    for (let i = 0; i < n; i++) {
+      const x = (i - (n - 1) / 2) * (row === 0 ? 4.4 : 4.8);
+      const g = new THREE.Group(); g.position.set(x, y, z + 0.4); g.rotation.set(0.28, 0, rnd(-0.35, 0.35));
+      g.add(new THREE.Mesh(canGeo, canBody));
+      const cone = new THREE.Mesh(coneGeo, coneMats[row]); cone.position.y = -0.5; g.add(cone);
+      truss.add(g);
+      g.updateMatrixWorld(true);
+      const lens = new THREE.Vector3(0, -0.6, 0).applyMatrix4(g.matrixWorld);
+      glowPts[row].push(lens.x, lens.y, lens.z);
+    }
+  });
+  const lensTex = softDotTex();
+  const glows = glowPts.map((arr) => {
+    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(arr, 3));
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({ map: lensTex, size: 2.4, color: 0xffc080, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    bg.add(pts); return pts;
+  });
 
   // haze
   const sTex = smokeTex();
   const haze = [];
-  for (let i = 0; i < (isMobile ? 14 : 26); i++) {
+  for (let i = 0; i < (isMobile ? 6 : 10); i++) {
     const m = new THREE.SpriteMaterial({ map: sTex, color: 0x6a4028, transparent: true, opacity: rnd(0.1, 0.22), depthWrite: false, fog: true });
-    const s = new THREE.Sprite(m); const sc = rnd(14, 30); s.scale.set(sc * 1.6, sc, 1);
-    s.position.set(rnd(-30, 30), rnd(2, 16), rnd(-55, -22)); stage.add(s);
+    const s = new THREE.Sprite(m); const sc = rnd(16, 30); s.scale.set(sc * 1.6, sc, 1);
+    s.position.set(rnd(-30, 30), rnd(2, 16), rnd(-55, -22)); bg.add(s);
     haze.push({ s, v: rnd(-0.4, 0.4) });
   }
 
   // embers floating in the light
-  const dustN = isMobile ? 160 : 380;
+  const dustN = isMobile ? 90 : 220;
   const dustGeo = new THREE.BufferGeometry();
   const dp = new Float32Array(dustN * 3);
   for (let i = 0; i < dustN; i++) { dp[i * 3] = rnd(-30, 30); dp[i * 3 + 1] = rnd(0, 20); dp[i * 3 + 2] = rnd(-55, 2); }
   dustGeo.setAttribute("position", new THREE.BufferAttribute(dp, 3));
   const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ map: softDotTex(), size: 0.18, transparent: true, opacity: 0.6, color: 0xffb070, blending: THREE.AdditiveBlending, depthWrite: false }));
-  scene.add(dust);
+  bg.add(dust);
 
   // pyro columns (fire on section changes / big streaks)
   const fire = fireFrames(6);
@@ -306,11 +339,13 @@ export function createRenderer(canvas) {
     for (let k = 0; k < 3; k++) {
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: fire[0], transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
       sp.center.set(0.5, 0); sp.position.set(x + rnd(-0.3, 0.3), -0.8, -22 - Math.abs(x) * 0.3); sp.scale.set(3, 8, 1);
-      scene.add(sp); col.push(sp);
+      sp.visible = false; bg.add(sp); col.push(sp);
     }
     pyro.push({ col, t: 9, x });
   }
   let pyroT = 9;
+
+  bg.add(bake(stage));
 
   /* --- highway --- */
   const hwy = new THREE.Group(); scene.add(hwy);
@@ -410,9 +445,9 @@ export function createRenderer(canvas) {
   }
 
   /* --- post --- */
-  const composer = new EffectComposer(renderer);
+  const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: isMobile ? 0 : 4 }));
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.4, 0.86);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(128, 128), 0.5, 0.4, 0.86);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
@@ -456,12 +491,47 @@ export function createRenderer(canvas) {
     baseCam.copy(camera.position);
   }
 
+  /* --- quality levels (auto mode steps down the moment frames get slow) --- */
+  const DEV_DPR = devicePixelRatio || 1;
+  const LEVELS = [
+    { dpr: Math.min(DEV_DPR, 2), bloom: 0.5, bg: 0.75, bgEvery: 1, fx: 2 },
+    { dpr: Math.min(DEV_DPR, 1.5), bloom: 0.35, bg: 0.7, bgEvery: 1, fx: 2 },
+    { dpr: 1, bloom: 0, bg: 0.5, bgEvery: 2, fx: 1 },
+    { dpr: 0.75, bloom: 0, bg: 0.33, bgEvery: 3, fx: 0 },
+  ];
+  let mode = "auto", level = isMobile ? 2 : 1;
+  const perf = { ema: 16.7, last: 0, slowFor: 0, fastFor: 0, lastDrop: -1e9 };
+  function applyLevel() {
+    const L = LEVELS[level];
+    const samples = !isMobile && level <= 1 ? 4 : 0;
+    for (const rt of [composer.renderTarget1, composer.renderTarget2, bgRT]) if (rt.samples !== samples) { rt.samples = samples; rt.dispose(); }
+    renderer.setPixelRatio(L.dpr);
+    bloom.enabled = L.bloom > 0;
+    dust.visible = L.fx >= 1;
+    haze.forEach((h, i) => (h.s.visible = L.fx >= 2 || i % 2 === 0));
+    coneMats.forEach((m) => (m.visible = L.fx >= 1));
+    resize();
+  }
+  function autoTune(now) {
+    if (mode !== "auto") return;
+    if (!perf.last) { perf.last = now; return; }
+    const ft = now - perf.last; perf.last = now;
+    if (ft > 250) return; // tab switch or a one-off hitch: ignore
+    perf.ema += (Math.min(ft, 60) - perf.ema) * 0.08;
+    if (perf.ema > 19.5) { perf.slowFor += ft; perf.fastFor = 0; } else if (perf.ema < 12.5) { perf.fastFor += ft; perf.slowFor = 0; } else { perf.slowFor = 0; perf.fastFor = 0; }
+    if (perf.slowFor > 700 && level < LEVELS.length - 1) { level++; perf.slowFor = 0; perf.lastDrop = now; perf.ema = 16.7; applyLevel(); }
+    else if (perf.fastFor > 8000 && level > (isMobile ? 1 : 0) && now - perf.lastDrop > 30000) { level--; perf.fastFor = 0; perf.ema = 16.7; applyLevel(); }
+  }
+
   function resize() {
     W = canvas.clientWidth || innerWidth; H = canvas.clientHeight || innerHeight;
+    const L = LEVELS[level];
     renderer.setSize(W, H, false); composer.setSize(W, H);
-    bloom.resolution.set(W * (isMobile ? 0.5 : 0.75), H * (isMobile ? 0.5 : 0.75));
+    bloom.resolution.set(Math.max(64, W * L.bloom), Math.max(64, H * L.bloom));
+    bgRT.setSize(Math.max(64, Math.round(W * L.dpr * L.bg)), Math.max(64, Math.round(H * L.dpr * L.bg)));
     fitCamera();
   }
+  let frameNo = 0;
 
   const WHITE = new THREE.Color(1, 1, 1);
   const tmpM = new THREE.Matrix4(), tmpC = new THREE.Color(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
@@ -474,14 +544,14 @@ export function createRenderer(canvas) {
 
   const api = {
     setLanes: layoutLanes,
+    // "auto" | "high" | "low"
     setQualityLevel(q) {
-      const high = q !== "low";
-      bloom.enabled = high;
-      renderer.setPixelRatio(high ? DPR : Math.min(DPR, 1));
-      dust.visible = high; haze.forEach((h, i) => (h.s.visible = high || i % 2 === 0));
-      cans.forEach((c) => (c.cone.visible = high));
-      resize();
+      mode = q === "high" || q === "low" ? q : "auto";
+      level = mode === "high" ? 0 : mode === "low" ? 2 : isMobile ? 2 : 1;
+      perf.ema = 16.7; perf.slowFor = perf.fastFor = 0;
+      applyLevel();
     },
+    qualityInfo() { return { mode, level, ema: +perf.ema.toFixed(1), bg: [bgRT.width, bgRT.height], px: renderer.getPixelRatio() }; },
     resize,
     setSection(i) { pal = ((i % palettes.length) + palettes.length) % palettes.length; if (i > 0) firePyro(); },
     pyro: firePyro,
@@ -520,13 +590,10 @@ export function createRenderer(canvas) {
 
       // lights
       colA.lerp(tmpC.setHex(palettes[pal][0]), 0.03); colB.lerp(tmpC.setHex(palettes[pal][1]), 0.03);
-      cans.forEach((c, i) => {
-        const col = c.row === -28 ? colA : colB;
-        const flick = 0.85 + 0.15 * Math.sin(now * 7 + c.phase);
-        c.glow.material.color.copy(col).multiplyScalar(0.7 + pulse * 0.6);
-        c.cone.material.uniforms.uColor.value.copy(col);
-        c.cone.material.uniforms.uI.value = (0.1 + pulse * 0.14) * flick;
-        c.g.rotation.z = c.aim + Math.sin(now * 0.35 + c.phase) * 0.08;
+      [colA, colB].forEach((col, row) => {
+        glows[row].material.color.copy(col).multiplyScalar(0.7 + pulse * 0.6);
+        coneMats[row].uniforms.uColor.value.copy(col);
+        coneMats[row].uniforms.uI.value = (0.1 + pulse * 0.14) * (0.88 + 0.12 * Math.sin(now * 7 + row));
       });
       wallSpots.forEach((s, i) => { s.color.copy(i === 1 ? colB : colA); s.intensity = 200 + pulse * 140; });
       stageWash.color.copy(colA); stageWash.intensity = 110 + pulse * 70;
@@ -546,6 +613,7 @@ export function createRenderer(canvas) {
         p.col.forEach((sp, j) => {
           sp.material.map = fire[(Math.floor(now * 18) + j * 2) % fire.length];
           sp.material.opacity = k < 1 ? Math.min(1, (1 - k) * 2.2) * 0.95 : 0;
+          sp.visible = k < 1;
           sp.scale.set(2.6 + j * 0.4, (k < 0.25 ? k / 0.25 : 1) * (9 + j * 2), 1);
         });
       });
@@ -613,6 +681,7 @@ export function createRenderer(canvas) {
         const k = f.t / 0.32;
         f.sp.material.map = fire[(Math.floor(now * 22) + i) % fire.length];
         f.sp.material.opacity = k < 1 ? (1 - k) : 0;
+        f.sp.visible = k < 1;
         f.sp.scale.set(0.95 + k * 0.25, 1.5 + k * 0.9, 1);
       }
       for (let i = 0; i < SPARKS; i++) {
@@ -622,6 +691,12 @@ export function createRenderer(canvas) {
       }
       sparkGeo.attributes.position.needsUpdate = true; sparkGeo.attributes.color.needsUpdate = true;
 
+      autoTune(performance.now());
+      if (frameNo++ % LEVELS[level].bgEvery === 0) {
+        renderer.setRenderTarget(bgRT);
+        renderer.render(bg, camera);
+        renderer.setRenderTarget(null);
+      }
       composer.render();
     },
   };

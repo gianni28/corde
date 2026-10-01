@@ -6,7 +6,9 @@ export const DEFAULTS = {
   laneMode: "auto", // "auto" | "5" | "4"
   speed: 1.5, // seconds of highway visible
   offsetMs: 0, // + = notes later
-  quality: "high", // "high" | "low"
+  gfx: "auto", // "auto" | "high" | "low"
+  missSfx: true,
+  autoSync: true,
   name: "",
 };
 

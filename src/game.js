@@ -5,12 +5,15 @@ export const WINDOW = 0.1; // ±100 ms to hit a note
 export const PERFECT = 0.045;
 
 export class Game {
-  constructor({ chart, diff, lanes, player, offsetMs = 0, look = 1.5 }) {
+  constructor({ chart, diff, lanes, player, offsetMs = 0, look = 1.5, autoSync = true }) {
     this.chart = chart;
     this.diff = diff;
     this.lanes = lanes;
     this.player = player;
     this.offset = offsetMs / 1000;
+    this.autoSync = autoSync;
+    this.errs = []; // recent hit errors (s), used to learn the player's latency
+    this.lastHit = new Array(5).fill(-9);
     this.look = look;
     this.notes = notesFor(chart, diff, lanes).map((n) => ({ ...n, state: 0, holding: false }));
     this.beats = chart.beats;
@@ -48,6 +51,8 @@ export class Game {
       best.state = 1;
       best.holding = best.dur > 0;
       const err = t - best.t;
+      this.lastHit[lane] = t;
+      this.learn(err);
       this.combo++; this.hits++;
       this.maxCombo = Math.max(this.maxCombo, this.combo);
       if (Math.abs(err) <= PERFECT) this.perfects++;
@@ -55,10 +60,26 @@ export class Game {
       this.player.guitar(true);
       this.events.push({ type: "hit", lane, sustain: best.holding, err });
     } else if (t > -0.5) {
-      this.breakCombo(true);
-      this.events.push({ type: "ghost", lane });
+      // Forgive double taps and presses that are just outside the window of a nearby note in this lane.
+      const near = t - this.lastHit[lane] < 0.18 || this.notes.some((n, i) => i >= this.next - 4 && i < this.next + 24 && n.lane === lane && Math.abs(n.t - t) < 0.22);
+      if (!near) { this.breakCombo(false); this.events.push({ type: "ghost", lane }); }
     }
   }
+
+  /** Auto-sync: nudge the clock toward the player's median timing so audio/display latency stops costing notes. */
+  learn(err) {
+    this.errs.push(err);
+    if (this.errs.length > 32) this.errs.shift();
+    if (!this.autoSync || this.errs.length < 8) return;
+    const sorted = [...this.errs].sort((a, b) => a - b);
+    const med = sorted[sorted.length >> 1];
+    if (Math.abs(med) < 0.008) return;
+    const step = Math.max(-0.006, Math.min(0.006, med * 0.25));
+    this.offset = Math.max(-0.3, Math.min(0.3, this.offset - step));
+    for (let i = 0; i < this.errs.length; i++) this.errs[i] -= step; // past errors as if measured with the new offset
+  }
+
+  get offsetMs() { return Math.round(this.offset * 1000); }
 
   release(lane) {
     if (lane < 0 || lane >= this.lanes) return;

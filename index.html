@@ -113,8 +113,18 @@
         <p class="hint">Si tienes que tocar antes de que la nota llegue, sube el valor. Si tienes que tocar después, bájalo.</p>
       </div>
       <div class="field">
+        <span class="label">Sincronía automática</span>
+        <div class="seg" id="syncSeg"><button data-v="on">Activada</button><button data-v="off">Apagada</button></div>
+        <p class="hint">Aprende mientras tocas cuánto retraso tienen tu audio y tu pantalla, y lo guarda para la próxima canción.</p>
+      </div>
+      <div class="field">
         <span class="label">Gráficos</span>
-        <div class="seg" id="qualitySeg"><button data-v="high">Altos</button><button data-v="low">Rápidos</button></div>
+        <div class="seg" id="qualitySeg"><button data-v="auto">Automático</button><button data-v="high">Altos</button><button data-v="low">Rápidos</button></div>
+        <p class="hint">Automático baja la calidad apenas detecta que el juego va lento.</p>
+      </div>
+      <div class="field">
+        <span class="label">Sonido al fallar</span>
+        <div class="seg" id="missSeg"><button data-v="on">Activado</button><button data-v="off">Apagado</button></div>
       </div>
     </div>
   </section>
@@ -164,6 +174,7 @@
       <div class="stack">
         <button class="primary" id="resumeBtn">Seguir</button>
         <button id="restartBtn">Reiniciar</button>
+        <button id="pauseSettingsBtn">Ajustes</button>
         <button id="quitBtn">Salir</button>
       </div>
     </div>
