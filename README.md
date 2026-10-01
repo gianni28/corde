@@ -2,11 +2,13 @@
 
 Juego de ritmo multijugador en el navegador, inspirado en Guitar Hero. Se toca con el teclado en PC (5 cuerdas) o con los dedos en el celular (4 cuerdas), con canciones en formato Clone Hero.
 
-**Stack:** Vite · Three.js (escena 3D, bloom) · Web Audio API · Supabase (Postgres, Storage, Realtime) · Netlify
+**Stack:** Vite · Three.js (escena 3D, bloom) · fuentes autoalojadas (@fontsource) · Web Audio API · Supabase (Postgres, Storage, Realtime) · Netlify
 
 ## Qué hace
 
-- **Autopista 3D** con botones y gemas estilo Guitar Hero, cuerdas que vibran, llamas y chispas al acertar, escenario con luces que pulsan al ritmo, humo y bloom.
+- **Look rock de los 2000:** escenario de bar en 3D (pared de ladrillo, muros de amplis, batería en tarima, truss con luces PAR cálidas, humo y pirotecnia en cada sección), mástil de palisandro con botones cromados y fuego al acertar. Menús de acero rayado con remaches y logo cromado.
+- **Sonido de fallo** sintetizado (rasgueo desafinado y distorsionado con Karplus-Strong) y la pista de guitarra se silencia mientras fallas.
+- **Rachas:** aviso cada 50 notas seguidas y pirotecnia cada 100.
 - **Se adapta al dispositivo:** 5 cuerdas en PC, 4 en celular. Las notas naranjas se pliegan a la cuerda de al lado (`notesFor` en `src/chart.js`).
 - **Teclas configurables** en Ajustes (por defecto `D F J K L`, también `1`–`5`).
 - **Biblioteca en línea:** canciones guardadas en Supabase Storage, catálogo en Postgres.

@@ -1,3 +1,9 @@
+import "@fontsource/new-rocker/latin-400.css";
+import "@fontsource/oswald/latin-500.css";
+import "@fontsource/oswald/latin-600.css";
+import "@fontsource/oswald/latin-700.css";
+import "@fontsource/barlow-condensed/latin-500.css";
+import "@fontsource/barlow-condensed/latin-600.css";
 import { createRenderer, LANE_HEX } from "./renderer.js";
 import { DIFFS, midiToChart, chartTextToChart, parseIni, iniMeta, notesFor } from "./chart.js";
 import { decodeStems, Player, audioCtx } from "./audio.js";
@@ -296,12 +302,18 @@ const pointerUp = (e) => {
 /* ================= HUD ================= */
 const ring = $("multRing");
 ring.innerHTML = Array.from({ length: 10 }, (_, i) => {
-  const a0 = (i / 10) * Math.PI * 2 + 0.06, a1 = ((i + 1) / 10) * Math.PI * 2 - 0.06, r = 28;
+  const a0 = (i / 10) * Math.PI * 2 + 0.09, a1 = ((i + 1) / 10) * Math.PI * 2 - 0.09, r = 26;
   const p = (a) => `${32 + r * Math.cos(a)} ${32 + r * Math.sin(a)}`;
-  return `<path d="M${p(a0)} A${r} ${r} 0 0 1 ${p(a1)}" stroke-width="5" fill="none" stroke-linecap="round"/>`;
+  return `<path d="M${p(a0)} A${r} ${r} 0 0 1 ${p(a1)}" stroke-width="6" fill="none" stroke-linecap="butt"/>`;
 }).join("");
 const ringSegs = [...ring.children];
 let lastSection = -2, judgeT = 0;
+let streakT = 0;
+function streak(text) {
+  const el = $("streak"); el.textContent = text;
+  el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
+  clearTimeout(streakT); streakT = setTimeout(() => el.classList.remove("show"), 1700);
+}
 function judge(text, color) {
   const j = $("judge"); j.textContent = text; j.style.color = color;
   j.style.top = Math.max(80, R.strikeScreenY() - 130) + "px";
@@ -314,8 +326,8 @@ function updateHUD(g, t) {
   $("multText").textContent = "×" + m;
   $("mult").className = "mult x" + m;
   const fill = m >= 4 ? 10 : g.combo % 10;
-  const col = ["#f4eee6", "#ffd21f", "#2ee65a", "#c58bff"][m - 1];
-  ringSegs.forEach((s, i) => s.setAttribute("stroke", i < fill ? col : "rgba(255,255,255,.14)"));
+  const col = ["#f2e8d8", "#f5c518", "#1fd14a", "#ff7a1a"][m - 1];
+  ringSegs.forEach((s, i) => s.setAttribute("stroke", i < fill ? col : "rgba(255,255,255,.1)"));
   $("progress").style.width = Math.max(0, Math.min(100, (t / g.end) * 100)) + "%";
   const si = g.section(t);
   if (si !== lastSection) { lastSection = si; $("section").textContent = si >= 0 ? g.sections[si][1] : ""; R.setSection(Math.max(0, si)); }
@@ -333,9 +345,13 @@ function frame(now) {
     const t = g.time();
     if (!app.paused) g.update(t);
     for (const ev of g.events) {
-      if (ev.type === "hit") { R.hit(ev.lane, ev.sustain); judge(Math.abs(ev.err) <= 0.045 ? "Perfecto" : ev.err < 0 ? "Temprano" : "Tarde", Math.abs(ev.err) <= 0.045 ? "#ffd21f" : "#f4eee6"); }
+      if (ev.type === "hit") {
+        R.hit(ev.lane, ev.sustain);
+        judge(Math.abs(ev.err) <= 0.045 ? "Perfecto" : ev.err < 0 ? "Temprano" : "Tarde", Math.abs(ev.err) <= 0.045 ? "#f5c518" : "#f2e8d8");
+        if (g.combo > 0 && g.combo % 50 === 0) { streak(`¡Racha de ${g.combo}!`); if (g.combo % 100 === 0) R.pyro(); }
+      }
       else if (ev.type === "hold") R.holdSpark(ev.lane);
-      else if (ev.type === "miss" || ev.type === "ghost") judge("Fallo", "#ff2e3c");
+      else if (ev.type === "miss" || ev.type === "ghost") judge("Fallo", "#ff2a22");
     }
     g.events.length = 0;
     R.render({ t, look: g.look, notes: g.notes, from: g.next, pressed: g.pressed, beats: g.beats.filter((b) => b[0] > t - 0.5 && b[0] < t + g.look), dt });

@@ -1,240 +1,374 @@
-// Corde — 3D stage + highway renderer (Three.js)
+// Corde — 3D renderer. Look: mid-2000s rock club stage (brick wall, amp walls, drum riser,
+// tungsten PAR cans, haze, pyro) behind a Guitar-Hero-style rosewood highway.
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 
-export const LANE_HEX = [0x2ee65a, 0xff2e3c, 0xffd21f, 0x2a84ff, 0xff8a1a];
+export const LANE_HEX = [0x1fd14a, 0xe8202c, 0xf5c518, 0x1f6fe0, 0xf57a12];
 const HL = 24; // highway length (world units)
 const LW = 1.0; // lane width
 const MAX_GEMS = 260;
-
 const isMobile = matchMedia("(pointer:coarse)").matches;
+const rnd = (a, b) => a + Math.random() * (b - a);
 
-/* ---------- procedural textures ---------- */
-function canvasTex(w, h, draw, repeat) {
+/* ================= procedural textures ================= */
+function canvasTex(w, h, draw, { repeat = false, srgb = true } = {}) {
   const c = document.createElement("canvas");
   c.width = w; c.height = h;
   draw(c.getContext("2d"), w, h);
   const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 8;
-  if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; }
+  if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
 }
+function grime(g, w, h, n, a) {
+  for (let i = 0; i < n; i++) {
+    const x = Math.random() * w, y = Math.random() * h, r = rnd(4, 40);
+    const rg = g.createRadialGradient(x, y, 0, x, y, r);
+    rg.addColorStop(0, `rgba(0,0,0,${a})`); rg.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+}
 
-function fretboardTex() {
+function rosewoodTex() {
   return canvasTex(512, 1024, (g, w, h) => {
-    // dark ebony neck with grain
-    const grd = g.createLinearGradient(0, 0, w, 0);
-    grd.addColorStop(0, "#120b0a"); grd.addColorStop(0.08, "#3a2519"); grd.addColorStop(0.5, "#4a3020");
-    grd.addColorStop(0.92, "#3a2519"); grd.addColorStop(1, "#120b0a");
-    g.fillStyle = grd; g.fillRect(0, 0, w, h);
-    for (let i = 0; i < 260; i++) {
-      const x = Math.random() * w, a = Math.random() * 0.08 + 0.02;
-      g.strokeStyle = Math.random() < 0.5 ? `rgba(70,45,30,${a})` : `rgba(0,0,0,${a * 1.6})`;
-      g.lineWidth = Math.random() * 2 + 0.4;
+    g.fillStyle = "#2a1610"; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 420; i++) {
+      const x = Math.random() * w, a = rnd(0.03, 0.12);
+      g.strokeStyle = Math.random() < 0.55 ? `rgba(90,52,30,${a})` : `rgba(8,3,2,${a * 1.8})`;
+      g.lineWidth = rnd(0.5, 3);
       g.beginPath(); g.moveTo(x, 0);
-      for (let y = 0; y <= h; y += 32) g.lineTo(x + Math.sin(y * 0.01 + i) * 4, y);
+      const ph = Math.random() * 10;
+      for (let y = 0; y <= h; y += 16) g.lineTo(x + Math.sin(y * 0.006 + ph) * 5, y);
       g.stroke();
     }
-    // pearl inlay dots (two per tile)
-    [h * 0.25, h * 0.75].forEach((y, k) => {
-      const r = 18;
-      const rg = g.createRadialGradient(w / 2 - 4, y - 4, 2, w / 2, y, r);
-      rg.addColorStop(0, "rgba(255,250,240,.55)"); rg.addColorStop(0.7, "rgba(200,190,210,.28)"); rg.addColorStop(1, "rgba(120,110,140,0)");
-      g.fillStyle = rg;
-      if (k === 1) { g.beginPath(); g.arc(w * 0.3, y, r, 0, 7); g.fill(); g.beginPath(); g.arc(w * 0.7, y, r, 0, 7); g.fill(); }
-      else { g.beginPath(); g.arc(w / 2, y, r, 0, 7); g.fill(); }
-    });
-  }, true);
+    grime(g, w, h, 60, 0.18);
+    // darker edges, like a worn neck
+    const e = g.createLinearGradient(0, 0, w, 0);
+    e.addColorStop(0, "rgba(0,0,0,.65)"); e.addColorStop(0.12, "rgba(0,0,0,0)"); e.addColorStop(0.88, "rgba(0,0,0,0)"); e.addColorStop(1, "rgba(0,0,0,.65)");
+    g.fillStyle = e; g.fillRect(0, 0, w, h);
+    // mother-of-pearl dots
+    const dot = (x, y) => {
+      const rg = g.createRadialGradient(x - 5, y - 5, 1, x, y, 20);
+      rg.addColorStop(0, "rgba(255,250,240,.55)"); rg.addColorStop(0.5, "rgba(217,210,195,.4)"); rg.addColorStop(0.85, "rgba(157,151,140,.25)"); rg.addColorStop(1, "rgba(60,50,40,0)");
+      g.fillStyle = rg; g.beginPath(); g.arc(x, y, 14, 0, 7); g.fill();
+    };
+    dot(w / 2, h * 0.25); dot(w * 0.3, h * 0.75); dot(w * 0.7, h * 0.75);
+  }, { repeat: true });
+}
+
+function brickTex() {
+  return canvasTex(1024, 512, (g, w, h) => {
+    g.fillStyle = "#1a0f0b"; g.fillRect(0, 0, w, h);
+    const bw = 64, bh = 26;
+    for (let r = 0; r * bh < h; r++) for (let c = -1; c * bw < w; c++) {
+      const x = c * bw + (r % 2 ? bw / 2 : 0), y = r * bh;
+      const l = rnd(14, 30);
+      g.fillStyle = `hsl(${rnd(8, 18)}, ${rnd(35, 55)}%, ${l}%)`;
+      g.fillRect(x + 2, y + 2, bw - 4, bh - 4);
+      g.fillStyle = `rgba(0,0,0,${rnd(0, 0.35)})`; g.fillRect(x + 2, y + 2, bw - 4, bh - 4);
+      g.fillStyle = "rgba(255,200,160,.05)"; g.fillRect(x + 2, y + 2, bw - 4, 3);
+    }
+    grime(g, w, h, 160, 0.35);
+    // old posters (blank, torn paper — no text)
+    for (let i = 0; i < 5; i++) {
+      const x = rnd(40, w - 160), y = rnd(40, h - 200), pw = rnd(90, 130), ph = pw * 1.4;
+      g.save(); g.translate(x, y); g.rotate(rnd(-0.08, 0.08));
+      g.fillStyle = `hsl(${[0, 30, 45, 0, 20][i]}, ${rnd(20, 60)}%, ${rnd(18, 32)}%)`; g.fillRect(0, 0, pw, ph);
+      g.fillStyle = "rgba(0,0,0,.35)"; g.fillRect(pw * 0.12, ph * 0.1, pw * 0.76, ph * 0.5);
+      g.fillStyle = "rgba(240,220,190,.18)"; g.fillRect(pw * 0.12, ph * 0.66, pw * 0.76, 8); g.fillRect(pw * 0.12, ph * 0.74, pw * 0.5, 6);
+      g.restore();
+    }
+    grime(g, w, h, 80, 0.45);
+  }, { repeat: true });
+}
+
+function planksTex() {
+  return canvasTex(512, 512, (g, w, h) => {
+    const pw = 64;
+    for (let x = 0; x < w; x += pw) {
+      g.fillStyle = `hsl(25, 30%, ${rnd(8, 13)}%)`; g.fillRect(x, 0, pw, h);
+      for (let i = 0; i < 30; i++) { g.strokeStyle = `rgba(0,0,0,${rnd(0.05, 0.2)})`; g.lineWidth = rnd(0.5, 2); const xx = x + rnd(2, pw - 2); g.beginPath(); g.moveTo(xx, 0); g.lineTo(xx + rnd(-3, 3), h); g.stroke(); }
+      g.fillStyle = "#050302"; g.fillRect(x, 0, 2, h);
+    }
+    grime(g, w, h, 50, 0.3);
+    g.fillStyle = "rgba(200,200,190,.12)"; g.fillRect(rnd(0, w - 120), rnd(0, h), 120, 14); // gaffer tape
+  }, { repeat: true });
+}
+
+function grilleTex() {
+  return canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = "#0d0c0c"; g.fillRect(0, 0, w, h);
+    // basket-weave grille cloth
+    for (let y = 0; y < h; y += 4) for (let x = 0; x < w; x += 4) {
+      g.fillStyle = (x + y) % 8 === 0 ? "#2a2722" : "#1a1815"; g.fillRect(x, y, 3, 3);
+    }
+    g.fillStyle = "rgba(220,200,150,.06)"; for (let y = 0; y < h; y += 2) g.fillRect(0, y, w, 1);
+    // silver piping + tolex frame
+    g.strokeStyle = "#0a0a0a"; g.lineWidth = 22; g.strokeRect(0, 0, w, h);
+    g.strokeStyle = "#8f8a80"; g.lineWidth = 3; g.strokeRect(12, 12, w - 24, h - 24);
+    grime(g, w, h, 20, 0.25);
+  });
+}
+function tolexTex() {
+  return canvasTex(128, 128, (g, w, h) => {
+    g.fillStyle = "#0e0d0d"; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 1600; i++) { g.fillStyle = `rgba(255,255,255,${rnd(0, 0.04)})`; g.fillRect(rnd(0, w), rnd(0, h), 1, 1); }
+  }, { repeat: true });
 }
 
 function softDotTex() {
   return canvasTex(64, 64, (g) => {
     const rg = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-    rg.addColorStop(0, "rgba(255,255,255,1)"); rg.addColorStop(0.3, "rgba(255,255,255,.5)"); rg.addColorStop(1, "rgba(255,255,255,0)");
+    rg.addColorStop(0, "rgba(255,255,255,1)"); rg.addColorStop(0.25, "rgba(255,255,255,.55)"); rg.addColorStop(1, "rgba(255,255,255,0)");
     g.fillStyle = rg; g.fillRect(0, 0, 64, 64);
   });
 }
 
-function flameTex() {
-  return canvasTex(128, 256, (g) => {
-    for (let i = 0; i < 3; i++) {
-      const rg = g.createRadialGradient(64, 210, 4, 64, 160 - i * 20, 120 - i * 25);
-      rg.addColorStop(0, "rgba(255,255,240,.95)"); rg.addColorStop(0.25, "rgba(255,220,120,.75)");
-      rg.addColorStop(0.6, "rgba(255,110,30,.35)"); rg.addColorStop(1, "rgba(255,60,0,0)");
-      g.fillStyle = rg;
-      g.beginPath(); g.moveTo(64, 10 + i * 30);
-      g.bezierCurveTo(118, 110, 116, 230, 64, 250); g.bezierCurveTo(12, 230, 10, 110, 64, 10 + i * 30); g.fill();
+function smokeTex() {
+  return canvasTex(256, 256, (g) => {
+    for (let i = 0; i < 40; i++) {
+      const x = 128 + rnd(-60, 60), y = 128 + rnd(-40, 40), r = rnd(30, 80);
+      const rg = g.createRadialGradient(x, y, 0, x, y, r);
+      rg.addColorStop(0, "rgba(255,255,255,.10)"); rg.addColorStop(1, "rgba(255,255,255,0)");
+      g.fillStyle = rg; g.fillRect(0, 0, 256, 256);
     }
   });
 }
 
-function grillTex() {
-  return canvasTex(256, 256, (g, w, h) => {
-    g.fillStyle = "#121014"; g.fillRect(0, 0, w, h);
-    g.fillStyle = "#1e1b22";
-    for (let y = 4; y < h; y += 8) for (let x = (y / 8) % 2 ? 4 : 0; x < w; x += 8) { g.beginPath(); g.arc(x, y, 2.4, 0, 7); g.fill(); }
-    g.strokeStyle = "#3a3540"; g.lineWidth = 10; g.strokeRect(5, 5, w - 10, h - 10);
-  });
+// Fire flipbook: a few frames of licking flames, drawn as stacked additive blobs.
+function fireFrames(n = 6) {
+  const frames = [];
+  for (let f = 0; f < n; f++) {
+    frames.push(canvasTex(128, 256, (g, w, h) => {
+      g.globalCompositeOperation = "lighter";
+      const tongues = 7;
+      for (let k = 0; k < tongues; k++) {
+        const bx = w / 2 + rnd(-22, 22), top = rnd(20, 110) + (k === 0 ? -10 : 0);
+        for (let s = 0; s < 22; s++) {
+          const p = s / 21; // 0 bottom → 1 tip
+          const y = h - 16 - p * (h - 16 - top);
+          const x = bx + Math.sin(p * 5 + f * 1.3 + k) * 10 * p;
+          const r = (1 - p) * 30 + 6;
+          const heat = 1 - p;
+          const col = heat > 0.75 ? [255, 250, 220] : heat > 0.45 ? [255, 190, 60] : heat > 0.2 ? [255, 110, 20] : [200, 40, 10];
+          const rg = g.createRadialGradient(x, y, 0, x, y, r);
+          rg.addColorStop(0, `rgba(${col},${0.22 + heat * 0.2})`); rg.addColorStop(1, `rgba(${col},0)`);
+          g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2);
+        }
+      }
+    }));
+  }
+  return frames;
 }
 
-/* ---------- shaders ---------- */
-const smokeShader = {
-  uniforms: { uTime: { value: 0 }, uHue: { value: new THREE.Color(0xff5a1a) }, uHue2: { value: new THREE.Color(0x5a2aff) }, uPulse: { value: 0 } },
-  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
-  fragmentShader: `
-    varying vec2 vUv; uniform float uTime; uniform vec3 uHue; uniform vec3 uHue2; uniform float uPulse;
-    float h(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
-    float n(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
-      return mix(mix(h(i),h(i+vec2(1,0)),f.x), mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x), f.y); }
-    float fbm(vec2 p){ float v=0., a=.5; for(int i=0;i<5;i++){ v+=a*n(p); p*=2.03; a*=.5; } return v; }
-    void main(){
-      vec2 p=vUv*vec2(6.,2.5);
-      float s=fbm(p+vec2(uTime*.04, -uTime*.02)+fbm(p*1.3-uTime*.03));
-      float glow=smoothstep(.95,.0,distance(vUv,vec2(.5,.35))*1.6);
-      vec3 base=mix(vec3(.02,.012,.03), uHue2*.35, smoothstep(.05,.8,vUv.y));
-      vec3 col=base + uHue*glow*(.35+.3*uPulse) + s*s*.45*mix(uHue,uHue2,vUv.x);
-      col*=smoothstep(0.,.18,vUv.y)*(1.-.75*smoothstep(.55,1.,vUv.y));
-      gl_FragColor=vec4(col,1.);
-    }`,
-};
-
-const beamShader = {
-  uniforms: { uColor: { value: new THREE.Color(1, 1, 1) }, uIntensity: { value: 0.6 } },
-  vertexShader: `varying vec2 vUv; varying vec3 vN; varying vec3 vV;
-    void main(){ vUv=uv; vec4 mv=modelViewMatrix*vec4(position,1.); vN=normalize(normalMatrix*normal); vV=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
-  fragmentShader: `varying vec2 vUv; varying vec3 vN; varying vec3 vV; uniform vec3 uColor; uniform float uIntensity;
-    void main(){ float edge=pow(abs(dot(vN,vV)),1.6); float len=pow(vUv.y,1.4);
-      gl_FragColor=vec4(uColor*uIntensity*edge*len*.55, 1.); }`,
-};
-
-/* ---------- renderer ---------- */
+/* ================= renderer ================= */
 export function createRenderer(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile, powerPreference: "high-performance" });
   const DPR = Math.min(devicePixelRatio || 1, isMobile ? 1.5 : 2);
   renderer.setPixelRatio(DPR);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.95;
+  renderer.toneMappingExposure = 1.0;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x050308);
-  scene.fog = new THREE.Fog(0x07040b, 14, 48);
-  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 200);
+  scene.background = new THREE.Color(0x070403);
+  scene.fog = new THREE.Fog(0x0d0705, 22, 75);
+  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 220);
 
-  // lights
-  scene.add(new THREE.HemisphereLight(0x9a8cff, 0x1a0c05, 0.35));
-  const key = new THREE.DirectionalLight(0xfff1e0, 1.1); key.position.set(2, 8, 6); scene.add(key);
-  const strikeLight = new THREE.PointLight(0xffb070, 2, 5, 1.8); strikeLight.position.set(0, 1.4, 0.6); scene.add(strikeLight);
+  /* --- lights: warm tungsten club rig --- */
+  const hemi = new THREE.HemisphereLight(0xffd9b0, 0x120604, 0.28); scene.add(hemi);
+  const key = new THREE.DirectionalLight(0xfff0dd, 1.0); key.position.set(2, 9, 7); scene.add(key);
+  const strikeLight = new THREE.PointLight(0xffa860, 1.6, 5, 1.8); strikeLight.position.set(0, 1.3, 0.8); scene.add(strikeLight);
+  const wallSpots = [];
+  [[-16, 0xffa040], [0, 0xff3b1a], [16, 0xffc070]].forEach(([x, c]) => {
+    const s = new THREE.SpotLight(c, 260, 80, 0.42, 0.7, 1.4);
+    s.position.set(x, 22, -30); s.target.position.set(x * 0.8, 6, -58);
+    scene.add(s, s.target); wallSpots.push(s);
+  });
+  const stageWash = new THREE.SpotLight(0xffb070, 140, 60, 0.6, 0.8, 1.5);
+  stageWash.position.set(0, 20, -20); stageWash.target.position.set(0, 0, -40); scene.add(stageWash, stageWash.target);
+  const pyroLight = new THREE.PointLight(0xff7a20, 0, 40, 1.5); pyroLight.position.set(0, 4, -22); scene.add(pyroLight);
 
-  /* --- background stage --- */
-  const smoke = new THREE.Mesh(new THREE.PlaneGeometry(220, 90), new THREE.ShaderMaterial({ ...smokeShader, fog: false, depthWrite: false }));
-  smoke.position.set(0, 12, -70); scene.add(smoke);
+  /* --- venue --- */
+  const stage = new THREE.Group(); scene.add(stage);
+  const brick = brickTex(); brick.repeat.set(4, 2);
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(140, 60), new THREE.MeshStandardMaterial({ map: brick, roughness: 0.95, metalness: 0 }));
+  wall.position.set(0, 24, -60); stage.add(wall);
 
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(200, 160), new THREE.MeshStandardMaterial({ color: 0x0c0a10, roughness: 0.35, metalness: 0.7 }));
-  floor.rotation.x = -Math.PI / 2; floor.position.set(0, -0.6, -40); scene.add(floor);
+  const planks = planksTex(); planks.repeat.set(16, 14);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(140, 120), new THREE.MeshStandardMaterial({ map: planks, roughness: 0.55, metalness: 0.15 }));
+  floor.rotation.x = -Math.PI / 2; floor.position.set(0, -0.9, -20); stage.add(floor);
 
-  const spots = [];
-  const spotColors = [0xff6a1a, 0x6b3bff, 0xff2e7a];
-  for (let i = 0; i < 3; i++) {
-    const s = new THREE.SpotLight(spotColors[i], 60, 60, 0.32, 0.6, 1.3);
-    s.position.set((i - 1) * 14, 18, -30); s.target.position.set((i - 1) * 6, -0.6, -18);
-    scene.add(s, s.target); spots.push(s);
+  // amp walls
+  const grille = grilleTex(), tolex = tolexTex();
+  const tolexMat = new THREE.MeshStandardMaterial({ map: tolex, roughness: 0.7, metalness: 0.1 });
+  const grilleMat = new THREE.MeshStandardMaterial({ map: grille, roughness: 0.9 });
+  const cabMats = [tolexMat, tolexMat, tolexMat, tolexMat, grilleMat, tolexMat];
+  const headFace = canvasTex(256, 64, (g, w, h) => {
+    g.fillStyle = "#121111"; g.fillRect(0, 0, w, h);
+    g.fillStyle = "#b8a77a"; g.fillRect(10, 18, w - 20, 28); // gold control panel
+    for (let i = 0; i < 10; i++) { g.fillStyle = "#111"; g.beginPath(); g.arc(30 + i * 21, 32, 7, 0, 7); g.fill(); }
+    g.fillStyle = "#ff3020"; g.beginPath(); g.arc(w - 22, 32, 4, 0, 7); g.fill();
+  });
+  const headMats = [tolexMat, tolexMat, tolexMat, tolexMat, new THREE.MeshStandardMaterial({ map: headFace, roughness: 0.6, emissive: 0x301008, emissiveIntensity: 0.4 }), tolexMat];
+  const cabGeo = new THREE.BoxGeometry(4.2, 4.2, 2.4), headGeo = new THREE.BoxGeometry(4.2, 1.5, 2.2);
+  for (const side of [-1, 1]) for (let k = 0; k < 4; k++) {
+    const x = side * (9.5 + (k % 2) * 4.4), z = -26 - Math.floor(k / 2) * 9 - (k % 2) * 2;
+    for (let j = 0; j < 2; j++) { const cab = new THREE.Mesh(cabGeo, cabMats); cab.position.set(x, 1.2 + j * 4.2, z); cab.rotation.y = -side * 0.12; stage.add(cab); }
+    const head = new THREE.Mesh(headGeo, headMats); head.position.set(x, 9.85, z); head.rotation.y = -side * 0.12; stage.add(head);
   }
 
-  // truss with lamps
-  const trussMat = new THREE.MeshStandardMaterial({ color: 0x2a2730, metalness: 0.9, roughness: 0.35 });
-  const truss = new THREE.Mesh(new THREE.BoxGeometry(70, 0.5, 0.5), trussMat); truss.position.set(0, 17, -44); scene.add(truss);
-  const beams = [];
-  const beamGeo = new THREE.ConeGeometry(3.2, 28, 40, 1, true); beamGeo.translate(0, -13, 0);
-  for (let i = 0; i < 8; i++) {
-    const x = -28 + i * 8;
-    const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.6, 0.9, 16), new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0xffffff, emissiveIntensity: 1.5 }));
-    lamp.position.set(x, 16.4, -44); scene.add(lamp);
-    const mat = new THREE.ShaderMaterial({ ...beamShader, uniforms: THREE.UniformsUtils.clone(beamShader.uniforms), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
-    const beam = new THREE.Mesh(beamGeo, mat); beam.position.set(x, 16.2, -44); beam.renderOrder = 2;
-    scene.add(beam); beams.push({ beam, lamp, phase: i * 0.9, x });
+  // drum riser + kit (silhouette-level detail)
+  const kit = new THREE.Group(); kit.position.set(0, 0, -44); stage.add(kit);
+  const carpet = new THREE.MeshStandardMaterial({ color: 0x1a0b08, roughness: 1 });
+  const riser = new THREE.Mesh(new THREE.BoxGeometry(12, 2.2, 7), carpet); riser.position.y = 0.2; kit.add(riser);
+  const shell = new THREE.MeshStandardMaterial({ color: 0x5a0d0d, metalness: 0.6, roughness: 0.3 });
+  const head = new THREE.MeshStandardMaterial({ color: 0xe8e0cc, roughness: 0.8 });
+  const chrome = new THREE.MeshStandardMaterial({ color: 0xc8c4bc, metalness: 1, roughness: 0.2 });
+  const brass = new THREE.MeshStandardMaterial({ color: 0xc9a040, metalness: 1, roughness: 0.28, emissive: 0x3a2000, emissiveIntensity: 0.3 });
+  const drum = (r, d, x, y, z, rx = 0) => {
+    const gg = new THREE.Group();
+    const s = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d, 32, 1, true), shell);
+    const h1 = new THREE.Mesh(new THREE.CircleGeometry(r, 32), head); h1.rotation.x = -Math.PI / 2; h1.position.y = d / 2;
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(r, 0.05, 6, 32), chrome); rim.rotation.x = Math.PI / 2; rim.position.y = d / 2;
+    gg.add(s, h1, rim); gg.position.set(x, y, z); gg.rotation.x = rx; kit.add(gg); return gg;
+  };
+  drum(1.6, 1.6, 0, 2.9, 1.4, Math.PI / 2); // kick, facing the crowd
+  drum(0.75, 0.6, -1.0, 4.7, 0.6, 0.5); drum(0.85, 0.7, 1.0, 4.7, 0.6, 0.5); // rack toms
+  drum(1.0, 1.0, 2.6, 2.6, 0.6, 0.15); drum(0.75, 0.35, -2.4, 3.1, 0.9, 0.3); // floor tom, snare
+  const cymbal = (r, x, y, z, rz) => { const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.98, 0.04, 40), brass); c.position.set(x, y, z); c.rotation.set(0.5, 0, rz); kit.add(c);
+    const st = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, y - 1.3, 6), chrome); st.position.set(x, (y + 1.3) / 2, z - 0.3); kit.add(st); };
+  cymbal(1.2, -3.4, 6.2, 0.4, 0.3); cymbal(1.35, 3.6, 6.5, 0.2, -0.3); cymbal(0.7, -4.2, 4.2, 1.2, 0.1); cymbal(1.0, 0.2, 7.0, -0.8, 0);
+
+  // lighting truss + PAR cans with haze cones
+  const truss = new THREE.Group(); stage.add(truss);
+  const tube = new THREE.MeshStandardMaterial({ color: 0x9a968e, metalness: 1, roughness: 0.35 });
+  const mkTruss = (z, y) => {
+    for (const [dy, dz] of [[0, 0], [0.8, 0], [0, 0.8], [0.8, 0.8]]) {
+      const t = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 80, 6), tube); t.rotation.z = Math.PI / 2; t.position.set(0, y + dy, z + dz); truss.add(t);
+    }
+    for (let x = -40; x < 40; x += 1.6) {
+      const d = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.13, 4), tube); d.position.set(x + 0.4, y + 0.4, z); d.rotation.z = Math.PI / 4; truss.add(d);
+      const d2 = d.clone(); d2.position.z = z + 0.8; truss.add(d2);
+    }
+  };
+  mkTruss(-28, 15); mkTruss(-48, 19);
+  const cans = [];
+  const coneGeo = new THREE.ConeGeometry(2.6, 24, 32, 1, true); coneGeo.translate(0, -12, 0);
+  const coneMat = () => new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: new THREE.Color() }, uI: { value: 0.12 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
+    vertexShader: `varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main(){ vUv=uv; vec4 mv=modelViewMatrix*vec4(position,1.); vN=normalize(normalMatrix*normal); vV=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
+    fragmentShader: `varying vec2 vUv; varying vec3 vN; varying vec3 vV; uniform vec3 uColor; uniform float uI;
+      void main(){ float e=pow(abs(dot(vN,vV)),2.); float l=pow(vUv.y,2.2); gl_FragColor=vec4(uColor*uI*e*l,1.); }`,
+  });
+  const lensTex = softDotTex();
+  const canBody = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.7, roughness: 0.4 });
+  const canGeo = new THREE.CylinderGeometry(0.42, 0.5, 1.1, 14);
+  for (const [z, y, n] of [[-28, 14.3, 9], [-48, 18.3, 11]]) for (let i = 0; i < n; i++) {
+    const x = (i - (n - 1) / 2) * (z === -28 ? 4.4 : 4.8);
+    const g = new THREE.Group(); g.position.set(x, y, z + 0.4);
+    const body = new THREE.Mesh(canGeo, canBody); g.add(body);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: lensTex, color: 0xffc080, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false }));
+    glow.scale.setScalar(2.2); glow.position.y = -0.6; g.add(glow);
+    const cone = new THREE.Mesh(coneGeo, coneMat()); cone.position.y = -0.5; g.add(cone);
+    const aim = rnd(-0.35, 0.35);
+    g.rotation.set(0.28, 0, aim);
+    truss.add(g); cans.push({ g, glow, cone, aim, phase: Math.random() * 6, row: z });
   }
 
-  // amp stacks on both sides
-  const grill = grillTex();
-  const ampMat = new THREE.MeshStandardMaterial({ map: grill, roughness: 0.8, metalness: 0.2 });
-  const headMat = new THREE.MeshStandardMaterial({ color: 0x151317, roughness: 0.5, metalness: 0.5 });
-  for (const side of [-1, 1]) for (let k = 0; k < 2; k++) {
-    const x = side * (11 + k * 5.4), z = -24 - k * 7;
-    for (let j = 0; j < 2; j++) { const cab = new THREE.Mesh(new THREE.BoxGeometry(4.6, 4.2, 2.6), ampMat); cab.position.set(x, 1.5 + j * 4.25, z); scene.add(cab); }
-    const head = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.6, 2.4), headMat); head.position.set(x, 10.4, z); scene.add(head);
-    const leds = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.12, 0.05), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xff6a1a, emissiveIntensity: 3 }));
-    leds.position.set(x, 10.4, z + 1.23); scene.add(leds);
+  // haze
+  const sTex = smokeTex();
+  const haze = [];
+  for (let i = 0; i < (isMobile ? 14 : 26); i++) {
+    const m = new THREE.SpriteMaterial({ map: sTex, color: 0x6a4028, transparent: true, opacity: rnd(0.1, 0.22), depthWrite: false, fog: true });
+    const s = new THREE.Sprite(m); const sc = rnd(14, 30); s.scale.set(sc * 1.6, sc, 1);
+    s.position.set(rnd(-30, 30), rnd(2, 16), rnd(-55, -22)); stage.add(s);
+    haze.push({ s, v: rnd(-0.4, 0.4) });
   }
 
-  // dust particles
-  const dustN = isMobile ? 260 : 600;
+  // embers floating in the light
+  const dustN = isMobile ? 160 : 380;
   const dustGeo = new THREE.BufferGeometry();
   const dp = new Float32Array(dustN * 3);
-  for (let i = 0; i < dustN; i++) { dp[i * 3] = (Math.random() - 0.5) * 60; dp[i * 3 + 1] = Math.random() * 20; dp[i * 3 + 2] = -Math.random() * 60 + 4; }
+  for (let i = 0; i < dustN; i++) { dp[i * 3] = rnd(-30, 30); dp[i * 3 + 1] = rnd(0, 20); dp[i * 3 + 2] = rnd(-55, 2); }
   dustGeo.setAttribute("position", new THREE.BufferAttribute(dp, 3));
-  const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ map: softDotTex(), size: 0.22, transparent: true, opacity: 0.55, color: 0xffd9b0, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ map: softDotTex(), size: 0.18, transparent: true, opacity: 0.6, color: 0xffb070, blending: THREE.AdditiveBlending, depthWrite: false }));
   scene.add(dust);
+
+  // pyro columns (fire on section changes / big streaks)
+  const fire = fireFrames(6);
+  const pyro = [];
+  for (const x of [-7.2, 7.2, -12, 12]) {
+    const col = [];
+    for (let k = 0; k < 3; k++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: fire[0], transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+      sp.center.set(0.5, 0); sp.position.set(x + rnd(-0.3, 0.3), -0.8, -22 - Math.abs(x) * 0.3); sp.scale.set(3, 8, 1);
+      scene.add(sp); col.push(sp);
+    }
+    pyro.push({ col, t: 9, x });
+  }
+  let pyroT = 9;
 
   /* --- highway --- */
   const hwy = new THREE.Group(); scene.add(hwy);
   let lanes = 5;
-  const boardTex = fretboardTex();
-  boardTex.repeat.set(1, (HL + 5) / 6);
-  const board = new THREE.Mesh(new THREE.PlaneGeometry(1, HL + 5), new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.6, metalness: 0.1, emissiveMap: boardTex, emissive: 0xffffff, emissiveIntensity: 0.18 }));
+  const boardTex = rosewoodTex(); boardTex.repeat.set(1, (HL + 5) / 6);
+  const board = new THREE.Mesh(new THREE.PlaneGeometry(1, HL + 5), new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.5, metalness: 0.05, emissiveMap: boardTex, emissive: 0xffffff, emissiveIntensity: 0.35 }));
   board.rotation.x = -Math.PI / 2; board.position.set(0, 0, -HL / 2 + 2.5); hwy.add(board);
+  // fade the far end of the neck into darkness
+  const fadeMat = new THREE.MeshBasicMaterial({ color: 0x070403, transparent: true, depthWrite: false, alphaMap: canvasTex(4, 256, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, "#fff"); gr.addColorStop(0.35, "#000"); g.fillStyle = gr; g.fillRect(0, 0, w, h); }, { srgb: false }) });
+  const fade = new THREE.Mesh(new THREE.PlaneGeometry(1, 8), fadeMat); fade.rotation.x = -Math.PI / 2; fade.position.set(0, 0.2, -HL + 3.6); hwy.add(fade);
 
-  const railMat = new THREE.MeshStandardMaterial({ color: 0x2a1a10, emissive: 0xff6a1a, emissiveIntensity: 0.9, metalness: 0.8, roughness: 0.3 });
-  const rails = [-1, 1].map(() => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, HL + 5), railMat); m.position.set(0, 0.05, -HL / 2 + 2.5); hwy.add(m); return m; });
-  const chromeMat = new THREE.MeshStandardMaterial({ color: 0x8a8590, metalness: 1, roughness: 0.25 });
-  const sideTrim = [-1, 1].map(() => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.06, HL + 5), chromeMat); m.position.set(0, 0.0, -HL / 2 + 2.5); hwy.add(m); return m; });
+  const chromeMat = new THREE.MeshStandardMaterial({ color: 0xd8d4cc, metalness: 1, roughness: 0.18 });
+  const edgeMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xfff2e0, emissiveIntensity: 0.55 });
+  const rails = [-1, 1].map(() => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.09, HL + 5), chromeMat); m.position.set(0, 0.04, -HL / 2 + 2.5); hwy.add(m); return m; });
+  const edges = [-1, 1].map(() => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.02, HL + 5), edgeMat); m.position.set(0, 0.1, -HL / 2 + 2.5); hwy.add(m); return m; });
 
-  // strings
+  // strings (silver; flash the lane colour when hit)
   const strings = [];
-  const strGeo = new THREE.CylinderGeometry(0.018, 0.018, HL + 1.5, 6); strGeo.rotateX(Math.PI / 2);
+  const strGeo = new THREE.CylinderGeometry(0.016, 0.016, HL + 3, 6); strGeo.rotateX(Math.PI / 2);
   for (let i = 0; i < 5; i++) {
-    const mat = new THREE.MeshStandardMaterial({ color: 0x9a94a4, metalness: 1, roughness: 0.25, emissive: 0x000000, emissiveIntensity: 1.1 });
-    const s = new THREE.Mesh(strGeo, mat); s.position.set(0, 0.06, -HL / 2 + 0.75); hwy.add(s);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xbdb8b0, metalness: 1, roughness: 0.22, emissive: 0x000000, emissiveIntensity: 1 });
+    const s = new THREE.Mesh(strGeo, mat); s.position.set(0, 0.07, -HL / 2 + 1.5); hwy.add(s);
     strings.push({ mesh: s, vib: 0, glow: 0 });
   }
 
-  // fret bars (beat lines)
-  const fretGeo = new THREE.BoxGeometry(1, 0.035, 0.07);
-  const frets = new THREE.InstancedMesh(fretGeo, new THREE.MeshStandardMaterial({ color: 0xb8b2c0, metalness: 0.9, roughness: 0.3, emissive: 0x6a6070, emissiveIntensity: 0.6 }), 64);
+  // metal fret bars on the beat
+  const frets = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.04, 0.08), new THREE.MeshStandardMaterial({ color: 0xcfcac0, metalness: 1, roughness: 0.25, emissive: 0x4a4038, emissiveIntensity: 0.5 }), 64);
   frets.instanceMatrix.setUsage(THREE.DynamicDrawUsage); hwy.add(frets);
 
-  // strike line glow
-  const strike = new THREE.Mesh(new THREE.BoxGeometry(1, 0.02, 0.08), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff, emissiveIntensity: 1.2 }));
-  strike.position.set(0, 0.03, 0); hwy.add(strike);
+  // strikeline bar
+  const strikeBar = new THREE.Mesh(new THREE.BoxGeometry(1, 0.05, 0.22), new THREE.MeshStandardMaterial({ color: 0x0c0b0b, metalness: 0.8, roughness: 0.35 }));
+  strikeBar.position.set(0, 0.03, 0); hwy.add(strikeBar);
+  const strikeEdge = new THREE.Mesh(new THREE.BoxGeometry(1, 0.02, 0.03), edgeMat); strikeEdge.position.set(0, 0.07, -0.12); hwy.add(strikeEdge);
 
-  // fret buttons (Guitar Hero style)
+  // fret buttons: black housing, chrome bezel, coloured cap, chrome centre stud
   const buttons = [];
-  const housingGeo = new THREE.CylinderGeometry(0.47, 0.52, 0.16, 48);
-  const rimGeo = new THREE.TorusGeometry(0.4, 0.055, 14, 48); rimGeo.rotateX(Math.PI / 2);
-  const capGeo = new THREE.CylinderGeometry(0.33, 0.36, 0.12, 48);
-  const centerGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.125, 32);
-  const housingMat = new THREE.MeshStandardMaterial({ color: 0x18161b, metalness: 0.85, roughness: 0.3 });
+  const housingGeo = new THREE.CylinderGeometry(0.47, 0.52, 0.18, 48);
+  const bezelGeo = new THREE.TorusGeometry(0.41, 0.06, 16, 48); bezelGeo.rotateX(Math.PI / 2);
+  const capGeo = new THREE.CylinderGeometry(0.34, 0.36, 0.12, 48);
+  const studGeo = new THREE.CylinderGeometry(0.12, 0.14, 0.13, 24);
+  const housingMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, metalness: 0.4, roughness: 0.25 });
   for (let i = 0; i < 5; i++) {
     const g = new THREE.Group();
-    const housing = new THREE.Mesh(housingGeo, housingMat); housing.position.y = 0.06;
-    const rim = new THREE.Mesh(rimGeo, new THREE.MeshStandardMaterial({ color: 0xd8d4dc, metalness: 1, roughness: 0.2, emissive: LANE_HEX[i], emissiveIntensity: 0.25 })); rim.position.y = 0.15;
-    const cap = new THREE.Mesh(capGeo, new THREE.MeshStandardMaterial({ color: LANE_HEX[i], metalness: 0.2, roughness: 0.25, emissive: LANE_HEX[i], emissiveIntensity: 0.25 }));
-    const center = new THREE.Mesh(centerGeo, new THREE.MeshStandardMaterial({ color: 0x0c0b0e, metalness: 0.6, roughness: 0.3, emissive: 0xffffff, emissiveIntensity: 0 }));
-    cap.position.y = 0.2; center.position.y = 0.2;
-    g.add(housing, rim, cap, center);
-    g.scale.setScalar(0.92);
+    const housing = new THREE.Mesh(housingGeo, housingMat); housing.position.y = 0.07;
+    const bezel = new THREE.Mesh(bezelGeo, chromeMat); bezel.position.y = 0.16;
+    const cap = new THREE.Mesh(capGeo, new THREE.MeshStandardMaterial({ color: LANE_HEX[i], metalness: 0.1, roughness: 0.2, emissive: LANE_HEX[i], emissiveIntensity: 0.12 }));
+    const stud = new THREE.Mesh(studGeo, new THREE.MeshStandardMaterial({ color: 0xdedad2, metalness: 1, roughness: 0.15, emissive: 0xffffff, emissiveIntensity: 0 }));
+    cap.position.y = 0.2; stud.position.y = 0.21;
+    g.add(housing, bezel, cap, stud); g.scale.setScalar(0.92);
     hwy.add(g);
-    buttons.push({ g, cap, center, rim, press: 0 });
+    buttons.push({ g, cap, stud, press: 0 });
   }
 
-  // gems (instanced, GH style: black base, coloured dome, white band)
-  const gemBaseGeo = new THREE.CylinderGeometry(0.39, 0.42, 0.08, 32);
+  // gems: glossy plastic, black base, white band
+  const gemBaseGeo = new THREE.CylinderGeometry(0.4, 0.42, 0.09, 32);
   const gemBodyGeo = new THREE.CylinderGeometry(0.35, 0.38, 0.12, 32); gemBodyGeo.translate(0, 0.08, 0);
-  const gemDomeGeo = new THREE.SphereGeometry(0.33, 28, 10, 0, Math.PI * 2, 0, Math.PI / 2); gemDomeGeo.scale(1, 0.38, 1); gemDomeGeo.translate(0, 0.14, 0);
-  const gemRingGeo = new THREE.TorusGeometry(0.365, 0.035, 10, 40); gemRingGeo.rotateX(Math.PI / 2); gemRingGeo.translate(0, 0.14, 0);
+  const gemDomeGeo = new THREE.SphereGeometry(0.33, 28, 10, 0, Math.PI * 2, 0, Math.PI / 2); gemDomeGeo.scale(1, 0.4, 1); gemDomeGeo.translate(0, 0.14, 0);
+  const gemRingGeo = new THREE.TorusGeometry(0.365, 0.04, 10, 40); gemRingGeo.rotateX(Math.PI / 2); gemRingGeo.translate(0, 0.14, 0);
   const glowInstance = (mat, k) => {
     mat.onBeforeCompile = (s) => {
       s.fragmentShader = s.fragmentShader.replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>\n#ifdef USE_INSTANCING_COLOR\n totalEmissiveRadiance += vColor * ${k.toFixed(2)};\n#endif`);
@@ -242,45 +376,43 @@ export function createRenderer(canvas) {
     return mat;
   };
   const mk = (geo, mat) => { const m = new THREE.InstancedMesh(geo, mat, MAX_GEMS); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.frustumCulled = false; hwy.add(m); return m; };
-  const gemBase = mk(gemBaseGeo, new THREE.MeshStandardMaterial({ color: 0x0b0a0d, metalness: 0.5, roughness: 0.4 }));
-  const gemBody = mk(gemBodyGeo, glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.15, roughness: 0.35 }), 0.12));
-  const gemDome = mk(gemDomeGeo, glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.1, roughness: 0.15 }), 0.22));
-  const gemRing = mk(gemRingGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.6, roughness: 0.2, emissive: 0xffffff, emissiveIntensity: 0.25 }));
-  const tails = mk(new THREE.BoxGeometry(1, 1, 1), glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 }), 0.45));
+  const gemBase = mk(gemBaseGeo, new THREE.MeshStandardMaterial({ color: 0x080808, metalness: 0.3, roughness: 0.35 }));
+  const gemBody = mk(gemBodyGeo, glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.05, roughness: 0.3 }), 0.1));
+  const gemDome = mk(gemDomeGeo, glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.05, roughness: 0.1 }), 0.16));
+  const gemRing = mk(gemRingGeo, new THREE.MeshStandardMaterial({ color: 0xf2eee6, metalness: 0.1, roughness: 0.25, emissive: 0xffffff, emissiveIntensity: 0.12 }));
+  const tails = mk(new THREE.BoxGeometry(1, 1, 1), glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 }), 0.35));
   [gemBody, gemDome, tails].forEach((m) => m.setColorAt(0, new THREE.Color()));
 
-  // flames + sparks
-  const fTex = flameTex();
+  // hit fire + sparks
   const flames = [];
   for (let i = 0; i < 5; i++) {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: fTex, color: 0xffffff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
-    sp.center.set(0.5, 0.05); hwy.add(sp); flames.push({ sp, t: 9 });
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: fire[0], transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+    sp.center.set(0.5, 0.04); hwy.add(sp); flames.push({ sp, t: 9, f: 0 });
   }
-  const SPARKS = 220;
+  const SPARKS = 240;
   const sparkGeo = new THREE.BufferGeometry();
   const spPos = new Float32Array(SPARKS * 3), spCol = new Float32Array(SPARKS * 3);
   sparkGeo.setAttribute("position", new THREE.BufferAttribute(spPos, 3));
   sparkGeo.setAttribute("color", new THREE.BufferAttribute(spCol, 3));
   const sparkVel = new Float32Array(SPARKS * 3), sparkLife = new Float32Array(SPARKS);
-  const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({ map: softDotTex(), size: 0.12, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({ map: softDotTex(), size: 0.1, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
   sparks.frustumCulled = false; hwy.add(sparks);
   let sparkIdx = 0;
-  function burst(x, color, n) {
-    const c = new THREE.Color(color);
+  function burst(x, n) {
     for (let k = 0; k < n; k++) {
       const i = sparkIdx++ % SPARKS;
-      spPos[i * 3] = x + (Math.random() - 0.5) * 0.4; spPos[i * 3 + 1] = 0.25; spPos[i * 3 + 2] = (Math.random() - 0.5) * 0.2;
-      sparkVel[i * 3] = (Math.random() - 0.5) * 3; sparkVel[i * 3 + 1] = Math.random() * 4 + 1.5; sparkVel[i * 3 + 2] = (Math.random() - 0.3) * 2;
-      sparkLife[i] = 0.45 + Math.random() * 0.3;
-      const w = Math.random() < 0.5 ? 1 : 0;
-      spCol[i * 3] = w || c.r; spCol[i * 3 + 1] = w ? 0.85 : c.g; spCol[i * 3 + 2] = w ? 0.5 : c.b;
+      spPos[i * 3] = x + rnd(-0.25, 0.25); spPos[i * 3 + 1] = 0.25; spPos[i * 3 + 2] = rnd(-0.1, 0.1);
+      sparkVel[i * 3] = rnd(-1.8, 1.8); sparkVel[i * 3 + 1] = rnd(2, 5.5); sparkVel[i * 3 + 2] = rnd(-0.6, 1.2);
+      sparkLife[i] = rnd(0.35, 0.7);
+      const hot = Math.random();
+      spCol[i * 3] = 1; spCol[i * 3 + 1] = 0.45 + hot * 0.5; spCol[i * 3 + 2] = hot * 0.35;
     }
   }
 
   /* --- post --- */
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.45, 0.82);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.4, 0.86);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
@@ -289,31 +421,31 @@ export function createRenderer(canvas) {
   function layoutLanes(n) {
     lanes = n;
     const w = n * LW + 0.5;
-    board.scale.x = w;
-    rails[0].position.x = -w / 2; rails[1].position.x = w / 2;
-    sideTrim[0].position.x = -w / 2 - 0.12; sideTrim[1].position.x = w / 2 + 0.12;
-    strike.scale.x = w; frets.scale.set(1, 1, 1);
+    board.scale.x = w; fade.scale.x = w + 0.6;
+    rails[0].position.x = -w / 2 - 0.04; rails[1].position.x = w / 2 + 0.04;
+    edges[0].position.x = -w / 2 + 0.06; edges[1].position.x = w / 2 - 0.06;
+    strikeBar.scale.x = w; strikeEdge.scale.x = w;
     for (let i = 0; i < 5; i++) {
       const on = i < n;
       strings[i].mesh.visible = on; buttons[i].g.visible = on;
       strings[i].mesh.position.x = laneX(i); buttons[i].g.position.set(laneX(i), 0, 0);
-      flames[i].sp.position.set(laneX(i), 0.2, 0);
+      flames[i].sp.position.set(laneX(i), 0.15, 0.05);
     }
     fitCamera();
   }
 
   let W = 1, H = 1;
-  // Analytic camera fit: strike line sits at a fixed screen height and the highway fills a fixed share of the width.
-  let pitch = 0.45;
+  const baseCam = new THREE.Vector3();
+  // Analytic camera fit: strike line at a fixed screen height, highway filling a fixed share of the width.
   function fitCamera() {
     const aspect = W / H;
     const portrait = aspect < 0.9;
     camera.aspect = aspect;
-    camera.fov = portrait ? 66 : 50;
-    pitch = portrait ? 0.62 : 0.5;
+    camera.fov = portrait ? 66 : 52;
+    const pitch = portrait ? 0.6 : 0.42;
     const tf = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
     const wantY = portrait ? -0.6 : -0.7;
-    const wantX = portrait ? 0.95 : Math.min(0.5, 1.0 / aspect);
+    const wantX = portrait ? 0.95 : Math.min(0.48, 0.95 / aspect);
     const half = (lanes * LW + 0.5) / 2 + 0.2;
     const alpha = Math.atan(-wantY * tf);
     const phi = pitch + alpha;
@@ -323,7 +455,6 @@ export function createRenderer(canvas) {
     camera.updateProjectionMatrix(); camera.updateMatrixWorld();
     baseCam.copy(camera.position);
   }
-  const baseCam = new THREE.Vector3();
 
   function resize() {
     W = canvas.clientWidth || innerWidth; H = canvas.clientHeight || innerHeight;
@@ -334,31 +465,37 @@ export function createRenderer(canvas) {
 
   const WHITE = new THREE.Color(1, 1, 1);
   const tmpM = new THREE.Matrix4(), tmpC = new THREE.Color(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
-  const sectionHues = [[0xff5a1a, 0x5a2aff], [0xff2e7a, 0x1a6bff], [0xffb21a, 0xff2e3c], [0x2ee6c8, 0x7a2aff], [0xff6a1a, 0xff1a8a]];
-  let hueTarget = 0;
+  // warm club palettes per song section: [front PARs, back PARs]
+  const palettes = [[0xffb060, 0xff3a1a], [0xff2a14, 0xffc070], [0xfff0d0, 0xff6a10], [0xffc040, 0xd01010], [0xff7a20, 0xfff2e0]];
+  let pal = 0;
+  const colA = new THREE.Color(palettes[0][0]), colB = new THREE.Color(palettes[0][1]);
 
-  /* --- public api --- */
+  function firePyro() { pyroT = 0; pyro.forEach((p) => (p.t = 0)); }
+
   const api = {
-    _scene: scene, _beams: beams,
     setLanes: layoutLanes,
     setQualityLevel(q) {
       const high = q !== "low";
       bloom.enabled = high;
       renderer.setPixelRatio(high ? DPR : Math.min(DPR, 1));
-      dust.visible = high;
-      spots.forEach((s) => (s.visible = high));
+      dust.visible = high; haze.forEach((h, i) => (h.s.visible = high || i % 2 === 0));
+      cans.forEach((c) => (c.cone.visible = high));
       resize();
     },
     resize,
-    setSection(i) { hueTarget = i % sectionHues.length; },
+    setSection(i) { pal = ((i % palettes.length) + palettes.length) % palettes.length; if (i > 0) firePyro(); },
+    pyro: firePyro,
     hit(lane, sustain) {
       const f = flames[lane]; f.t = 0;
-      f.sp.material.color.setHex(LANE_HEX[lane]).lerp(new THREE.Color(1, 1, 1), 0.45);
       strings[lane].vib = 1; strings[lane].glow = 1; buttons[lane].press = 1;
-      burst(laneX(lane), LANE_HEX[lane], sustain ? 8 : 16);
+      burst(laneX(lane), sustain ? 6 : 14);
     },
-    holdSpark(lane) { if (Math.random() < 0.5) burst(laneX(lane), LANE_HEX[lane], 1); strings[lane].glow = Math.max(strings[lane].glow, 0.7); strings[lane].vib = Math.max(strings[lane].vib, 0.4); },
-    miss() { /* reserved */ },
+    holdSpark(lane) {
+      if (Math.random() < 0.45) burst(laneX(lane), 1);
+      const f = flames[lane]; if (f.t > 0.12) f.t = 0.12;
+      strings[lane].glow = Math.max(strings[lane].glow, 0.7); strings[lane].vib = Math.max(strings[lane].vib, 0.4);
+    },
+    miss() {},
     laneFromClientX(x, rect) {
       let best = 0, bd = 1e9;
       for (let i = 0; i < lanes; i++) {
@@ -371,39 +508,50 @@ export function createRenderer(canvas) {
     strikeScreenY() { tmpV.set(0, 0, 0).project(camera); return ((1 - tmpV.y) / 2) * H; },
     laneScreenX(i) { tmpV.set(laneX(i), 0, 0).project(camera); return ((tmpV.x + 1) / 2) * W; },
 
-    // state: { t, look, notes:[{t,lane,dur,state,holding}], from, pressed[], beats[[t,bar]], beatPulse, dt, combo }
+    // state: { t, look, notes:[{t,lane,dur,state,holding}], from, pressed[], beats[[t,bar]], dt }
     render(state) {
       const { t, look, notes, from = 0, pressed = [], beats = [], dt = 0.016 } = state;
       const speed = HL / look;
       const zOf = (time) => -(time - t) * speed;
-      // background motion
       const now = performance.now() / 1000;
-      smoke.material.uniforms.uTime.value = now;
-      // beat pulse
-      let pulse = 0;
-      for (let i = 0; i < beats.length; i++) { const d = t - beats[i][0]; if (d >= 0 && d < 0.35) pulse = Math.max(pulse, (1 - d / 0.35) * (beats[i][1] ? 1 : 0.5)); }
-      smoke.material.uniforms.uPulse.value = pulse;
-      const [h1, h2] = sectionHues[hueTarget];
-      smoke.material.uniforms.uHue.value.lerp(tmpC.setHex(h1), 0.02);
-      smoke.material.uniforms.uHue2.value.lerp(tmpC.setHex(h2), 0.02);
-      beams.forEach((b, i) => {
-        b.beam.rotation.z = Math.sin(now * 0.5 + b.phase) * 0.45;
-        b.beam.rotation.x = -0.15 + Math.sin(now * 0.37 + b.phase * 1.3) * 0.15;
-        const c = i % 2 ? smoke.material.uniforms.uHue2.value : smoke.material.uniforms.uHue.value;
-        b.beam.material.uniforms.uColor.value.copy(c);
-        b.beam.material.uniforms.uIntensity.value = 0.16 + pulse * 0.24;
-        b.lamp.material.emissive.copy(c); b.lamp.material.emissiveIntensity = 1.5 + pulse * 3;
-      });
-      spots.forEach((s, i) => { s.target.position.x = Math.sin(now * 0.4 + i * 2) * 12; s.intensity = 50 + pulse * 60; s.color.copy(i % 2 ? smoke.material.uniforms.uHue2.value : smoke.material.uniforms.uHue.value); });
-      railMat.emissiveIntensity = 0.7 + pulse * 0.8;
-      strikeLight.intensity = 1.8 + pulse * 1.2;
-      const da = dust.geometry.attributes.position;
-      for (let i = 0; i < dustN; i++) { da.array[i * 3 + 1] += dt * 0.25; da.array[i * 3] += Math.sin(now + i) * dt * 0.1; if (da.array[i * 3 + 1] > 20) da.array[i * 3 + 1] = 0; }
-      da.needsUpdate = true;
-      // subtle camera sway
-      camera.position.set(baseCam.x + Math.sin(now * 0.3) * 0.06, baseCam.y + pulse * 0.03, baseCam.z);
 
-      // board scroll
+      let pulse = 0;
+      for (let i = 0; i < beats.length; i++) { const d = t - beats[i][0]; if (d >= 0 && d < 0.3) pulse = Math.max(pulse, (1 - d / 0.3) * (beats[i][1] ? 1 : 0.55)); }
+
+      // lights
+      colA.lerp(tmpC.setHex(palettes[pal][0]), 0.03); colB.lerp(tmpC.setHex(palettes[pal][1]), 0.03);
+      cans.forEach((c, i) => {
+        const col = c.row === -28 ? colA : colB;
+        const flick = 0.85 + 0.15 * Math.sin(now * 7 + c.phase);
+        c.glow.material.color.copy(col).multiplyScalar(0.7 + pulse * 0.6);
+        c.cone.material.uniforms.uColor.value.copy(col);
+        c.cone.material.uniforms.uI.value = (0.1 + pulse * 0.14) * flick;
+        c.g.rotation.z = c.aim + Math.sin(now * 0.35 + c.phase) * 0.08;
+      });
+      wallSpots.forEach((s, i) => { s.color.copy(i === 1 ? colB : colA); s.intensity = 200 + pulse * 140; });
+      stageWash.color.copy(colA); stageWash.intensity = 110 + pulse * 70;
+      strikeLight.intensity = 1.4 + pulse * 0.8;
+      edgeMat.emissiveIntensity = 0.5 + pulse * 0.35;
+
+      haze.forEach((h) => { h.s.position.x += h.v * dt; if (h.s.position.x > 34) h.s.position.x = -34; if (h.s.position.x < -34) h.s.position.x = 34; });
+      const da = dust.geometry.attributes.position;
+      for (let i = 0; i < dustN; i++) { da.array[i * 3 + 1] += dt * 0.35; da.array[i * 3] += Math.sin(now * 0.7 + i) * dt * 0.15; if (da.array[i * 3 + 1] > 20) da.array[i * 3 + 1] = 0; }
+      da.needsUpdate = true;
+
+      // pyro
+      pyroT += dt;
+      pyro.forEach((p) => {
+        p.t += dt;
+        const k = p.t / 1.1;
+        p.col.forEach((sp, j) => {
+          sp.material.map = fire[(Math.floor(now * 18) + j * 2) % fire.length];
+          sp.material.opacity = k < 1 ? Math.min(1, (1 - k) * 2.2) * 0.95 : 0;
+          sp.scale.set(2.6 + j * 0.4, (k < 0.25 ? k / 0.25 : 1) * (9 + j * 2), 1);
+        });
+      });
+      pyroLight.intensity = pyroT < 1.1 ? (1 - pyroT / 1.1) * 900 : 0;
+
+      camera.position.set(baseCam.x + Math.sin(now * 0.3) * 0.05, baseCam.y + pulse * 0.025, baseCam.z);
       boardTex.offset.y = (t * speed) / 6;
 
       // fret bars
@@ -412,8 +560,7 @@ export function createRenderer(canvas) {
       for (const [bt, bar] of beats) {
         const z = zOf(bt);
         if (z > 0.6 || z < -HL) continue;
-        tmpS.set(w, bar ? 1.6 : 0.8, bar ? 1.4 : 0.8);
-        tmpM.compose(tmpV.set(0, 0.025, z), tmpQ.identity(), tmpS);
+        tmpM.compose(tmpV.set(0, 0.025, z), tmpQ.identity(), tmpS.set(w, bar ? 1.8 : 0.9, bar ? 1.5 : 0.8));
         frets.setMatrixAt(fi++, tmpM);
         if (fi >= 64) break;
       }
@@ -425,56 +572,52 @@ export function createRenderer(canvas) {
         const n = notes[i];
         if (n.t - t > look * 1.02) break;
         const x = laneX(n.lane);
-        // tail
         if (n.dur > 0 && n.t + n.dur > t && ti < MAX_GEMS) {
           const z0 = n.holding ? 0 : Math.min(0.4, zOf(n.t));
           const z1 = Math.max(-HL, zOf(n.t + n.dur));
           if (z0 > z1) {
             const len = z0 - z1;
             const dead = n.state === 2 || (n.state === 1 && !n.holding);
-            const wob = n.holding ? Math.sin(now * 40 + i) * 0.03 : 0;
-            tmpM.compose(tmpV.set(x + wob, 0.07, z1 + len / 2), tmpQ.identity(), tmpS.set(n.holding ? 0.2 : 0.15, 0.04, len));
+            const wob = n.holding ? Math.sin(now * 45 + i) * 0.035 : 0;
+            tmpM.compose(tmpV.set(x + wob, 0.075, z1 + len / 2), tmpQ.identity(), tmpS.set(n.holding ? 0.2 : 0.16, 0.045, len));
             tails.setMatrixAt(ti, tmpM);
-            tmpC.setHex(dead ? 0x3a3540 : LANE_HEX[n.lane]); if (n.holding) tmpC.multiplyScalar(1.8);
+            tmpC.setHex(dead ? 0x2e2a28 : LANE_HEX[n.lane]); if (n.holding) tmpC.multiplyScalar(1.6);
             tails.setColorAt(ti, tmpC); ti++;
           }
         }
         if (n.state === 1) continue;
         const z = zOf(n.t);
         if (z > 1.4 || gi >= MAX_GEMS) continue;
-        const sc = 0.9;
-        tmpM.compose(tmpV.set(x, 0.05, z), tmpQ.identity(), tmpS.set(sc, sc, sc));
+        tmpM.compose(tmpV.set(x, 0.05, z), tmpQ.identity(), tmpS.set(0.9, 0.9, 0.9));
         gemBase.setMatrixAt(gi, tmpM); gemBody.setMatrixAt(gi, tmpM); gemDome.setMatrixAt(gi, tmpM); gemRing.setMatrixAt(gi, tmpM);
-        tmpC.setHex(n.state === 2 ? 0x2a2630 : LANE_HEX[n.lane]);
-        gemBody.setColorAt(gi, tmpC); gemDome.setColorAt(gi, tmpC.lerp(WHITE, n.state === 2 ? 0 : 0.08));
+        tmpC.setHex(n.state === 2 ? 0x24201e : LANE_HEX[n.lane]);
+        gemBody.setColorAt(gi, tmpC); gemDome.setColorAt(gi, tmpC.lerp(WHITE, n.state === 2 ? 0 : 0.1));
         gi++;
       }
       for (const m of [gemBase, gemBody, gemDome, gemRing]) { m.count = gi; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
       tails.count = ti; tails.instanceMatrix.needsUpdate = true; if (tails.instanceColor) tails.instanceColor.needsUpdate = true;
 
-      // buttons, strings, flames
+      // buttons, strings, hit fire
       for (let i = 0; i < lanes; i++) {
         const b = buttons[i], p = pressed[i] ? 1 : 0;
-        b.press += (Math.max(p, b.press * 0.82) - b.press) * 0.5;
+        b.press += (Math.max(p, b.press * 0.8) - b.press) * 0.5;
         b.cap.position.y = 0.2 - 0.07 * (p || b.press * 0.5);
-        b.center.position.y = b.cap.position.y;
-        b.cap.material.emissiveIntensity = 0.2 + (p ? 0.9 : 0) + b.press * 0.6;
-        b.center.material.emissiveIntensity = p ? 1.2 : b.press;
-        b.rim.material.emissiveIntensity = 0.25 + pulse * 0.4 + b.press;
+        b.stud.position.y = b.cap.position.y + 0.01;
+        b.cap.material.emissiveIntensity = 0.12 + (p ? 0.75 : 0) + b.press * 0.5;
+        b.stud.material.emissiveIntensity = b.press * 0.6;
         const s = strings[i];
-        s.vib *= Math.pow(0.02, dt); s.glow *= Math.pow(0.05, dt);
-        s.mesh.position.x = laneX(i) + Math.sin(now * 90 + i) * 0.035 * s.vib;
-        s.mesh.material.emissive.setHex(LANE_HEX[i]).multiplyScalar(s.glow * 0.8);
+        s.vib *= Math.pow(0.02, dt); s.glow *= Math.pow(0.002, dt);
+        s.mesh.position.x = laneX(i) + Math.sin(now * 95 + i) * 0.035 * s.vib;
+        s.mesh.material.emissive.setHex(LANE_HEX[i]).multiplyScalar(s.glow * 0.4);
         const f = flames[i]; f.t += dt;
-        const k = f.t / 0.28;
-        f.sp.material.opacity = k < 1 ? (1 - k) * 0.7 : 0;
-        f.sp.scale.set(0.7 + k * 0.4, 1.0 + k * 1.1, 1);
+        const k = f.t / 0.32;
+        f.sp.material.map = fire[(Math.floor(now * 22) + i) % fire.length];
+        f.sp.material.opacity = k < 1 ? (1 - k) : 0;
+        f.sp.scale.set(0.95 + k * 0.25, 1.5 + k * 0.9, 1);
       }
-      // sparks
       for (let i = 0; i < SPARKS; i++) {
         if (sparkLife[i] <= 0) { spPos[i * 3 + 1] = -50; continue; }
-        sparkLife[i] -= dt;
-        sparkVel[i * 3 + 1] -= 9 * dt;
+        sparkLife[i] -= dt; sparkVel[i * 3 + 1] -= 9.5 * dt;
         spPos[i * 3] += sparkVel[i * 3] * dt; spPos[i * 3 + 1] += sparkVel[i * 3 + 1] * dt; spPos[i * 3 + 2] += sparkVel[i * 3 + 2] * dt;
       }
       sparkGeo.attributes.position.needsUpdate = true; sparkGeo.attributes.color.needsUpdate = true;

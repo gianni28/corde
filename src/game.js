@@ -85,7 +85,7 @@ export class Game {
       const n = N[i];
       if (n.t > t) break;
       if (n.state === 0 && t - n.t > WINDOW) {
-        n.state = 2; this.missed++; this.breakCombo(false);
+        n.state = 2; this.missed++; this.breakCombo(this.combo > 0);
         this.events.push({ type: "miss", lane: n.lane });
       }
       if (n.holding) {
