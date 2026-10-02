@@ -12,7 +12,10 @@ Juego de ritmo multijugador en el navegador, inspirado en Guitar Hero. Se toca c
 - **Se adapta al dispositivo:** 5 cuerdas en PC, 4 en celular. Las notas naranjas se pliegan a la cuerda de al lado (`notesFor` en `src/chart.js`).
 - **Teclas configurables** en Ajustes (por defecto `D F J K L`, también `1`–`5`).
 - **Biblioteca en línea:** canciones guardadas en Supabase Storage, catálogo en Postgres.
-- **Multijugador en tiempo real:** salas con código de 4 letras sobre Supabase Realtime (presence + broadcast). El anfitrión elige canción y dificultad, todos descargan, y el marcador de los rivales se ve en vivo. Si alguien juega desde el celular, la sala entera toca con 4 cuerdas para que sea justo.
+- **Multijugador en tiempo real:** salas con código de 4 letras sobre Supabase Realtime (presence + broadcast). El anfitrión elige canción y dificultad, todos descargan, y el marcador de los rivales se ve en vivo. Si alguien juega desde el celular, la sala entera toca con 4 cuerdas para que sea justo. Botón **Invitar** (compartir o WhatsApp) con un enlace `#sala-ABCD` que abre el juego directo en la sala.
+- **Dos jugadores en un mismo PC:** pantalla dividida con dos mástiles (cada uno con su cámara, sobre el mismo escenario), cada jugador con su dificultad, su poder estrella y su marcador, y al final quién ganó. Teclas por defecto `A S D F G` + Espacio y `H J K L Ñ` + Enter (poder estrella), configurables (se guardan por posición física, así sirven en teclados en español o en inglés).
+- **Récords personales:** tu mejor resultado de cada canción y dificultad (en este navegador), con estrellas en la lista de canciones y en los botones de dificultad.
+- **Se instala como app:** manifest con íconos; en Android/PC aparece «Instalar como app» y abre en pantalla completa.
 - **Niveles automáticos desde un MP3:** para canciones que no tienen chart, el panel de subida acepta un MP3 y genera las 4 dificultades: detección de golpes (spectral flux), tempo por autocorrelación, seguimiento del pulso con programación dinámica (Ellis 2007), selección de notas por densidad y carriles que siguen el contorno melódico (`src/autochart.js`). Contra el chart hecho a mano de *Kryptonite*, el 82–86 % de las notas generadas en Fácil, Media y Difícil caen donde el humano puso una.
 - **Canciones locales:** también puedes cargar una carpeta de Clone Hero (`notes.mid` o `notes.chart`) sin subir nada.
 - Sincronía calibrable, la guitarra se silencia cuando fallas, multiplicador ×4, secciones de la canción, resultados con estrellas.
@@ -68,4 +71,4 @@ Tiempos en segundos. Cada nota es `[tiempo, cuerda, duración]`; duración 0 = n
 
 ## Pendiente
 
-Star power, editor de niveles para la comunidad, notas abiertas y HOPOs, cuentas de usuario y tabla de récords.
+Controles y guitarras USB (Gamepad API), modo Gira (carrera por escenarios), canción del día, editor de niveles para la comunidad, notas abiertas y HOPOs, cuentas de usuario.

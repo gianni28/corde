@@ -1,0 +1,17 @@
+{
+  "name": "Corde",
+  "short_name": "Corde",
+  "description": "Juego de ritmo: toca la guitarra con el teclado o la pantalla táctil, solo o con amigos.",
+  "lang": "es",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "background_color": "#0a0605",
+  "theme_color": "#0a0605",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

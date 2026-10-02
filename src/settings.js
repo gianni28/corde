@@ -10,12 +10,17 @@ export const DEFAULTS = {
   missSfx: true,
   autoSync: true,
   name: "",
+  // two players on one PC: each guitar's keys by physical position (KeyboardEvent.code), star power last
+  duoKeys: [["KeyA", "KeyS", "KeyD", "KeyF", "KeyG", "Space"], ["KeyH", "KeyJ", "KeyK", "KeyL", "Semicolon", "Enter"]],
+  duoNames: ["Jugador 1", "Jugador 2"],
+  duoDiffs: ["medium", "medium"],
 };
 
 export const isTouchDevice = () => matchMedia("(pointer:coarse)").matches && !matchMedia("(any-pointer:fine)").matches;
 
 function load() {
-  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch { return { ...DEFAULTS }; }
+  const fresh = () => JSON.parse(JSON.stringify(DEFAULTS)); // its own copy of the default lists
+  try { return { ...fresh(), ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch { return fresh(); }
 }
 
 export const settings = load();

@@ -219,12 +219,13 @@ export class Game {
     // pausing again during a lead-in keeps the original comeback point
     this.resumeAt = Math.max(this.resumeAt ?? -Infinity, pausedAt);
   }
-  resumeFrom(toT) {
+  // seek: false for the second of two players sharing one song (the first one moves the music)
+  resumeFrom(toT, seek = true) {
     this.pressed.fill(false);
     this.practiceUntil = this.resumeAt;
     this.resumeFromT = toT;
     this.lastT = toT;
-    this.player.seek(toT - this.offset + this.songOffset, 0.05);
+    if (seek) this.player.seek(toT - this.offset + this.songOffset, 0.05);
   }
 
   /** The no-notes stretch the song is in right now, if any: [start, end]. */
