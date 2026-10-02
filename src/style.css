@@ -393,6 +393,10 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 
 /* ---------- practice ---------- */
 .practice-tag { font: 700 12px var(--display); letter-spacing: .2em; text-transform: uppercase; color: #fff; padding: 3px 10px 2px; background: linear-gradient(180deg, #c4161c, #6e0808); box-shadow: 0 0 0 1px #000, inset 0 1px 0 rgba(255,255,255,.2); border-radius: 2px; }
+.motion-test { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; }
+.mt-bar { height: 10px; background: #0a0808; box-shadow: 0 0 0 1px #000, inset 0 0 0 1px #2a2420; overflow: hidden; }
+.mt-bar i { display: block; height: 100%; width: 100%; transform: scaleX(0); transform-origin: left; background: linear-gradient(90deg, #7a0a0a, var(--red-hi), var(--fire)); transition: transform .08s linear; }
+.mt-bar.hit i { background: linear-gradient(90deg, #3aa0ff, #bfe4ff); box-shadow: 0 0 12px #8fd0ff; }
 .play-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 10px; align-items: stretch; }
 .practice-btn { width: 100%; text-align: center; padding-left: 6px; padding-right: 6px; font-size: 17px; letter-spacing: .05em; }
 .sections li.go { cursor: pointer; padding: 4px 6px; margin: 0 -6px; border-radius: 2px; }
