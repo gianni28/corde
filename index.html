@@ -17,7 +17,7 @@
 </head>
 <body>
 <canvas id="stage" aria-label="Escenario"></canvas>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="dice" viewBox="0 0 24 24"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm2.5 3a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM7.5 15a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></symbol></svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="flame" viewBox="0 0 24 24"><path d="M12 2c.6 3.2 2.4 4.9 4 6.6 1.7 1.8 3 3.6 3 6.4A7 7 0 0 1 5 15c0-2.3 1-4.1 2.4-5.4-.1 1.6.4 2.9 1.6 3.6C8.7 9.3 10.2 5.3 12 2zm.3 11.2c-1.6 1.4-2.6 2.7-2.6 4.2a2.3 2.3 0 0 0 4.6.2c.1-1.6-.8-2.9-2-4.4z"/></symbol><symbol id="lock" viewBox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3h1.5A1.5 1.5 0 0 1 20 11.5v9A1.5 1.5 0 0 1 18.5 22h-13A1.5 1.5 0 0 1 4 20.5v-9A1.5 1.5 0 0 1 5.5 10H7zm2 0h6V7a3 3 0 0 0-6 0v3z"/></symbol><symbol id="dice" viewBox="0 0 24 24"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm2.5 3a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM7.5 15a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></symbol></svg>
 
 <!-- ===== HUD ===== -->
 <div id="hud" hidden>
@@ -52,6 +52,7 @@
   </div>
   <div class="hud-top">
     <div class="practice-tag" id="practiceTag" hidden>Práctica</div>
+    <div class="practice-tag ctx-tag" id="ctxTag" hidden></div>
     <div class="section" id="section"></div>
     <div class="progress"><i id="progress"></i></div>
   </div>
@@ -68,6 +69,14 @@
 </div>
 
 <div id="ui">
+  <div class="celebrate" id="celebrate" hidden>
+    <div class="cel-rays" aria-hidden="true"></div>
+    <div class="cel-box">
+      <span class="cel-kicker" id="celKicker"></span>
+      <h2 class="cel-title" id="celTitle"></h2>
+      <p class="cel-sub" id="celSub"></p>
+    </div>
+  </div>
   <!-- ===== HOME ===== -->
   <section class="screen home" id="s-home">
     <div class="home-main">
@@ -77,9 +86,15 @@
       </div>
       <nav class="menu">
         <button data-go="library" data-mode="solo">Jugar</button>
+        <button data-go="tour">Gira</button>
         <button data-go="mp">Multijugador</button>
         <button data-go="settings">Ajustes</button>
       </nav>
+      <button class="daily-card" id="dailyCard" hidden>
+        <span class="dc-art"><svg aria-hidden="true"><use href="#flame"/></svg><img id="dcCover" alt=""></span>
+        <span class="dc-text"><span class="dc-label">Canción del día</span><b id="dcName"></b><small id="dcArtist"></small><small class="dc-state" id="dcState"></small></span>
+        <span class="dc-side"><span class="dc-streak" id="dcStreak" hidden><svg aria-hidden="true"><use href="#flame"/></svg><b></b></span><span class="dc-time" id="dcTime"></span></span>
+      </button>
       <p class="foot" id="homeFoot"></p>
       <button class="link install-btn" id="installBtn" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Instalar como app</button>
       <p class="hint install-ios" id="installIos" hidden>En iPhone: toca Compartir y luego «Agregar a inicio» para jugarlo en pantalla completa.</p>
@@ -227,6 +242,53 @@
     </div>
   </section>
 
+  <!-- ===== SONG OF THE DAY ===== -->
+  <section class="screen panel-screen" id="s-daily" hidden>
+    <div class="panel wide">
+      <header class="bar"><button class="back" data-back>Volver</button><h2>Canción del día</h2></header>
+      <div class="daily-hero">
+        <span class="dh-art"><svg aria-hidden="true"><use href="#flame"/></svg><img id="dailyCover" alt=""></span>
+        <div class="dh-text">
+          <span class="label" id="dailyDate"></span>
+          <h2 id="dailySong"></h2>
+          <p id="dailyArtist"></p>
+        </div>
+      </div>
+      <div class="daily-meta">
+        <div class="daily-clock"><span class="label">Nueva canción en</span><b id="dailyTime">--:--:--</b></div>
+        <div class="daily-streak" id="dailyStreakBox">
+          <svg aria-hidden="true"><use href="#flame"/></svg>
+          <div><b id="dailyStreak">0</b><span class="label" id="dailyStreakLabel">días seguidos</span></div>
+          <ol class="week" id="dailyWeek" aria-label="Últimos 7 días"></ol>
+        </div>
+      </div>
+      <div class="field"><span class="label">Dificultad</span><div class="diffs" id="dailyDiffs"></div></div>
+      <button class="primary" id="dailyPlay">Tocar</button>
+      <div class="board" id="dailyBoard">
+        <div class="board-head"><span class="label">Clasificación de hoy</span><span class="hint" id="dailyCount"></span></div>
+        <ol class="board-list"></ol>
+        <p class="hint board-empty" hidden>Nadie ha tocado esta dificultad hoy. ¡Sé el primero!</p>
+        <p class="hint board-me" id="dailyMe" hidden></p>
+      </div>
+      <p class="err" id="dailyErr" hidden></p>
+    </div>
+  </section>
+
+  <!-- ===== TOUR ===== -->
+  <section class="screen panel-screen" id="s-tour" hidden>
+    <div class="panel wide tour-panel">
+      <header class="bar"><button class="back" data-back>Volver</button><h2>Gira</h2><span class="tour-stars" id="tourStars"></span></header>
+      <div class="seg" id="tourDiffs"><button data-d="easy">Fácil</button><button data-d="medium">Media</button><button data-d="hard">Difícil</button><button data-d="expert">Experto</button></div>
+      <div class="tour-road" id="tourRoad" aria-hidden="true"></div>
+      <div class="tour-done" id="tourDone" hidden>
+        <svg aria-hidden="true"><use href="#flame"/></svg>
+        <div><b>¡Gira completa! Eres leyenda del rock</b><small id="tourDoneSub"></small></div>
+      </div>
+      <div class="tour-list" id="tourList"></div>
+      <p class="hint tour-rules">Cada dificultad es una gira distinta. Supera 3 canciones de un escenario y el público pedirá el bis; supera el bis y se abre el siguiente escenario.</p>
+    </div>
+  </section>
+
   <!-- ===== TWO PLAYERS ON ONE PC ===== -->
   <section class="screen panel-screen" id="s-duo" hidden>
     <div class="panel wide">
@@ -337,6 +399,14 @@
         <div><span class="label">Mejor racha</span><b id="resCombo"></b></div>
       </div>
       <p class="pb-line" id="pbLine" hidden></p>
+      <div class="ctx-res daily-res" id="dailyRes" hidden>
+        <svg aria-hidden="true"><use href="#flame"/></svg>
+        <div><span class="label">Canción del día</span><b id="dailyRank"></b><small id="dailyResStreak"></small></div>
+      </div>
+      <div class="ctx-res tour-res" id="tourRes" hidden>
+        <div><span class="label" id="tourResVenue"></span><b id="tourResMsg"></b></div>
+        <button class="primary" id="tourNextBtn" hidden></button>
+      </div>
       <div class="sections" id="resSections" hidden>
         <span class="label">Por sección</span>
         <ol></ol>

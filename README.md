@@ -14,6 +14,8 @@ Juego de ritmo multijugador en el navegador, inspirado en Guitar Hero. Se toca c
 - **Biblioteca en línea:** canciones guardadas en Supabase Storage, catálogo en Postgres.
 - **Multijugador en tiempo real:** salas con código de 4 letras sobre Supabase Realtime (presence + broadcast). El anfitrión elige canción y dificultad, todos descargan, y el marcador de los rivales se ve en vivo. Si alguien juega desde el celular, la sala entera toca con 4 cuerdas para que sea justo. Botón **Invitar** (compartir o WhatsApp) con un enlace `#sala-ABCD` que abre el juego directo en la sala.
 - **Dos jugadores en un mismo PC:** pantalla dividida con dos mástiles (cada uno con su cámara, sobre el mismo escenario), cada jugador con su dificultad, su poder estrella y su marcador, y al final quién ganó. Teclas por defecto `A S D F G` + Espacio y `H J K L Ñ` + Enter (poder estrella), configurables (se guardan por posición física, así sirven en teclados en español o en inglés).
+- **Canción del día:** la misma canción para todos cada día (calendario de Colombia), elegida por el servidor entre las canciones con chart sin repetir las de los últimos 30 días. Clasificación del día por dificultad y cuerdas (como las demás), cuenta regresiva para la siguiente y racha de días seguidos (en el navegador). Tablas `daily` y `daily_scores` con las funciones `daily_today()` y `submit_daily()` (`supabase/daily.sql`), con las mismas validaciones anti-trampa que `submit-score`.
+- **Modo Gira:** seis escenarios, del garaje al estadio, cada uno con su look en 3D (`R.setStage`). Una gira por dificultad, armada con la biblioteca: canciones ordenadas por notas por segundo y repartidas de fácil a difícil (`src/tour.js`). Cada escenario tiene 4 canciones y un bis: supera 3 y el público pide otra; supera el bis y se abre el siguiente escenario. Las estrellas son tus récords personales en esa dificultad.
 - **Récords personales:** tu mejor resultado de cada canción y dificultad (en este navegador), con estrellas en la lista de canciones y en los botones de dificultad.
 - **Se instala como app:** manifest con íconos; en Android/PC aparece «Instalar como app» y abre en pantalla completa.
 - **Niveles automáticos desde un MP3:** para canciones que no tienen chart, el panel de subida acepta un MP3 y genera las 4 dificultades: detección de golpes (spectral flux), tempo por autocorrelación, seguimiento del pulso con programación dinámica (Ellis 2007), selección de notas por densidad y carriles que siguen el contorno melódico (`src/autochart.js`). Contra el chart hecho a mano de *Kryptonite*, el 82–86 % de las notas generadas en Fácil, Media y Difícil caen donde el humano puso una.
@@ -36,6 +38,7 @@ supabase/schema.sql        tabla + bucket
 supabase/functions/admin-upload   Edge Function que firma subidas (protegida con código)
 src/admin.js               conversión de canciones en el navegador (carpetas de Clone Hero o MP3 con etiquetas ID3)
 src/autochart.js           generador automático de niveles
+src/tour.js                modo Gira: escenarios, setlists por dificultad y progreso
 ```
 
 ## Puesta en marcha
@@ -71,4 +74,4 @@ Tiempos en segundos. Cada nota es `[tiempo, cuerda, duración]`; duración 0 = n
 
 ## Pendiente
 
-Controles y guitarras USB (Gamepad API), modo Gira (carrera por escenarios), canción del día, editor de niveles para la comunidad, notas abiertas y HOPOs, cuentas de usuario.
+Controles y guitarras USB (Gamepad API), editor de niveles para la comunidad, notas abiertas y HOPOs, cuentas de usuario.

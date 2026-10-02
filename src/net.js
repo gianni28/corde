@@ -123,6 +123,48 @@ export async function submitScore(body) {
   return data; // { best, rank, newRecord }
 }
 
+/* ---------------- song of the day ---------------- */
+/** Today's song for everyone (Colombia's calendar): { day: "2026-10-02", song_id }. Picks it if nobody has asked yet. */
+export async function dailyToday() {
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc("daily_today");
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/**
+ * The day's board for one song, difficulty and string count: the top 10, how many played, and where `me`
+ * (a lowercased name) stands even outside the top 10 → { rows, total, mine: { score, rank } | null }.
+ */
+export async function dailyBoard({ day, songId, diff, lanes, me }) {
+  if (!supabase) return { rows: [], total: 0, mine: null };
+  const board = { day, song_id: songId, diff, lanes };
+  const t = () => supabase.from("daily_scores");
+  const [top, count, mine] = await Promise.all([
+    t().select("name, score, acc, stars").match(board).order("score", { ascending: false }).order("updated_at").limit(10),
+    t().select("id", { count: "exact", head: true }).match(board),
+    me ? t().select("score").match(board).eq("name_key", me).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+  for (const r of [top, count, mine]) if (r.error) throw new Error(r.error.message);
+  let rank = null;
+  if (mine.data) {
+    const above = await t().select("id", { count: "exact", head: true }).match(board).gt("score", mine.data.score);
+    if (above.error) throw new Error(above.error.message);
+    rank = (above.count || 0) + 1;
+  }
+  return { rows: top.data, total: count.count || 0, mine: mine.data ? { score: mine.data.score, rank } : null };
+}
+
+/** A run of the day's song → { best, rank, players, newRecord }. */
+export async function submitDaily(r) {
+  const { data, error } = await supabase.rpc("submit_daily", {
+    p_day: r.day, p_song_id: r.song_id, p_diff: r.diff, p_lanes: r.lanes, p_name: r.name, p_secret: r.secret,
+    p_score: r.score, p_acc: r.acc, p_max_combo: r.max_combo, p_stars: r.stars,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 /* ---------------- admin uploads ---------------- */
 export async function adminCall(body) {
   const { data, error } = await supabase.functions.invoke("admin-upload", { body });

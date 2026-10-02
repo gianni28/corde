@@ -1,5 +1,6 @@
 // Corde — 3D renderer. Look: mid-2000s rock club stage (brick wall, amp walls, drum riser,
-// tungsten PAR cans, haze, pyro) behind a Guitar-Hero-style rosewood highway.
+// tungsten PAR cans, haze, pyro) behind a Guitar-Hero-style rosewood highway. setStage() re-tints the same
+// rig for the tour venues, from a friend's garage to a stadium (see STAGES).
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
@@ -89,8 +90,10 @@ function brickTex() {
   }, { repeat: true });
 }
 
+// [boards, slabs]: slabs is the same canvas before the tape goes on, for floors that stretch it (no extra random draws)
 function planksTex() {
-  return canvasTex(512, 512, (g, w, h) => {
+  let slabs;
+  const boards = canvasTex(512, 512, (g, w, h) => {
     const pw = 64;
     for (let x = 0; x < w; x += pw) {
       g.fillStyle = `hsl(25, 30%, ${rnd(8, 13)}%)`; g.fillRect(x, 0, pw, h);
@@ -98,8 +101,10 @@ function planksTex() {
       g.fillStyle = "#050302"; g.fillRect(x, 0, 2, h);
     }
     grime(g, w, h, 50, 0.3);
+    slabs = canvasTex(w, h, (s) => s.drawImage(g.canvas, 0, 0), { repeat: true });
     g.fillStyle = "rgba(200,200,190,.12)"; g.fillRect(rnd(0, w - 120), rnd(0, h), 120, 14); // gaffer tape
   }, { repeat: true });
+  return [boards, slabs];
 }
 
 function grilleTex() {
@@ -188,6 +193,68 @@ function bake(group) {
   return out;
 }
 
+/* ================= tour venues ================= */
+// One rig, re-tinted per venue: only colours, intensities and counts change, so a switch costs nothing.
+// pal: light colours per song section [front PARs, back PARs]; wall/floor: colour multipliers (linear, may go above 1);
+// gloss: floor [roughness, metalness]; boards: plank texture repeat (slabs: no tape, it stretches into a band);
+// fog: [colour, near, far]; amb/key: venue fill lights; spot: band key light [colour, strength];
+// light/beat/rim: rig brightness, how hard it hits the beat, rim light on the people;
+// glow/cone/back: PAR lens size, beam strength, back truss on; haze: [colour, opacity]; dust: [colour, opacity];
+// crowd: density; pyro: [opacity, size, light] (null: none); wide: two more columns; fire: [flame tint, light colour, cryo jets].
+const NO_PYRO = [0, 1, 0]; // garage: shared so render() doesn't allocate each frame
+const BAR_PAL = [[0xffb060, 0xff3a1a], [0xff2a14, 0xffc070], [0xfff0d0, 0xff6a10], [0xffc040, 0xd01010], [0xff7a20, 0xfff2e0]];
+const STAGES = {
+  // a friend's garage: bare warm bulbs under a buzzing fluorescent tube, concrete, a handful of friends
+  garage: {
+    pal: [[0xffa04a, 0xc8ffe0], [0xffb466, 0xb0f5d4], [0xff9238, 0xd8ffea], [0xffbf7a, 0xa8f0cc]],
+    wall: [0.62, 0.78, 0.72], floor: [2.3, 3.2, 3.6], gloss: [0.9, 0], boards: [1.4, 3], slabs: true,
+    fog: [0x0a0e0c, 26, 95], amb: [0xcdeedd, 0x0b100d, 0.75], key: [0xdcfff0, 0.95], spot: [0xffd8a8, 0.8],
+    light: 0.55, beat: 0.4, rim: 0.75, glow: 0.7, cone: 0.45, back: 0, haze: [0x4c5c52, 0.35], dust: [0xe0f0e8, 0.35],
+    crowd: 0.22, pyro: null, wide: false, fire: [0xffffff, 0xff7a20, false],
+  },
+  // the club: today's look (every value here matches how the venue is built)
+  bar: {
+    pal: BAR_PAL,
+    wall: [1, 1, 1], floor: [1, 1, 1], gloss: [0.55, 0.15], boards: [16, 14],
+    fog: [0x0d0705, 22, 75], amb: [0xffd9b0, 0x120604, 0.35], key: [0xffe2c4, 0.7], spot: [0xffe2c0, 1],
+    light: 1, beat: 1, rim: 1, glow: 1, cone: 1, back: 1, haze: [0x6a4028, 1], dust: [0xffb070, 0.6],
+    crowd: 1, pyro: [1, 1, 1], wide: false, fire: [0xffffff, 0xff7a20, false],
+  },
+  // college festival under a tent at night: violet, blue and magenta, thick haze, cryo jets instead of fire
+  university: {
+    pal: [[0x9a40ff, 0xff2ad0], [0x3a6bff, 0xc040ff], [0xff40c8, 0x5a50ff], [0x7a3cff, 0x30c0ff], [0xe040ff, 0x4060ff]],
+    wall: [0.55, 0.45, 1.1], floor: [1.0, 1.25, 3.0], gloss: [0.42, 0.25], boards: [10, 10],
+    fog: [0x0e0820, 22, 76], amb: [0xa890ff, 0x0c0618, 0.45], key: [0xd0c0ff, 0.6], spot: [0xf0e0ff, 1],
+    light: 1.05, beat: 1.1, rim: 1.05, glow: 1.1, cone: 1.5, back: 1, haze: [0x5a30a0, 1.8], dust: [0xd8a0ff, 0.6],
+    crowd: 0.6, pyro: [0.85, 0.9, 0.7], wide: false, fire: [0xf0d8ff, 0xa080ff, true],
+  },
+  // old theatre: burgundy curtains, dark red air, polished boards, warm golden follow spots on the band
+  theater: {
+    pal: [[0xffc860, 0xff9a30], [0xffd890, 0xe0402a], [0xffb040, 0xffe0a0], [0xffcf70, 0xd02838]],
+    wall: [1.8, 0.3, 0.36], floor: [1.4, 0.6, 0.55], gloss: [0.3, 0.3], boards: [22, 14],
+    fog: [0x2a0814, 18, 66], amb: [0xffb080, 0x220610, 0.32], key: [0xffd8a0, 0.7], spot: [0xffd890, 1.25],
+    light: 1, beat: 0.8, rim: 1, glow: 1.15, cone: 1.1, back: 1, haze: [0xa01a2a, 1.4], dust: [0xffd080, 0.7],
+    crowd: 0.75, pyro: [0.6, 0.72, 0.5], wide: false, fire: [0xffe0b0, 0xff8a30, false],
+  },
+  // open air at night: navy sky, cyan, magenta and green beams over a full field
+  festival: {
+    pal: [[0x20e0ff, 0xff30c0], [0x40ff80, 0x2080ff], [0xff40d0, 0x30ffe0], [0xa0ff30, 0xff3070], [0x30a0ff, 0x60ff60]],
+    wall: [0.12, 0.2, 0.42], floor: [1.2, 2.0, 4.2], gloss: [0.38, 0.3], boards: [8, 8],
+    fog: [0x0c1e56, 16, 70], amb: [0x6080ff, 0x050a20, 0.55], key: [0xc8d8ff, 0.6], spot: [0xe6f0ff, 1],
+    light: 1.25, beat: 1.15, rim: 1.1, glow: 1.3, cone: 1.8, back: 1, haze: [0x1a4090, 1.5], dust: [0xa0e0ff, 0.75],
+    crowd: 1, pyro: [1, 1.1, 1.1], wide: false, fire: [0xffffff, 0xff7a20, false],
+  },
+  // the biggest show: a packed arena, white and gold walls of light, huge fire
+  stadium: {
+    pal: [[0xffe0a0, 0xffb830], [0xffc850, 0xfff4e0], [0xfff4e0, 0xffa820], [0xffd070, 0xffffff], [0xffb840, 0xffeccc]],
+    wall: [0.5, 0.52, 0.6], floor: [1.2, 1.2, 1.4], gloss: [0.22, 0.5], boards: [6, 6],
+    fog: [0x1c1814, 22, 80], amb: [0xfff0dc, 0x0c0a0c, 0.42], key: [0xfff4e4, 0.85], spot: [0xfff0dc, 0.6], // x light 1.6 ~ the club; any hotter clips the kick head white
+    light: 1.6, beat: 1.2, rim: 1, glow: 1.6, cone: 1.8, back: 1, haze: [0x9a8870, 1.8], dust: [0xfff0c8, 0.8],
+    crowd: 1.4, pyro: [1, 1.35, 1.7], wide: true, fire: [0xffffff, 0xff8a30, false],
+  },
+};
+export const STAGE_NAMES = Object.keys(STAGES);
+
 /* ================= renderer ================= */
 export function createRenderer(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
@@ -201,10 +268,11 @@ export function createRenderer(canvas) {
   // The venue lives in its own scene, rendered into a low-res target and shown as the highway's background.
   const bg = new THREE.Scene();
   bg.background = new THREE.Color(0x070403);
-  bg.fog = scene.fog;
+  // its own fog (same as the neck's at the club) so a venue can tint it without touching the highway
+  const bgFog = new THREE.Fog(0x0d0705, 22, 75); bg.fog = bgFog;
   const bgRT = new THREE.WebGLRenderTarget(16, 16, { type: THREE.HalfFloatType });
   scene.background = bgRT.texture;
-  bg.add(new THREE.HemisphereLight(0xffd9b0, 0x120604, 0.35));
+  const bgHemi = new THREE.HemisphereLight(0xffd9b0, 0x120604, 0.35); bg.add(bgHemi);
   const bgKey = new THREE.DirectionalLight(0xffe2c4, 0.7); bgKey.position.set(2, 9, 7); bg.add(bgKey);
 
   /* --- lights: warm tungsten club rig --- */
@@ -229,7 +297,8 @@ export function createRenderer(canvas) {
   const wall = new THREE.Mesh(new THREE.PlaneGeometry(140, 60), new THREE.MeshStandardMaterial({ map: brick, roughness: 0.95, metalness: 0 }));
   wall.position.set(0, 24, -60); stage.add(wall);
 
-  const planks = planksTex(); planks.repeat.set(16, 14);
+  const [planks, slabs] = planksTex(); planks.repeat.set(16, 14);
+  renderer.initTexture(slabs); // upload now so the first garage doesn't hitch
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(140, 120), new THREE.MeshStandardMaterial({ map: planks, roughness: 0.55, metalness: 0.15 }));
   floor.rotation.x = -Math.PI / 2; floor.position.set(0, -0.9, -20); stage.add(floor);
 
@@ -328,7 +397,7 @@ export function createRenderer(canvas) {
     const m = new THREE.SpriteMaterial({ map: sTex, color: 0x6a4028, transparent: true, opacity: rnd(0.1, 0.22), depthWrite: false, fog: true });
     const s = new THREE.Sprite(m); const sc = rnd(16, 30); s.scale.set(sc * 1.6, sc, 1);
     s.position.set(rnd(-30, 30), rnd(2, 16), rnd(-55, -22)); bg.add(s);
-    haze.push({ s, v: rnd(-0.4, 0.4) });
+    haze.push({ s, v: rnd(-0.4, 0.4), o: m.opacity });
   }
 
   // embers floating in the light
@@ -352,10 +421,20 @@ export function createRenderer(canvas) {
     }
     pyro.push({ col, t: 9, x });
   }
+  // the stadium's extra pair, further out (never lit anywhere else)
+  for (const x of [-16.5, 16.5]) {
+    const col = [];
+    for (let k = 0; k < 3; k++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: fire[0], transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+      sp.center.set(0.5, 0); sp.position.set(x + (k - 1) * 0.25, -0.8, -22 - Math.abs(x) * 0.3); sp.scale.set(3, 8, 1);
+      sp.visible = false; bg.add(sp); col.push(sp);
+    }
+    pyro.push({ col, t: 9, x, wide: true });
+  }
   let pyroT = 9;
 
   // crowd in front of the stage + the band on it (see stagecrew.js); both follow the beat and the song's energy
-  const crowd = createCrowd(bg, camera, { max: isMobile ? 56 : 96, dotTex: softDotTex() });
+  const crowd = createCrowd(bg, camera, { max: isMobile ? 56 : 96, room: STAGES.stadium.crowd, dotTex: softDotTex() });
   const band = createBand(bg, { kitPos: kit.position, cymbals: cymList });
   let hype = 0.5, hypeS = 0.5;
   const rimCol = new THREE.Color();
@@ -718,6 +797,8 @@ export function createRenderer(canvas) {
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
+  let stageName = "bar", S = STAGES.bar; // current venue look (setStage below)
+
   /* --- layout --- */
   // The crowd is laid out in screen space beside the neck: find where the neck's edge is on screen, row by row.
   function layoutCrowd(aspect) {
@@ -731,7 +812,7 @@ export function createRenderer(canvas) {
       for (let i = 1; i < pts.length; i++) if (pts[i][0] >= y) { const [y0, x0] = pts[i - 1], [y1, x1] = pts[i]; return x0 + ((x1 - x0) * (y - y0)) / Math.max(1e-6, y1 - y0); }
       return pts[pts.length - 1][1];
     };
-    crowd.layout(aspect, Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2), edgeX);
+    crowd.layout(aspect, Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2), edgeX, S.crowd);
   }
 
   let W = 1, H = 1;
@@ -809,12 +890,34 @@ export function createRenderer(canvas) {
 
   let peopleDt = 0;
   const beatTrack = { count: 0, bar: 0, lastT: -1e9, prevT: -1e9, len: 0.5 };
-  // warm club palettes per song section: [front PARs, back PARs]
-  const palettes = [[0xffb060, 0xff3a1a], [0xff2a14, 0xffc070], [0xfff0d0, 0xff6a10], [0xffc040, 0xd01010], [0xff7a20, 0xfff2e0]];
-  let pal = 0;
+  // light colours per song section: [front PARs, back PARs] (the venue picks the list; the club's are warm)
+  let palettes = BAR_PAL, pal = 0, section = 0;
   const colA = new THREE.Color(palettes[0][0]), colB = new THREE.Color(palettes[0][1]);
 
-  function firePyro() { pyroT = 0; pyro.forEach((p) => (p.t = 0)); }
+  function firePyro() { if (!S.pyro) return; pyroT = 0; pyro.forEach((p) => (p.t = p.wide && !S.wide ? 9 : 0)); }
+
+  // the venue look (see STAGES); the club is what the scene is built as, so "bar" changes nothing
+  function setStage(name) {
+    if (!STAGES[name]) name = "bar";
+    if (name === stageName) return;
+    stageName = name; S = STAGES[name];
+    palettes = S.pal; pal = ((section % palettes.length) + palettes.length) % palettes.length;
+    colA.setHex(palettes[pal][0]); colB.setHex(palettes[pal][1]); // no slow fade from the last venue's colours
+    wall.material.color.setRGB(...S.wall); floor.material.color.setRGB(...S.floor);
+    floor.material.roughness = S.gloss[0]; floor.material.metalness = S.gloss[1];
+    floor.material.map = S.slabs ? slabs : planks; floor.material.map.repeat.set(...S.boards); // same shader either way
+    bgFog.color.setHex(S.fog[0]); bgFog.near = S.fog[1]; bgFog.far = S.fog[2];
+    bgHemi.color.setHex(S.amb[0]); bgHemi.groundColor.setHex(S.amb[1]); bgHemi.intensity = S.amb[2];
+    bgKey.color.setHex(S.key[0]); bgKey.intensity = S.key[1]; bandKey.color.setHex(S.spot[0]);
+    glows.forEach((g, row) => { g.material.size = 2.4 * S.glow; g.visible = row === 0 || S.back > 0; });
+    haze.forEach((h) => { h.s.material.color.setHex(S.haze[0]); h.s.material.opacity = h.o * S.haze[1]; });
+    dust.material.color.setHex(S.dust[0]); dust.material.opacity = S.dust[1];
+    pyro.forEach((p) => p.col.forEach((sp) => sp.material.color.setHex(S.fire[0]))); pyroLight.color.setHex(S.fire[1]);
+    // put out any fire this venue doesn't have (all of it in a garage, the outer pair anywhere but the stadium)
+    pyro.forEach((p) => { if (!S.pyro || (p.wide && !S.wide)) p.t = 9; });
+    if (!S.pyro) pyroT = 9;
+    layoutCrowd(W / H);
+  }
   // screen position (CSS px) of a point on player p's neck
   function toScreen(p, x, out) {
     const h = hws[p] || hws[0];
@@ -826,7 +929,7 @@ export function createRenderer(canvas) {
   const scr = { x: 0, y: 0 };
 
   const api = {
-    _internals: { camera, baseCam, bg },
+    _internals: { camera, baseCam, bg, crowd },
     setLanes: layoutLanes,
     /** 1 player (one neck in the middle) or 2 (two necks, split screen). */
     setPlayers(n) {
@@ -848,7 +951,10 @@ export function createRenderer(canvas) {
     },
     qualityInfo() { return { mode, level, ema: +perf.ema.toFixed(1), bg: [bgRT.width, bgRT.height], px: renderer.getPixelRatio() }; },
     resize,
-    setSection(i) { pal = ((i % palettes.length) + palettes.length) % palettes.length; if (i > 0) firePyro(); },
+    setSection(i) { section = i; pal = ((i % palettes.length) + palettes.length) % palettes.length; if (i > 0) firePyro(); },
+    /** Tour venue look: "garage" | "bar" (the club, default) | "university" | "theater" | "festival" | "stadium". */
+    setStage,
+    get stage() { return stageName; },
     pyro: firePyro,
     hit(lane, sustain, p = 0) { hws[p]?.hit(lane, sustain); },
     holdSpark(lane, p = 0) { hws[p]?.holdSpark(lane); },
@@ -904,15 +1010,15 @@ export function createRenderer(canvas) {
       // lights: brighter, punchier and changing colour faster when the song is loud; dim and warm when it's calm
       const lerpK = 0.015 + 0.03 * E;
       colA.lerp(tmpC.setHex(palettes[pal][0]), lerpK); colB.lerp(tmpC.setHex(palettes[pal][1]), lerpK);
-      const pk = pulse * (0.35 + 0.9 * E) + punch * 0.35 * E;
+      const pk = (pulse * (0.35 + 0.9 * E) + punch * 0.35 * E) * S.beat;
       [colA, colB].forEach((col, row) => {
         glows[row].material.color.copy(col).multiplyScalar(0.45 + 0.45 * E + pk * 0.6);
         coneMats[row].uniforms.uColor.value.copy(col);
-        coneMats[row].uniforms.uI.value = (0.05 + 0.08 * E + pk * 0.14) * (0.88 + 0.12 * Math.sin(now * (3 + 6 * E) + row));
+        coneMats[row].uniforms.uI.value = (0.05 + 0.08 * E + pk * 0.14) * (0.88 + 0.12 * Math.sin(now * (3 + 6 * E) + row)) * S.cone * (row ? S.back : 1);
       });
-      wallSpots.forEach((s, i) => { s.color.copy(i === 1 ? colB : colA); s.intensity = 110 + 160 * E + pk * 150; });
-      stageWash.color.copy(colA); stageWash.intensity = 85 + 60 * E + pk * 70;
-      bandKey.intensity = 260 + 160 * E + pk * 120;
+      wallSpots.forEach((s, i) => { s.color.copy(i === 1 ? colB : colA); s.intensity = (110 + 160 * E + pk * 150) * S.light; });
+      stageWash.color.copy(colA); stageWash.intensity = (85 + 60 * E + pk * 70) * S.light;
+      bandKey.intensity = (260 + 160 * E + pk * 120) * S.light * S.spot[1];
 
       const sway = (cam, base) => cam.position.set(base.x + Math.sin(now * 0.3) * 0.05, base.y + pulse * 0.025 * (0.4 + E), base.z);
       sway(camera, baseCam);
@@ -922,7 +1028,7 @@ export function createRenderer(canvas) {
       hypeS += (Math.max(hype, starGlow * 0.95) - hypeS) * Math.min(1, dt * 1.5);
       peopleDt += dt;
       if (frameNo % LEVELS[level].bgEvery === 0) {
-        rimCol.copy(colA).lerp(colB, 0.35).multiplyScalar(0.55 + 0.5 * E + pk * 0.5);
+        rimCol.copy(colA).lerp(colB, 0.35).multiplyScalar((0.55 + 0.5 * E + pk * 0.5) * S.rim);
         if (starGlow > 0.01) rimCol.lerp(tmpC.setHex(0x3fb4ff).multiplyScalar(1.1), starGlow * 0.75);
         const fdt = Math.min(0.1, peopleDt); peopleDt = 0;
         camera.updateMatrixWorld();
@@ -938,17 +1044,18 @@ export function createRenderer(canvas) {
 
       // pyro
       pyroT += dt;
+      const [pyO, pyS, pyL] = S.pyro || NO_PYRO, flames = S.fire[2] ? blueFire : fire;
       pyro.forEach((p) => {
         p.t += dt;
         const k = p.t / 1.1;
         p.col.forEach((sp, j) => {
-          sp.material.map = fire[(Math.floor(now * 18) + j * 2) % fire.length];
-          sp.material.opacity = k < 1 ? Math.min(1, (1 - k) * 2.2) * 0.95 : 0;
+          sp.material.map = flames[(Math.floor(now * 18) + j * 2) % flames.length];
+          sp.material.opacity = (k < 1 ? Math.min(1, (1 - k) * 2.2) * 0.95 : 0) * pyO;
           sp.visible = k < 1;
-          sp.scale.set(2.6 + j * 0.4, (k < 0.25 ? k / 0.25 : 1) * (9 + j * 2), 1);
+          sp.scale.set((2.6 + j * 0.4) * pyS, (k < 0.25 ? k / 0.25 : 1) * (9 + j * 2) * pyS, 1);
         });
       });
-      pyroLight.intensity = pyroT < 1.1 ? (1 - pyroT / 1.1) * 900 : 0;
+      pyroLight.intensity = (pyroT < 1.1 ? (1 - pyroT / 1.1) * 900 : 0) * pyL;
 
       autoTune(performance.now());
       if (frameNo++ % LEVELS[level].bgEvery === 0) {
