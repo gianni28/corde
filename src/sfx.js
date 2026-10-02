@@ -149,3 +149,25 @@ export function starOn() {
 }
 /** The song failed: the crowd boos (the music itself winds down in the player). */
 export function failed() { const c = bus(); boos(c, c.currentTime + 0.4, 2.6, 0.09); }
+
+/** "¡Otra! ¡Otra!": the crowd chants for an encore, clapping in time (O-tra, clap clap clap). */
+export function encore() {
+  const c = bus(), t0 = c.currentTime + 0.05, beat = 0.42;
+  for (let r = 0; r < 3; r++) {
+    const t = t0 + r * beat * 4;
+    // two syllables of the chant: a rounded "o" then an open "a", a crowd of voices through formants
+    roar(c, t, beat * 0.9, 0.11 + r * 0.03, [520, 900]);
+    roar(c, t + beat, beat * 1.1, 0.13 + r * 0.03, [780, 1250]);
+    for (let k = 0; k < 3; k++) claps(c, t + beat * (2 + k * 0.5), 0.08, 400, 0.55 + r * 0.1); // everyone on the same clap
+  }
+  whistle(c, t0 + beat * 9); whistle(c, t0 + beat * 10.5);
+}
+
+/** A venue unlocked: a rising run of power chords and the crowd going wild. */
+export function unlock() {
+  const c = bus(), t = c.currentTime + 0.05;
+  [E3, G3, A3].forEach((f, i) => powerChord(f, t + i * 0.22, { gain: 0.36 }));
+  powerChord(E3 * 2, t + 0.75, { gain: 0.42 });
+  roar(c, t + 0.6, 3.4, 0.16); claps(c, t + 0.7, 3.2, 60, 0.8);
+  for (let i = 0; i < 4; i++) whistle(c, t + 0.9 + Math.random() * 2.2);
+}
