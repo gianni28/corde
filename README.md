@@ -46,6 +46,8 @@ src/autochart.js           generador automático de niveles
    ```
 4. **Subir canciones desde el navegador:** en Ajustes → *Subir canciones a la biblioteca* (o abre la página con `#admin`), escribe el código de administrador y elige una carpeta de canciones de Clone Hero. El navegador convierte cada canción (mezcla de pistas y MP3 con lamejs) y la sube a través de la Edge Function `admin-upload`, que firma las subidas con la service role sin exponerla.
 
+   Si una carpeta trae solo Experto, el juego arma Fácil, Media y Difícil a partir de él (`src/reduce.js`). Si la canción ya estaba subida desde un MP3 (niveles automáticos), la versión con chart la reemplaza y borra la del MP3; esas canciones también se pueden borrar a mano desde el mismo panel. Un MP3 nunca reemplaza una canción que ya tiene chart.
+
    **O con el script** (convierte con ffmpeg, no hace falta instalarlo):
    ```bash
    npm run upload-songs -- "C:\Users\TU_USUARIO\Documents\Clone Hero\Songs"

@@ -375,7 +375,7 @@ function openSetup() {
   const draw = () => { renderDiffChips($("setupDiffs"), app.chart, lanes, app.diff, (k) => { app.diff = k; settings.lastDiff = k; save(); draw(); }); showBoard($("setupBoard"), 5); };
   draw();
   const keys = settings.keys.slice(0, lanes).map(keyLabel).join(" ");
-  const starHow = touch ? (liftOn() ? "Poder estrella: actívalo levantando el celular, como una guitarra." : "Toca el multiplicador para activar el poder estrella.") : "Enter activa el poder estrella.";
+  const starHow = touch ? (liftOn() ? "Poder estrella: actívalo levantando o sacudiendo el celular, como una guitarra." : "Toca el multiplicador para activar el poder estrella.") : "Enter activa el poder estrella.";
   $("setupHint").textContent = touch
     ? `Juegas con ${lanes} cuerdas. Toca la columna de cada color cuando la nota llegue a los botones y mantén el dedo en las notas largas. ${starHow}`
     : `Juegas con ${lanes} cuerdas: ${keys}. Presiona cuando la nota llegue a los botones y mantén en las largas. Espacio o Esc para pausar. ${starHow}`;
@@ -391,7 +391,7 @@ function practiceParts() {
   const notes = notesFor(app.chart, app.diff, deviceLanes());
   if (!notes.length) return [];
   const last = notes[notes.length - 1].t + notes[notes.length - 1].dur;
-  let starts = (app.chart.sections || []).map(([t, n], i) => ({ t, name: sectionName(n, i) }));
+  let starts = (app.chart.sections || []).map(([t, n], i) => ({ t, name: sectionName(n, i), i }));
   if (starts.length < 2) {
     starts = [];
     for (let t = notes[0].t, i = 0; t < last; t += 25, i++) starts.push({ t: i ? t : 0, name: sectionName("", i) });
@@ -400,7 +400,7 @@ function practiceParts() {
   starts.forEach((s, i) => {
     const to = i + 1 < starts.length ? starts[i + 1].t - 0.05 : last + 0.5;
     const n = notes.filter((x) => x.t >= s.t - 0.01 && x.t <= to).length;
-    if (n >= 4) parts.push({ from: s.t, to, name: s.name });
+    if (n >= 4) parts.push({ from: s.t, to, name: s.name, i: s.i });
   });
   return parts;
 }
@@ -460,10 +460,10 @@ function starGain() {
   for (const k of ["star", "mult"]) delete hudCache[k]; // the meter catches up now, with the flash
   app.starShown = true;
 }
-// "star power ready" reminder (top left) if the player doesn't use it within a couple of seconds
+// "star power ready" reminder (top left) if the player doesn't use it within a couple of seconds; shown only once per device
 const tip = { at: 0, hideAt: 0 };
 function starTipHow() {
-  return touch ? (liftOn() ? "Levanta el celular" : "Toca el multiplicador") : "Pulsa Enter";
+  return touch ? (liftOn() ? "Levanta o sacude el celular" : "Toca el multiplicador") : "Pulsa Enter";
 }
 function hideStarTip() { tip.at = 0; tip.hideAt = 0; $("spTip").hidden = true; }
 if (liftOn()) onLift(activateStar);
@@ -479,7 +479,7 @@ function openTutorial({ done = null, fromSettings = false } = {}) {
   $("tutNotes").textContent = touch
     ? "Toca la columna de cada color cuando la nota llegue a los botones. Mantén el dedo en las notas largas."
     : "Presiona la tecla de cada color cuando la nota llegue a los botones. Mantén en las notas largas.";
-  $("tutStarHow").textContent = touch && motionAvailable() ? "Actívalo levantando el celular, como una guitarra." : "Actívalo con Enter.";
+  $("tutStarHow").textContent = touch && motionAvailable() ? "Actívalo levantando o sacudiendo el celular, como una guitarra." : "Actívalo con Enter.";
   $("motionBtn").hidden = !(touch && motionNeedsPermission() && settings.motion !== "granted");
   $("motionNote").hidden = !(touch && settings.motion === "denied");
   $("tutAlert").hidden = true;
@@ -647,12 +647,23 @@ function renderSections(sum) {
   ol.innerHTML = "";
   const secs = sum.sections || [];
   box.hidden = secs.length < 2;
+  // tap a section to practice it (solo only): the weak ones are right there after the song
+  const parts = app.mode === "mp" ? [] : practiceParts();
+  $("resSectionsHint").hidden = !parts.length;
   for (const s of secs) {
     const pct = Math.round((s.hit / s.total) * 100);
     const li = document.createElement("li");
     li.className = pct >= 90 ? "great" : pct < 60 ? "weak" : "";
     li.innerHTML = `<span class="n"></span><span class="b"><i style="width:${pct}%"></i></span><span class="p">${pct}%</span>`;
     li.querySelector(".n").textContent = sectionName(s.name, s.i);
+    const part = parts.find((p) => p.i === s.i);
+    if (part) {
+      li.classList.add("go"); li.tabIndex = 0; li.setAttribute("role", "button");
+      li.setAttribute("aria-label", `Practicar ${sectionName(s.name, s.i)}`);
+      const go = () => startGame({ lanes: deviceLanes(), diff: app.diff, practice: part });
+      li.onclick = go;
+      li.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } };
+    }
     ol.appendChild(li);
   }
 }
@@ -864,7 +875,13 @@ function frame(now) {
       app.paused = true; g.player.pause(); g.restartPractice();
       app.rewinding = { from: t, to: Math.max(0, app.practice.from - 3), start: now, dur: 1100 };
     }
-    if (tip.at && now >= tip.at && !g.starOn && g.starMeter >= STAR_READY && !app.paused) { tip.at = 0; tip.hideAt = now + 5500; $("spTipHow").textContent = starTipHow(); $("spTip").hidden = false; }
+    if (tip.at && now >= tip.at && !g.starOn && g.starMeter >= STAR_READY && !app.paused) {
+      tip.at = 0;
+      if (!settings.starTipSeen) { // once is enough: after that the chime and the glowing meter say it
+        settings.starTipSeen = true; save();
+        tip.hideAt = now + 5500; $("spTipHow").textContent = starTipHow(); $("spTip").hidden = false;
+      }
+    }
     if (tip.hideAt && (now >= tip.hideAt || g.starOn || app.paused)) { tip.hideAt = 0; $("spTip").hidden = true; }
     R.setHype(Math.min(1, 0.15 + g.rock * 0.65 + Math.min(0.2, g.combo / 250)));
     energyAt(app.energy, t - g.offset + g.songOffset, en);
@@ -1093,8 +1110,47 @@ const ADMIN_KEY = "corde.adminCode";
 // The upload screen is hidden for everyone; the admin opens it once with /#admin and it stays visible in that browser.
 function isAdminBrowser() { try { return !!localStorage.getItem(ADMIN_KEY); } catch { return false; } }
 try { $("adminCode").value = localStorage.getItem(ADMIN_KEY) || ""; } catch {}
-$("openAdmin").onclick = () => { if (app.game) return; show("admin"); };
-if (location.hash === "#admin") setTimeout(() => show("admin"), 0);
+$("openAdmin").onclick = () => { if (app.game) return; show("admin"); loadAutoList(); };
+if (location.hash === "#admin") setTimeout(() => { show("admin"); loadAutoList(); }, 0);
+
+// Songs made from a bare MP3. Uploading the same song as a Clone Hero folder replaces them (even with only
+// Expert: the easier levels are built from it), and they can be deleted from here.
+const AUTO_CHARTER = "Corde (automático)";
+const songKey = (x) => (x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+  .replace(/\(.*?\)|\[.*?\]/g, "").replace(/\b(\d{4} )?remaster(ed)?\b|\bofficial (audio|video)\b/g, "").replace(/[^a-z0-9]+/g, "");
+function sameSong(a, b) {
+  const n = songKey(a.name);
+  if (!n || n !== songKey(b.name)) return false;
+  const x = songKey(a.artist), y = songKey(b.artist);
+  return !x || !y || x.includes(y) || y.includes(x);
+}
+async function loadAutoList() {
+  if (!online) return;
+  let lib = [];
+  try { lib = await listSongs(); } catch { return; }
+  const auto = lib.filter((x) => x.charter === AUTO_CHARTER);
+  const ul = $("autoList"); ul.innerHTML = "";
+  $("autoBox").hidden = !auto.length;
+  for (const x of auto) {
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="n"></span><button type="button">Borrar</button>`;
+    li.querySelector(".n").innerHTML = `<span class="t"></span> <span class="a"></span>`;
+    li.querySelector(".t").textContent = x.name; li.querySelector(".a").textContent = x.artist ? `· ${x.artist}` : "";
+    li.querySelector("button").onclick = async (e) => {
+      const code = $("adminCode").value.trim();
+      if (!code) { $("adminStatus").textContent = "Escribe el código de administrador."; return; }
+      if (!confirm(`¿Borrar «${x.name}»? También se borran sus puntajes.`)) return;
+      e.target.disabled = true;
+      try {
+        await adminCall({ code, action: "delete", id: x.id });
+        $("adminStatus").textContent = `Borrada: ${x.name}.`;
+        app.songs = []; if (app.loadedSongId === x.id) app.loadedSongId = null;
+      } catch (err) { $("adminStatus").textContent = err.message; }
+      loadAutoList();
+    };
+    ul.appendChild(li);
+  }
+}
 
 function renderAdmin() {
   const ul = $("adminList"); ul.innerHTML = "";
@@ -1129,19 +1185,29 @@ $("adminUpload").onclick = async () => {
   try { await adminCall({ code, action: "check" }); } catch (e) { $("adminStatus").textContent = e.message; return; }
   try { localStorage.setItem(ADMIN_KEY, code); } catch {}
   adm.busy = true; renderAdmin();
+  let lib = [];
+  try { lib = await listSongs(); } catch {}
   let ok = 0, bad = 0;
   for (const s of adm.songs) {
     if (!s.on || s.cls === "ok" || s.cls === "warn") continue;
     const set = (status, p, cls) => { s.status = status; s.p = p; if (cls) s.cls = cls; renderAdmin(); };
     try {
       const conv = await (s.kind === "mp3" ? convertMp3Song : convertSong)(s, (txt, p) => set(txt, p * 0.85));
+      // an MP3 never replaces a song that already has a real chart
+      const charted = lib.find((x) => x.charter !== AUTO_CHARTER && (x.id === conv.id || sameSong(x, conv.row)));
+      if (s.kind === "mp3" && charted) { set("Ya está con chart: no la subí", 0, "warn"); continue; }
+      // a chart replaces the version made from the MP3
+      const autos = s.kind === "mp3" ? [] : lib.filter((x) => x.charter === AUTO_CHARTER && (x.id === conv.id || sameSong(x, conv.row)));
       await uploadSong(code, conv, (p) => set("Subiendo", 0.85 + p * 0.15));
-      if (conv.warnMs) set(`Subida, pero revisa: las notas podrían ir desfasadas (unos ${conv.warnMs} ms)`, 1, "warn");
-      else set("Lista", 1, "ok");
+      for (const x of autos) if (x.id !== conv.id) await adminCall({ code, action: "delete", id: x.id });
+      const replaced = autos.length ? " · reemplazó la del MP3" : "";
+      if (conv.warnMs) set(`Subida${replaced}, pero revisa: las notas podrían ir desfasadas (unos ${conv.warnMs} ms)`, 1, "warn");
+      else set("Lista" + replaced, 1, "ok");
       ok++;
     } catch (e) { set(e.message || "Error", 0, "bad"); bad++; }
   }
   adm.busy = false; renderAdmin();
   app.songs = []; app.loadedSongId = null; // reload the library (and any re-uploaded song) next time
+  loadAutoList();
   $("adminStatus").textContent = `Listo: ${ok} subida${ok === 1 ? "" : "s"}${bad ? `, ${bad} con error` : ""}. Ya aparecen en Jugar.`;
 };
