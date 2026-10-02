@@ -280,6 +280,12 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .uploads .bar2 i { display: block; height: 100%; width: 100%; transform: scaleX(0); transform-origin: left; background: linear-gradient(90deg, #7a0a0a, var(--red-hi), var(--fire)); transition: transform .2s; }
 #openAdmin { align-self: flex-start; }
 
+/* random song */
+.random { display: flex; flex-direction: column; gap: 8px; }
+.random-btn { align-self: flex-start; display: inline-flex !important; align-items: center; gap: 10px; }
+.random-btn svg { width: 20px; height: 20px; fill: var(--fire); flex: none; }
+.random-btn[aria-expanded="true"] { filter: brightness(1.25); }
+
 /* leaderboard */
 .board { display: flex; flex-direction: column; gap: 8px; }
 .board-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }

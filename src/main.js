@@ -132,6 +132,8 @@ const coverOf = (s) => (s.has_cover ? fileUrl(s.id, "cover.jpg") : "");
 async function openLibrary() {
   $("libTitle").textContent = app.mode === "pick" ? "Elige la canción" : "Canciones";
   $("localFolderBtn").hidden = touch;
+  $("randomBox").hidden = !online || app.mode === "pick";
+  $("randomDiffs").hidden = true; $("randomBtn").setAttribute("aria-expanded", "false");
   show("library");
   renderSongs();
   if (!online) return;
@@ -171,6 +173,30 @@ function renderSongs() {
   }
 }
 $("libSearch").oninput = renderSongs;
+
+// Random song: pick the difficulty, then a random song that has it starts right away (never the same one twice in a row).
+$("randomBtn").onclick = () => {
+  const open = $("randomDiffs").hidden;
+  $("randomDiffs").hidden = !open; $("randomBtn").setAttribute("aria-expanded", String(open));
+};
+$("randomDiffs").onclick = async (e) => {
+  const b = e.target.closest("button[data-d]");
+  if (!b || app.loadingRandom) return;
+  const diff = b.dataset.d;
+  const has = app.songs.filter((s) => (s.diffs?.[diff]?.n || 0) > 0);
+  const pool = has.length > 1 ? has.filter((s) => s.id !== app.lastRandomId) : has;
+  if (!pool.length) return;
+  const s = pool[Math.floor(Math.random() * pool.length)];
+  app.lastRandomId = s.id; app.loadingRandom = true;
+  $("randomDiffs").hidden = true; $("randomBtn").setAttribute("aria-expanded", "false");
+  try {
+    await loadLibrarySong(s);
+    settings.lastDiff = diff; save();
+    openSetup(); // so "Salir" from the pause lands on this song's screen
+    startGame({ lanes: deviceLanes(), diff: app.diff });
+  } catch (err) { toast(err.message); show("library", false); }
+  finally { app.loadingRandom = false; }
+};
 
 async function pickLibrarySong(s) {
   if (app.mode === "pick") { // host choosing for the room

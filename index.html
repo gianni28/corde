@@ -68,6 +68,10 @@
     <div class="panel wide">
       <header class="bar"><button class="back" data-back>Volver</button><h2 id="libTitle">Canciones</h2></header>
       <input type="search" id="libSearch" placeholder="Buscar canción o artista" autocomplete="off">
+      <div class="random" id="randomBox">
+        <button class="btn random-btn" id="randomBtn" aria-expanded="false" aria-controls="randomDiffs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm2.5 3a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM7.5 15a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg>Canción al azar</button>
+        <div class="seg" id="randomDiffs" hidden><button data-d="easy">Fácil</button><button data-d="medium">Media</button><button data-d="hard">Difícil</button><button data-d="expert">Experto</button></div>
+      </div>
       <div class="songs" id="songList"></div>
       <div class="local" id="localBox" hidden>
         <div>
