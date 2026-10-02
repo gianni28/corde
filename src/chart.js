@@ -33,7 +33,7 @@ function tempoMap(tempos, res) {
   };
 }
 
-function finish({ res, toSec, rawDiffs, sections, ts, lastTick, meta, offset = 0 }) {
+function finish({ res, toSec, rawDiffs, rawStar = {}, sections, ts, lastTick, meta, offset = 0 }) {
   const sustainMin = res / 2;
   const diffs = {};
   for (const d of DIFFS) {
@@ -49,6 +49,8 @@ function finish({ res, toSec, rawDiffs, sections, ts, lastTick, meta, offset = 0
     const out = [];
     for (const n of notes) { const p = out[out.length - 1]; if (!p || p[0] !== n[0] || p[1] !== n[1]) out.push(n); }
     diffs[d.key] = { lanes: [...new Set(out.map((n) => n[1]))].sort((a, b) => a - b), notes: out };
+    const star = (rawStar[d.key] || []).map((p) => [r3(toSec(p.tick) + offset), r3(toSec(p.tick + p.len) - toSec(p.tick))]).filter((p) => p[1] > 0);
+    if (star.length) diffs[d.key].star = star; // star power phrases: [start, length] in seconds
   }
   const beats = [];
   const num = ts || 4;
@@ -120,9 +122,11 @@ export function midiToChart(buf, meta = {}, offset = 0) {
   const rawDiffs = {};
   for (const df of DIFFS)
     rawDiffs[df.key] = gtr.notes.filter((n) => n.note >= df.midi && n.note <= df.midi + 4).map((n) => ({ tick: n.tick, lane: n.note - df.midi, len: n.end - n.tick }));
+  const sp = gtr.notes.filter((n) => n.note === 116).map((n) => ({ tick: n.tick, len: n.end - n.tick }));
+  const rawStar = Object.fromEntries(DIFFS.map((df) => [df.key, sp]));
   const ts = midi.tracks.find((t) => t.ts)?.ts;
   const lastTick = Math.max(0, ...gtr.notes.map((n) => n.end));
-  return finish({ res: midi.res, toSec, rawDiffs, sections, ts, lastTick, meta, offset });
+  return finish({ res: midi.res, toSec, rawDiffs, rawStar, sections, ts, lastTick, meta, offset });
 }
 
 /* ---------------- .chart (Moonscraper / FeedBack) ---------------- */
@@ -152,12 +156,14 @@ export function chartTextToChart(text, meta = {}) {
   const secs = (sections.Events || [])
     .map((l) => { const m = l.match(/^(\d+)\s*=\s*E\s+"?section\s+(.+?)"?$/i); return m ? [+m[1], m[2]] : null; })
     .filter(Boolean);
-  const rawDiffs = {};
+  const rawDiffs = {}, rawStar = {};
   let lastTick = 0;
   for (const df of DIFFS) {
     const lines = sections[df.chart + "Single"] || [];
-    rawDiffs[df.key] = [];
+    rawDiffs[df.key] = []; rawStar[df.key] = [];
     for (const l of lines) {
+      const sp = l.match(/^(\d+)\s*=\s*S\s+2\s+(\d+)/);
+      if (sp) { rawStar[df.key].push({ tick: +sp[1], len: +sp[2] }); continue; }
       const m = l.match(/^(\d+)\s*=\s*N\s+(\d+)\s+(\d+)/);
       if (!m) continue;
       const fret = +m[2];
@@ -168,7 +174,7 @@ export function chartTextToChart(text, meta = {}) {
   }
   if (!DIFFS.some((d) => rawDiffs[d.key].length)) throw new Error("notes.chart no tiene pista de guitarra.");
   const m = { name: meta.name || song.name, artist: meta.artist || song.artist, album: meta.album || song.album, year: meta.year || song.year, charter: meta.charter || song.charter };
-  return finish({ res, toSec, rawDiffs, sections: secs, ts, lastTick, meta: m, offset });
+  return finish({ res, toSec, rawDiffs, rawStar, sections: secs, ts, lastTick, meta: m, offset });
 }
 
 export function parseIni(text) {
@@ -211,4 +217,42 @@ export function diffSummary(chart) {
   const o = {};
   for (const d of DIFFS) { const x = chart.diffs[d.key]; o[d.key] = { n: x.notes.length, lanes: x.lanes }; }
   return o;
+}
+
+/**
+ * Star power phrases of a difficulty as [[start, end]] in chart seconds: the chart's own (Clone Hero note 116 /
+ * "S 2"), or, when it has none (older uploads, automatic charts), a short phrase about every 25 s.
+ */
+export function starPhrasesFor(chart, diffKey) {
+  const d = chart.diffs[diffKey];
+  if (!d) return [];
+  if (d.star && d.star.length) return d.star.map(([t, len]) => [t - 0.005, t + len + 0.005]);
+  const times = [...new Set(d.notes.map((n) => n[0]))].sort((a, b) => a - b);
+  if (times.length < 24) return [];
+  const out = [];
+  let i = 0, nextStart = times[0] + 8;
+  while (i < times.length) {
+    while (i < times.length && times[i] < nextStart) i++;
+    if (i >= times.length) break;
+    let j = i;
+    while (j < times.length && j - i < 8 && times[j] - times[i] < 5) j++;
+    if (j - i >= 4) out.push([times[i] - 0.005, times[j - 1] + 0.005]);
+    nextStart = times[j - 1] + 24;
+    i = j;
+  }
+  return out;
+}
+
+/* ---------------- section names (charts name them in English) ---------------- */
+const SECTION_WORDS = [
+  [/^(guitar\s+|gtr\s+|lead\s+)?solo\b/i, "Solo"], [/^pre[- ]?chorus\b/i, "Pre-coro"], [/^chorus\b/i, "Coro"],
+  [/^verse\b/i, "Verso"], [/^bridge\b/i, "Puente"], [/^intro\b/i, "Intro"], [/^outro\b/i, "Outro"],
+  [/^interlude\b/i, "Interludio"], [/^riff\b/i, "Riff"],
+];
+/** Spanish name for a chart section ("Chorus 2A" → "Coro 2A"); unknown names stay as they are. */
+export function sectionName(name, index) {
+  const n = String(name || "").replace(/_/g, " ").trim();
+  if (!n) return `Parte ${index + 1}`;
+  for (const [re, es] of SECTION_WORDS) if (re.test(n)) return n.replace(re, es);
+  return n;
 }

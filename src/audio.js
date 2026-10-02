@@ -77,17 +77,26 @@ export class Player {
     this.paused = false;
     this.missSfx = true;
   }
-  start(delay) {
+  /** Start after `delay` seconds, from song second `from` (practice starts in the middle of the song). */
+  start(delay, from = 0) {
     const c = audioCtx();
     c.resume();
     this.master = c.createGain(); this.master.gain.value = 0.9; this.master.connect(c.destination);
     this.guitarGain = c.createGain(); this.guitarGain.connect(this.master);
-    this.startAt = c.currentTime + delay;
+    const when = c.currentTime + delay;
+    this.startAt = when - from;
     for (const s of this.stems) {
       const src = c.createBufferSource(); src.buffer = s.buffer;
-      src.connect(s.guitar ? this.guitarGain : this.master); src.start(this.startAt);
+      src.connect(s.guitar ? this.guitarGain : this.master);
+      if (from >= 0) src.start(when, from); else src.start(when - from);
       this.sources.push(src);
     }
+  }
+  /** Song failed: the band "runs out of power" — pitch and volume fall away over `sec` seconds. */
+  windDown(sec = 1.4) {
+    const c = audioCtx(), now = c.currentTime;
+    for (const s of this.sources) { try { s.playbackRate.cancelScheduledValues(now); s.playbackRate.setValueAtTime(1, now); s.playbackRate.exponentialRampToValueAtTime(0.25, now + sec); } catch {} }
+    if (this.master) { this.master.gain.cancelScheduledValues(now); this.master.gain.setValueAtTime(this.master.gain.value, now); this.master.gain.linearRampToValueAtTime(0, now + sec); }
   }
   /** Restart playback from songTime (seconds) after `delay` seconds. Negative songTime = play later. */
   seek(songTime, delay) {

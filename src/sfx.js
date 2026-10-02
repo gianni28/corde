@@ -121,3 +121,22 @@ export function finale(stars) {
   else if (stars === 2) { claps(c, at, 2.2, 9, 0.45); boos(c, at + 0.2, 2.0, 0.055); }
   else { boos(c, at, 2.6, 0.09); }
 }
+
+/** A star phrase completed: a bright little arpeggio. */
+export function starChime() {
+  const c = bus(), t = c.currentTime + 0.01;
+  [E4 * 2, 987.77, E4 * 4].forEach((f, i) => note(f, t + i * 0.06, { dur: 0.5, gain: 0.16, dist: false }));
+}
+/** Star power on: a rising whoosh, a big chord and the crowd going up. */
+export function starOn() {
+  const c = bus(), t = c.currentTime + 0.01;
+  const src = c.createBufferSource(); src.buffer = noise(c);
+  const bp = c.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 1.2;
+  bp.frequency.setValueAtTime(300, t); bp.frequency.exponentialRampToValueAtTime(4000, t + 0.5);
+  const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.22, t + 0.3); g.gain.linearRampToValueAtTime(0, t + 0.6);
+  src.connect(bp).connect(g).connect(out); src.start(t, 0, 0.7);
+  powerChord(A3, t + 0.05, { gain: 0.3 });
+  roar(c, t + 0.1, 2.2, 0.08); claps(c, t + 0.2, 1.8, 30, 0.45);
+}
+/** The song failed: the crowd boos (the music itself winds down in the player). */
+export function failed() { const c = bus(); boos(c, c.currentTime + 0.4, 2.6, 0.09); }

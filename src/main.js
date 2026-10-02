@@ -5,9 +5,10 @@ import "@fontsource/oswald/latin-700.css";
 import "@fontsource/barlow-condensed/latin-500.css";
 import "@fontsource/barlow-condensed/latin-600.css";
 import { createRenderer, LANE_HEX } from "./renderer.js";
-import { DIFFS, midiToChart, chartTextToChart, parseIni, iniMeta, notesFor } from "./chart.js";
+import { DIFFS, midiToChart, chartTextToChart, parseIni, iniMeta, notesFor, sectionName } from "./chart.js";
 import { decodeStems, Player, audioCtx, unlockAudio } from "./audio.js";
-import { Game } from "./game.js";
+import { Game, STAR_READY } from "./game.js";
+import { motionAvailable, motionNeedsPermission, requestMotion, onLift } from "./motion.js";
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, topScores, submitScore, generalBoard } from "./net.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song } from "./admin.js";
@@ -48,7 +49,7 @@ const app = {
 };
 
 /* ================= navigation ================= */
-const SCREENS = ["home", "library", "setup", "settings", "mp", "lobby", "pause", "results", "loading", "admin"];
+const SCREENS = ["home", "library", "setup", "settings", "mp", "lobby", "pause", "results", "loading", "admin", "tutorial"];
 function show(name, push = true) {
   const transient = ["pause", "loading", "play", "results"];
   if (push && !transient.includes(name)) {
@@ -88,6 +89,9 @@ document.addEventListener("click", (e) => {
 let toastT;
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 3200); }
 function loading(label, p) { $("loadLabel").textContent = label; $("loadBar").style.width = Math.round((p || 0) * 100) + "%"; }
+
+// ?debug exposes the app to automated tests (never needed by players)
+if (new URLSearchParams(location.search).has("debug")) window.__corde = { app, R };
 
 /* ================= home ================= */
 $("homeFoot").textContent = online ? "Biblioteca en línea" : "Modo local · conecta Supabase para la biblioteca y el multijugador";
@@ -189,7 +193,7 @@ $("randomDiffs").onclick = async (e) => {
     await loadLibrarySong(s);
     settings.lastDiff = diff; save();
     openSetup(); // so "Salir" from the pause lands on this song's screen
-    startGame({ lanes: deviceLanes(), diff: app.diff });
+    withTutorial(() => startGame({ lanes: deviceLanes(), diff: app.diff }));
   } catch (err) { toast(err.message); show("library", false); }
   finally { app.loadingRandom = false; }
 };
@@ -309,19 +313,115 @@ function openSetup() {
   const draw = () => { renderDiffChips($("setupDiffs"), app.chart, lanes, app.diff, (k) => { app.diff = k; settings.lastDiff = k; save(); draw(); }); showBoard($("setupBoard"), 5); };
   draw();
   const keys = settings.keys.slice(0, lanes).map(keyLabel).join(" ");
+  const starHow = touch ? (liftOn() ? "Poder estrella: actívalo levantando el celular, como una guitarra." : "Toca el multiplicador para activar el poder estrella.") : "Enter activa el poder estrella.";
   $("setupHint").textContent = touch
-    ? `Juegas con ${lanes} cuerdas. Toca la columna de cada color cuando la nota llegue a los botones y mantén el dedo en las notas largas.`
-    : `Juegas con ${lanes} cuerdas: ${keys}. Presiona cuando la nota llegue a los botones y mantén en las largas. Espacio o Esc para pausar.`;
+    ? `Juegas con ${lanes} cuerdas. Toca la columna de cada color cuando la nota llegue a los botones y mantén el dedo en las notas largas. ${starHow}`
+    : `Juegas con ${lanes} cuerdas: ${keys}. Presiona cuando la nota llegue a los botones y mantén en las largas. Espacio o Esc para pausar. ${starHow}`;
+  $("practiceBox").hidden = true; $("practiceBtn").setAttribute("aria-expanded", "false");
   show("setup");
 }
-$("playBtn").onclick = () => startGame({ lanes: deviceLanes(), diff: app.diff });
+$("playBtn").onclick = () => withTutorial(() => startGame({ lanes: deviceLanes(), diff: app.diff }));
+
+/* ---------- practice one part ---------- */
+const mmss = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+// The parts of a song for the chosen difficulty: its sections (or ~25 s chunks when the chart has none).
+function practiceParts() {
+  const notes = notesFor(app.chart, app.diff, deviceLanes());
+  if (!notes.length) return [];
+  const last = notes[notes.length - 1].t + notes[notes.length - 1].dur;
+  let starts = (app.chart.sections || []).map(([t, n], i) => ({ t, name: sectionName(n, i) }));
+  if (starts.length < 2) {
+    starts = [];
+    for (let t = notes[0].t, i = 0; t < last; t += 25, i++) starts.push({ t: i ? t : 0, name: sectionName("", i) });
+  }
+  const parts = [];
+  starts.forEach((s, i) => {
+    const to = i + 1 < starts.length ? starts[i + 1].t - 0.05 : last + 0.5;
+    const n = notes.filter((x) => x.t >= s.t - 0.01 && x.t <= to).length;
+    if (n >= 4) parts.push({ from: s.t, to, name: s.name });
+  });
+  return parts;
+}
+$("practiceBtn").onclick = () => {
+  const box = $("practiceBox"), open = box.hidden;
+  if (open) {
+    const ol = $("practiceParts"); ol.innerHTML = "";
+    for (const p of practiceParts()) {
+      const li = document.createElement("li"), b = document.createElement("button");
+      b.innerHTML = `<span class="n"></span><span class="tm">${mmss(p.from)}</span>`;
+      b.querySelector(".n").textContent = p.name;
+      b.onclick = () => withTutorial(() => startGame({ lanes: deviceLanes(), diff: app.diff, practice: p }));
+      li.appendChild(b); ol.appendChild(li);
+    }
+  }
+  box.hidden = !open; $("practiceBtn").setAttribute("aria-expanded", String(open));
+  if (open) box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+};
+
+/* ---------- tutorial (first song) + lifting the phone ---------- */
+const liftOn = () => touch && motionAvailable() && (!motionNeedsPermission() || settings.motion === "granted");
+function activateStar() {
+  const g = app.game;
+  if (!g || app.paused || app.rewinding || app.failing) return;
+  g.activateStar(); // the frame loop reacts to the "starOn" event
+}
+if (liftOn()) onLift(activateStar);
+let tut = { i: 0, done: null, fromSettings: false };
+function withTutorial(fn) {
+  // iPhone: a permission given earlier may need confirming again; ask now, from this tap, never during a song
+  if (touch && motionNeedsPermission() && settings.motion === "granted") requestMotion().then((ok) => { if (ok) onLift(activateStar); });
+  if (settings.tutorialDone) return fn();
+  openTutorial({ done: fn });
+}
+function openTutorial({ done = null, fromSettings = false } = {}) {
+  tut = { i: 0, done, fromSettings };
+  $("tutNotes").textContent = touch
+    ? "Toca la columna de cada color cuando la nota llegue a los botones. Mantén el dedo en las notas largas."
+    : "Presiona la tecla de cada color cuando la nota llegue a los botones. Mantén en las notas largas.";
+  $("tutStarHow").textContent = touch && motionAvailable() ? "Actívalo levantando el celular, como una guitarra." : "Actívalo con Enter.";
+  $("motionBtn").hidden = !(touch && motionNeedsPermission() && settings.motion !== "granted");
+  $("motionNote").hidden = !(touch && settings.motion === "denied");
+  showTutCard();
+  show("tutorial", !fromSettings);
+}
+function showTutCard() {
+  document.querySelectorAll("#s-tutorial .tut-card").forEach((c, k) => (c.hidden = k !== tut.i));
+  document.querySelectorAll("#s-tutorial .tut-dots i").forEach((d, k) => d.classList.toggle("on", k === tut.i));
+  const last = tut.i === 2;
+  $("tutNext").textContent = last ? (tut.fromSettings ? "Volver" : "¡A tocar!") : "Siguiente";
+  $("tutSkip").hidden = last;
+}
+function finishTutorial() {
+  settings.tutorialDone = true; save();
+  if (tut.fromSettings) { renderSettings(); show("settings", false); return; }
+  const fn = tut.done; tut.done = null;
+  if (fn) fn();
+}
+$("tutNext").onclick = () => { if (tut.i < 2) { tut.i++; showTutCard(); } else finishTutorial(); };
+$("tutSkip").onclick = finishTutorial;
+$("motionBtn").onclick = async () => {
+  const ok = await requestMotion();
+  settings.motion = ok ? "granted" : "denied"; save();
+  $("motionBtn").hidden = true; // asked once: iPhone won't show the prompt again anyway
+  $("motionNote").hidden = ok;
+  if (ok) onLift(activateStar);
+};
+$("openTutorial").onclick = () => openTutorial({ fromSettings: true });
+$("mult").addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); activateStar(); });
 
 /* ================= gameplay ================= */
-function startGame({ lanes, diff }) {
+function startGame({ lanes, diff, practice = null }) {
   stopGame();
   const player = new Player(app.decoded);
   player.missSfx = settings.missSfx;
-  app.game = new Game({ chart: app.chart, diff, lanes, player, offsetMs: settings.offsetMs, songOffsetMs: app.songOffsetMs || 0, look: +settings.speed, autoSync: settings.autoSync });
+  // the rock meter can end the song only on Difícil/Experto, and never in practice or multiplayer
+  const canFail = !practice && app.mode !== "mp" && (diff === "hard" || diff === "expert");
+  app.game = new Game({ chart: app.chart, diff, lanes, player, offsetMs: settings.offsetMs, songOffsetMs: app.songOffsetMs || 0, look: +settings.speed, autoSync: settings.autoSync, practice, canFail });
+  app.practice = practice ? { ...practice, loopAt: Math.min(practice.to + 1.2, player.duration - (app.songOffsetMs || 0) / 1000 - 0.2) } : null;
+  app.failing = false;
+  $("practiceTag").hidden = !practice;
+  $("hud").classList.toggle("mp", app.mode === "mp");
+  $("failFx").classList.remove("on");
   app.lanes = lanes;
   app.diff = diff;
   R.setLanes(lanes);
@@ -333,7 +433,7 @@ function startGame({ lanes, diff }) {
   show("play");
   unlockAudio();
   app.game.start();
-  sfx.intro(lanes, (i) => R.hit(i)); // the frets light up one by one with a little riff, like the classics
+  if (!practice) sfx.intro(lanes, (i) => R.hit(i)); // the frets light up one by one with a little riff, like the classics
   try { navigator.wakeLock?.request("screen").then((l) => (app.wake = l)).catch(() => {}); } catch {}
 }
 // Keep what auto-sync learned only after a solid run, and move at most 30 ms per song so one bad game can't wreck the next.
@@ -343,6 +443,7 @@ function keepLearnedSync(g) {
   if (target !== settings.offsetMs) { settings.offsetMs = target; save(); }
 }
 function stopGame() {
+  app.practice = null; app.failing = false; R.setHype(0.5);
   if (!app.game) return;
   keepLearnedSync(app.game);
   app.game.player.stop();
@@ -350,7 +451,7 @@ function stopGame() {
   try { app.wake?.release(); } catch {}
 }
 function pauseGame() {
-  if (!app.game || app.paused || app.game.ended) return;
+  if (!app.game || app.paused || app.game.ended || app.failing) return;
   if (app.mode === "mp") return toast("En multijugador no se puede pausar.");
   app.paused = true; app.game.player.pause(); show("pause");
 }
@@ -371,7 +472,7 @@ $("pauseBtn").onclick = pauseGame;
 $("pauseSettingsBtn").onclick = () => { app.settingsFromPause = true; renderSettings(); show("settings", false); };
 function backToPause() { app.settingsFromPause = false; show("pause", false); }
 $("resumeBtn").onclick = resumeGame;
-$("restartBtn").onclick = () => startGame({ lanes: app.lanes, diff: app.diff });
+$("restartBtn").onclick = () => startGame({ lanes: app.lanes, diff: app.diff, practice: app.practice });
 $("quitBtn").onclick = () => { stopGame(); R.setLanes(5); show("setup", false); };
 document.addEventListener("visibilitychange", () => { if (document.hidden) pauseGame(); });
 
@@ -381,10 +482,13 @@ function finishGame() {
   g.player.stop();
   keepLearnedSync(g);
   app.lastSummary = sum;
-  $("resSong").textContent = `${app.song.name} · ${DIFFS.find((d) => d.key === app.diff).name} · ${app.lanes} cuerdas`;
+  app.failing = false; app.practice = null; R.setHype(0.5);
+  $("resFail").hidden = !sum.failed;
+  renderSections(sum);
+  $("resSong").textContent = `${app.song.name} · ${DIFFS.find((d) => d.key === app.diff).name}`;
   $("resScore").textContent = sum.score.toLocaleString("es-CO");
   $("resStars").innerHTML = "★".repeat(sum.stars) + `<span class="off">${"★".repeat(5 - sum.stars)}</span>`;
-  sfx.finale(sum.stars); // a chord, then the crowd cheers or boos
+  if (sum.failed) sfx.failed(); else sfx.finale(sum.stars); // a chord, then the crowd cheers or boos
   $("resHit").textContent = `${sum.hits}/${sum.total}`;
   $("resAcc").textContent = Math.round(sum.acc * 100) + "%";
   $("resCombo").textContent = sum.maxCombo;
@@ -397,9 +501,36 @@ function finishGame() {
   $("newRecord").hidden = true; $("boardMe").hidden = true; $("nameAsk").hidden = true; $("resultsBoard").hidden = true;
   app.boardLanes = app.lanes;
   if (app.mode !== "mp" && hasBoard()) {
-    if (settings.name || !(sum.score > 0)) sendScore(sum); else { $("nameAsk").hidden = false; $("boardName").value = ""; app.pendingScore = sum; }
+    if (sum.failed) showBoard($("resultsBoard"), 10); // a failed song doesn't go on the board
+    else if (settings.name || !(sum.score > 0)) sendScore(sum); else { $("nameAsk").hidden = false; $("boardName").value = ""; app.pendingScore = sum; }
   }
   show("results");
+}
+
+// Rock meter at the bottom on Difícil/Experto: the band runs out of power, then the results say so
+function failSong() {
+  const g = app.game;
+  if (!g || app.failing) return;
+  app.failing = true;
+  g.player.windDown(1.5);
+  $("failFx").classList.add("on");
+  setTimeout(() => { if (app.game === g) finishGame(); }, 1700);
+}
+
+// Results per section: how much of each part you hit (the weakest ones stand out)
+function renderSections(sum) {
+  const box = $("resSections"), ol = box.querySelector("ol");
+  ol.innerHTML = "";
+  const secs = sum.sections || [];
+  box.hidden = secs.length < 2;
+  for (const s of secs) {
+    const pct = Math.round((s.hit / s.total) * 100);
+    const li = document.createElement("li");
+    li.className = pct >= 90 ? "great" : pct < 60 ? "weak" : "";
+    li.innerHTML = `<span class="n"></span><span class="b"><i style="width:${pct}%"></i></span><span class="p">${pct}%</span>`;
+    li.querySelector(".n").textContent = sectionName(s.name, s.i);
+    ol.appendChild(li);
+  }
 }
 
 /* ================= leaderboard ================= */
@@ -475,15 +606,16 @@ addEventListener("keydown", (e) => {
     if (app.screen === "settings" && app.settingsFromPause) { backToPause(); return; }
     app.paused ? resumeGame() : pauseGame(); return;
   }
-  if (e.repeat || app.paused) return;
+  if (e.repeat || app.paused || app.failing) return;
   const lane = laneForKey(k);
   if (lane >= 0) { e.preventDefault(); app.game.press(lane, evTime(e)); }
+  else if (k === "enter") { e.preventDefault(); activateStar(); }
 });
 addEventListener("keyup", (e) => { const lane = laneForKey(e.key.toLowerCase()); if (lane >= 0 && app.game) app.game.release(lane); });
 
 const pointerLane = new Map();
 canvas.addEventListener("pointerdown", (e) => {
-  if (!app.game || app.paused) return;
+  if (!app.game || app.paused || app.failing) return;
   e.preventDefault();
   const lane = R.laneFromClientX(e.clientX, canvas.getBoundingClientRect());
   pointerLane.set(e.pointerId, lane);
@@ -522,16 +654,21 @@ const setHud = (k, v, fn) => { if (hudCache[k] !== v) { hudCache[k] = v; fn(v); 
 function updateHUD(g, t) {
   setHud("score", Math.round(g.score), (v) => ($("score").textContent = v.toLocaleString("es-CO")));
   setHud("combo", g.combo, (v) => ($("combo").textContent = v));
-  const m = g.multiplier;
-  setHud("mult", m, (v) => { $("multText").textContent = "×" + v; $("mult").className = "mult x" + v; });
+  const m = g.baseMultiplier, shown = g.multiplier;
+  const starState = g.starOn ? " star-on" : g.starMeter >= STAR_READY ? " star-ready" : "";
+  setHud("mult", shown + starState, () => { $("multText").textContent = "×" + shown; $("mult").className = "mult x" + m + starState; });
   const fill = m >= 4 ? 10 : g.combo % 10;
-  setHud("ring", m * 100 + fill, () => {
-    const col = ["#f2e8d8", "#f5c518", "#1fd14a", "#ff7a1a"][m - 1];
+  setHud("ring", m * 100 + fill + (g.starOn ? 1000 : 0), () => {
+    const col = g.starOn ? "#3fbfff" : ["#f2e8d8", "#f5c518", "#1fd14a", "#ff7a1a"][m - 1];
     ringSegs.forEach((s, i) => s.setAttribute("stroke", i < fill ? col : "rgba(255,255,255,.1)"));
   });
+  setHud("star", Math.round(g.starMeter * 100), (v) => $("starFill").setAttribute("stroke-dasharray", `${v} 100`));
+  // rock meter needle: -60° (red, about to fail) … +60° (green)
+  setHud("rock", Math.round(g.rock * 60), (v) => ($("rockNeedle").style.transform = `rotate(${(v / 60) * 120 - 60}deg)`));
+  setHud("danger", g.canFail && g.rock < 0.25, (v) => $("rock").classList.toggle("danger", v));
   setHud("prog", Math.round(Math.max(0, Math.min(1, t / g.end)) * 400), (v) => ($("progress").style.transform = `scaleX(${v / 400})`));
   const si = g.section(t);
-  if (si !== lastSection) { lastSection = si; $("section").textContent = si >= 0 ? g.sections[si][1] : ""; R.setSection(Math.max(0, si)); }
+  if (si !== lastSection) { lastSection = si; $("section").textContent = si >= 0 ? sectionName(g.sections[si][1], si) : ""; R.setSection(Math.max(0, si)); }
   const left = (g.countdownUntil || 0) - t;
   setHud("cd", left > 0 && left <= 3.2 ? Math.ceil(left) : "", (v) => ($("countdown").textContent = v));
   // timers: after a pause (until the notes come back) and in long stretches without notes.
@@ -568,7 +705,7 @@ function frame(now) {
     const rw = app.rewinding, k = Math.min(1, (now - rw.start) / rw.dur);
     const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; // ease in-out
     const t = rw.from + (rw.to - rw.from) * e;
-    R.render({ t, look: g.look, notes: g.notes, from: 0, pressed: g.pressed, beats: visibleBeats(g.beats, t, g.look), dt });
+    R.render({ t, look: g.look, notes: g.notes, from: 0, pressed: g.pressed, beats: visibleBeats(g.beats, t, g.look), dt, star: g.starOn });
     if (k >= 1 && !rw.done) {
       rw.done = true;
       g.player.resume().then(() => { g.resumeFrom(rw.to); app.rewinding = null; app.paused = false; });
@@ -577,7 +714,7 @@ function frame(now) {
   }
   if (g) {
     const t = g.time();
-    if (!app.paused) g.update(t);
+    if (!app.paused && !app.failing) g.update(t);
     for (const ev of g.events) {
       if (ev.type === "hit") {
         R.hit(ev.lane, ev.sustain);
@@ -586,9 +723,18 @@ function frame(now) {
       }
       else if (ev.type === "hold") R.holdSpark(ev.lane);
       else if (ev.type === "miss" || ev.type === "ghost") judge("Fallo", "#ff2a22");
+      else if (ev.type === "starPhrase") { R.starPhrase(); sfx.starChime(); }
+      else if (ev.type === "starOn") { const el = $("starPop"); el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); sfx.starOn(); }
+      else if (ev.type === "fail") failSong();
     }
     g.events.length = 0;
-    R.render({ t, look: g.look, notes: g.notes, from: g.next, pressed: g.pressed, beats: visibleBeats(g.beats, t, g.look), dt });
+    // practice: when the part is over, rewind to its start and play it again
+    if (app.practice && !app.paused && !app.rewinding && t > app.practice.loopAt) {
+      app.paused = true; g.player.pause(); g.restartPractice();
+      app.rewinding = { from: t, to: Math.max(0, app.practice.from - 3), start: now, dur: 1100 };
+    }
+    R.setHype(Math.min(1, 0.15 + g.rock * 0.65 + Math.min(0.2, g.combo / 250)));
+    R.render({ t, look: g.look, notes: g.notes, from: g.next, pressed: g.pressed, beats: visibleBeats(g.beats, t, g.look), dt, star: g.starOn });
     updateHUD(g, t);
     if (app.mode === "mp" && app.room && now - lastNet > 300) {
       lastNet = now;

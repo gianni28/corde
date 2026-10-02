@@ -21,12 +21,12 @@ async function sha256(s: string) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-// Highest score the game could award for n notes (multiplier ramps ×1→×4 every 10 notes)
-// plus sustain points if every second of the song were held at ×4.
+// Highest score the game could award for n notes (multiplier ramps ×1→×4 every 10 notes, and star power
+// doubles it, so ×8 at most) plus sustain points if every second of the song were held at ×8.
 function maxScore(n: number, seconds: number) {
   let notes = 0;
-  for (let i = 0; i < n; i++) notes += 50 * Math.min(4, 1 + Math.floor(i / 10));
-  return notes + 60 * 4 * seconds * 2 + 100;
+  for (let i = 0; i < n; i++) notes += 50 * 2 * Math.min(4, 1 + Math.floor(i / 10));
+  return notes + 60 * 8 * seconds * 2 + 100;
 }
 
 Deno.serve(async (req) => {
