@@ -8,7 +8,7 @@ import { createRenderer, LANE_HEX } from "./renderer.js";
 import { DIFFS, midiToChart, chartTextToChart, parseIni, iniMeta, notesFor, sectionName } from "./chart.js";
 import { decodeStems, Player, audioCtx, unlockAudio } from "./audio.js";
 import { Game, STAR_READY } from "./game.js";
-import { motionAvailable, motionNeedsPermission, requestMotion, onLift } from "./motion.js";
+import { motionAvailable, motionNeedsPermission, motionReady, requestMotion, onLift, watchMotion, seen as motionSeen } from "./motion.js";
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, topScores, submitScore, generalBoard } from "./net.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song } from "./admin.js";
@@ -101,6 +101,7 @@ music.setMuted(settings.menuMusic === false);
 
 /* ================= navigation ================= */
 const SCREENS = ["home", "library", "setup", "settings", "mp", "lobby", "pause", "results", "loading", "admin", "tutorial"];
+let motionTest = null; // the movement test in Settings, while it runs
 function show(name, push = true) {
   const transient = ["pause", "loading", "play", "results"];
   if (push && !transient.includes(name)) {
@@ -113,6 +114,7 @@ function show(name, push = true) {
   $("hud").hidden = !(app.game && ["play", "pause", "settings"].includes(name));
   if (name === "play") $("hud").hidden = false;
   if (name === "home") renderHomeBoard();
+  if (name !== "settings") stopMotionTest();
   syncMenuMusic();
 }
 function back() {
@@ -467,10 +469,14 @@ function starTipHow() {
 }
 function hideStarTip() { tip.at = 0; tip.hideAt = 0; $("spTip").hidden = true; }
 if (liftOn()) onLift(activateStar);
+// iPhone forgets the motion permission when the page reloads: the next tap anywhere asks again
+// (no prompt shows once it was given), so the phone's movement works in every song, not just after "Tocar"
+if (touch && motionNeedsPermission()) {
+  const rearm = () => { if (settings.motion === "granted" && !motionReady()) requestMotion().then((ok) => ok && onLift(activateStar)); };
+  for (const ev of ["touchend", "click"]) document.addEventListener(ev, rearm, { capture: true, passive: true });
+}
 let tut = { i: 0, done: null, fromSettings: false };
 function withTutorial(fn) {
-  // iPhone: a permission given earlier may need confirming again; ask now, from this tap, never during a song
-  if (touch && motionNeedsPermission() && settings.motion === "granted") requestMotion().then((ok) => { if (ok) onLift(activateStar); });
   if (settings.tutorialDone) return fn();
   openTutorial({ done: fn });
 }
@@ -928,6 +934,7 @@ function renderSettings() {
     box.appendChild(b);
   });
   $("keysField").hidden = touch;
+  $("motionField").hidden = !(touch && motionAvailable());
   $("openAdmin").hidden = !isAdminBrowser() || !online || touch || !!app.game;
   document.querySelectorAll("#laneSeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === settings.laneMode));
   document.querySelectorAll("#qualitySeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === settings.gfx));
@@ -941,6 +948,49 @@ function renderSettings() {
   $("speedOut").textContent = (+settings.speed).toFixed(1) + " s de vista";
   $("offsetOut").textContent = (settings.offsetMs > 0 ? "+" : "") + settings.offsetMs + " ms";
 }
+/* ---------- testing the phone's movement (star power) ---------- */
+function stopMotionTest() {
+  if (!motionTest) return;
+  motionTest.stop(); clearTimeout(motionTest.timer); clearTimeout(motionTest.hitT); motionTest = null;
+  $("motionLevel").style.transform = "scaleX(0)"; $("motionLevel").parentElement.classList.remove("hit");
+  $("motionTest").textContent = "Probar";
+}
+function sensorList() {
+  const s = [motionSeen.accel && "acelerómetro", motionSeen.gyro && "giroscopio", motionSeen.tilt && "inclinación"].filter(Boolean);
+  return s.length ? `Sensores que funcionan: ${s.join(", ")}.` : "";
+}
+$("motionTest").onclick = async () => {
+  if (motionTest) { stopMotionTest(); $("motionTestMsg").textContent = "Toca Probar y levanta o sacude el celular."; return; }
+  const msg = $("motionTestMsg"), bar = $("motionLevel");
+  const ok = await requestMotion(); // from this tap: on iPhone this is where the permission is asked
+  if (motionNeedsPermission()) { settings.motion = ok ? "granted" : "denied"; save(); }
+  if (!ok) {
+    msg.textContent = "El celular no dio permiso de movimiento. En iPhone: Ajustes › Safari › Movimiento y orientación, y vuelve a tocar Probar. Mientras tanto, toca el multiplicador para activar el poder estrella.";
+    return;
+  }
+  onLift(activateStar);
+  let got = 0, hits = 0;
+  msg.textContent = "Levanta o sacude el celular…";
+  $("motionTest").textContent = "Parar";
+  const test = (motionTest = { stop: () => {}, timer: 0, hitT: 0 });
+  test.stop = watchMotion(({ level, fired }) => {
+    got++;
+    bar.style.transform = `scaleX(${level.toFixed(3)})`;
+    if (!fired) return;
+    hits++; sfx.starOn();
+    bar.parentElement.classList.add("hit");
+    clearTimeout(test.hitT); test.hitT = setTimeout(() => bar.parentElement.classList.remove("hit"), 900);
+    msg.textContent = `¡Detectado${hits > 1 ? ` ×${hits}` : ""}! Así se activa el poder estrella. ${sensorList()}`;
+  });
+  // no readings at all after a moment: the browser isn't passing the sensors to the page
+  test.timer = setTimeout(() => {
+    if (motionTest !== test || got) return;
+    msg.textContent = motionNeedsPermission()
+      ? "El celular no está enviando el movimiento. En iPhone: Ajustes › Safari › Movimiento y orientación. Mientras tanto, toca el multiplicador para activar el poder estrella."
+      : "El navegador no está enviando el movimiento. En Chrome: toca el candado junto a la dirección › Configuración del sitio › Sensores de movimiento › Permitir. Mientras tanto, toca el multiplicador para activar el poder estrella.";
+  }, 2500);
+};
+
 function finishRebind(k) {
   const i = rebinding; rebinding = -1;
   if (k && !["escape"].includes(k)) {
