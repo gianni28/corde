@@ -18,8 +18,6 @@ import { energyCurve, energyAt } from "./energy.js";
 import { createMenuMusic } from "./music.js";
 
 const $ = (id) => document.getElementById(id);
-// New texts waiting for Gianni's OK: the tutorial's motion-permission alert and the "star power ready" reminder.
-const NEW_TEXTS = false;
 const LANE_CSS = ["--g", "--r", "--y", "--b", "--o"];
 const touch = isTouchDevice();
 
@@ -503,7 +501,7 @@ function finishTutorial() {
 }
 // iPhone: going on without ever answering the motion permission gets a short explanation first
 let tutPending = null;
-const motionUnasked = () => NEW_TEXTS && touch && motionNeedsPermission() && !settings.motion;
+const motionUnasked = () => touch && motionNeedsPermission() && !settings.motion;
 function tutGuard(next) {
   if (!motionUnasked()) return next();
   tutPending = next;
@@ -866,10 +864,8 @@ function frame(now) {
       app.paused = true; g.player.pause(); g.restartPractice();
       app.rewinding = { from: t, to: Math.max(0, app.practice.from - 3), start: now, dur: 1100 };
     }
-    if (NEW_TEXTS) {
-      if (tip.at && now >= tip.at && !g.starOn && g.starMeter >= STAR_READY && !app.paused) { tip.at = 0; tip.hideAt = now + 5500; $("spTipHow").textContent = starTipHow(); $("spTip").hidden = false; }
-      if (tip.hideAt && (now >= tip.hideAt || g.starOn || app.paused)) { tip.hideAt = 0; $("spTip").hidden = true; }
-    }
+    if (tip.at && now >= tip.at && !g.starOn && g.starMeter >= STAR_READY && !app.paused) { tip.at = 0; tip.hideAt = now + 5500; $("spTipHow").textContent = starTipHow(); $("spTip").hidden = false; }
+    if (tip.hideAt && (now >= tip.hideAt || g.starOn || app.paused)) { tip.hideAt = 0; $("spTip").hidden = true; }
     R.setHype(Math.min(1, 0.15 + g.rock * 0.65 + Math.min(0.2, g.combo / 250)));
     energyAt(app.energy, t - g.offset + g.songOffset, en);
     R.render({ t, look: g.look, notes: g.notes, from: g.next, pressed: g.pressed, beats: visibleBeats(g.beats, t, g.look), dt, star: g.starOn,
