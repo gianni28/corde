@@ -21,9 +21,9 @@ export function fileUrl(songId, file) {
   return supabase.storage.from(BUCKET).getPublicUrl(`${songId}/${file}`).data.publicUrl;
 }
 
-async function fetchBuf(url, onProgress) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`No se pudo descargar ${url.split("/").pop()} (${res.status}).`);
+async function fetchBuf(url, onProgress, init) {
+  const res = await fetch(url, init);
+  if (!res.ok) throw new Error(`No se pudo descargar ${url.split("/").pop().split("?")[0]} (${res.status}).`);
   if (!onProgress || !res.body) return res.arrayBuffer();
   const total = +res.headers.get("content-length") || 0;
   const reader = res.body.getReader();
@@ -33,18 +33,30 @@ async function fetchBuf(url, onProgress) {
   return out.buffer;
 }
 
-/** Downloads chart + stems of a library song. */
+// FNV-1a of the chart bytes: changes whenever a song is re-uploaded, so it versions the audio URLs too.
+function hashBytes(buf) {
+  const b = new Uint8Array(buf);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < b.length; i++) { h ^= b[i]; h = Math.imul(h, 0x01000193); }
+  return (h >>> 0).toString(36);
+}
+
+/**
+ * Downloads chart + stems of a library song.
+ * The chart (small) is always fetched fresh, past browser and CDN caches; the stems are fetched with
+ * ?v=<chart hash>, so they stay cached between plays but a re-upload can never pair a new chart with old audio
+ * (or an old cached chart with a new offset).
+ */
 export async function downloadSong(song, onProgress) {
   const files = [{ name: "backing", file: song.backing_file || "backing.mp3", guitar: false }];
   if (song.has_guitar) files.push({ name: "guitar", file: song.guitar_file || "guitar.mp3", guitar: true });
-  const prog = new Array(files.length + 1).fill(0), tot = new Array(files.length + 1).fill(1);
+  const prog = new Array(files.length).fill(0), tot = new Array(files.length).fill(1);
   const report = () => onProgress && onProgress(prog.reduce((a, b) => a + b, 0) / Math.max(1, tot.reduce((a, b) => a + b, 0)));
-  const [chartBuf, ...stems] = await Promise.all([
-    fetchBuf(fileUrl(song.id, "chart.json"), (g, t) => { prog[0] = g; tot[0] = t || g; report(); }),
-    ...files.map((f, i) => fetchBuf(fileUrl(song.id, f.file), (g, t) => { prog[i + 1] = g; tot[i + 1] = t || g * 2; report(); })),
-  ]);
+  const chartBuf = await fetchBuf(`${fileUrl(song.id, "chart.json")}?t=${Date.now()}`, null, { cache: "no-store" });
+  const v = hashBytes(chartBuf);
   const chart = JSON.parse(new TextDecoder().decode(chartBuf));
-  return { chart, stems: stems.map((data, i) => ({ name: files[i].name, guitar: files[i].guitar, data })) };
+  const stems = await Promise.all(files.map((f, i) => fetchBuf(`${fileUrl(song.id, f.file)}?v=${v}`, (g, t) => { prog[i] = g; tot[i] = t || g * 2; report(); })));
+  return { chart, v, stems: stems.map((data, i) => ({ name: files[i].name, guitar: files[i].guitar, data })) };
 }
 
 /* ---------------- rooms ---------------- */

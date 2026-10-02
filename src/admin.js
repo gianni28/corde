@@ -116,7 +116,7 @@ export async function convertSong(song, onStatus) {
   }
   const art = find(/^album\.(jpe?g|png)$/i);
   if (art) { try { out["cover.jpg"] = await makeCover(art); } catch {} }
-  out["chart.json"] = new Blob([JSON.stringify(chart)], { type: "application/json" });
+  out["chart.json"] = new Blob([JSON.stringify({ ...chart, rev: Date.now() })], { type: "application/json" }); // rev: every upload gets fresh file URLs
 
   const name = chart.meta.name || song.label;
   const artist = chart.meta.artist || "";
@@ -215,7 +215,7 @@ export async function convertMp3Song(song, onStatus) {
   }
   const coverSrc = song.image || tags.cover;
   if (coverSrc) { try { out["cover.jpg"] = await makeCover(coverSrc); } catch {} }
-  out["chart.json"] = new Blob([JSON.stringify(chart)], { type: "application/json" });
+  out["chart.json"] = new Blob([JSON.stringify({ ...chart, rev: Date.now() })], { type: "application/json" }); // rev: every upload gets fresh file URLs
 
   const id = slug(`${artist}-${name}`) || slug(song.label);
   const row = {

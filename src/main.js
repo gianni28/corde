@@ -90,11 +90,23 @@ async function openLibrary() {
   $("localFolderBtn").hidden = touch;
   show("library");
   renderSongs();
-  if (online && !app.songs.length) {
+  if (!online) return;
+  if (!app.songs.length) {
     $("songList").innerHTML = `<p class="empty">Cargando biblioteca…</p>`;
     try { app.songs = await listSongs(); renderSongs(); }
     catch (e) { $("songList").innerHTML = `<p class="empty">${e.message}</p>`; }
+    return;
   }
+  // refresh quietly so new songs and re-uploads (offsets, charts) show up without reloading the page
+  try {
+    const fresh = await listSongs();
+    if (JSON.stringify(fresh) === JSON.stringify(app.songs)) return;
+    const was = app.songs.find((x) => x.id === app.loadedSongId);
+    const now = fresh.find((x) => x.id === app.loadedSongId);
+    if (!now || JSON.stringify(was) !== JSON.stringify(now)) app.loadedSongId = null;
+    app.songs = fresh;
+    if (app.screen === "library") renderSongs();
+  } catch {}
 }
 function renderSongs() {
   const box = $("songList");
@@ -770,6 +782,6 @@ $("adminUpload").onclick = async () => {
     } catch (e) { set(e.message || "Error", 0, "bad"); bad++; }
   }
   adm.busy = false; renderAdmin();
-  app.songs = []; // reload the library next time
+  app.songs = []; app.loadedSongId = null; // reload the library (and any re-uploaded song) next time
   $("adminStatus").textContent = `Listo: ${ok} subida${ok === 1 ? "" : "s"}${bad ? `, ${bad} con error` : ""}. Ya aparecen en Jugar.`;
 };
