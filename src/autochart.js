@@ -1,19 +1,23 @@
 // Corde auto-charter: listens to a song and writes a playable Corde chart (v1) for all four difficulties.
 // Pure module (no DOM): feed it mono samples. Runs in the browser and in Node.
 //
-// Pipeline
-//   1. STFT → spectral flux (onset strength), band energies, spectral centroid, chroma, RMS
+// Pipeline (v2, tuned against the hand-made Clone Hero charts in the library)
+//   1. STFT → spectral flux (onset strength), band energies, chroma, RMS
 //   2. Tempo from autocorrelation of the onset envelope, then dynamic-programming beat tracking (Ellis 2007)
-//   3. Beat grid (beats, 8ths, 16ths), each slot scored by nearby onset strength vs. a local adaptive level
-//   4. Per difficulty: greedy pick of the strongest slots up to a target note density, nested Easy ⊂ … ⊂ Expert
-//   5. Lanes follow the melodic contour (centroid height + pitch-class changes); chords on big accents; sustains on held sounds
+//   3. Attacks actually heard (peaks of the onset envelope), snapped to the 16th-note grid when close;
+//      attacks where the pitch content changes (a new chord/note, not just a drum hit) weigh more
+//   4. Expert = the clear attacks, so the density follows the song; easier levels keep the strongest,
+//      most on-beat notes of the level above (Easy ⊂ Medium ⊂ Hard ⊂ Expert)
+//   5. Lanes follow the bass line: same note → same fret, up/down with the interval; chords on big accents;
+//      sustains on held sounds
 //   6. Sections where the energy of the song changes
 
+// ratio: share of the expert notes kept; min/max: notes per second of music; gap: shortest distance between notes
 const DIFFS = [
-  { key: "easy", lanes: 3, nps: 1.45, gap: 0.36, levels: [0, 1], chord: 0, susBeats: 2 },
-  { key: "medium", lanes: 4, nps: 2.0, gap: 0.2, levels: [0, 1], chord: 0.04, susBeats: 2 },
-  { key: "hard", lanes: 5, nps: 2.8, gap: 0.14, levels: [0, 1, 2], chord: 0.08, susBeats: 2 },
-  { key: "expert", lanes: 5, nps: 3.6, gap: 0.095, levels: [0, 1, 2], chord: 0.12, susBeats: 2 },
+  { key: "easy", lanes: 3, ratio: 0.4, min: 0.7, max: 1.7, gap: 0.33, chord: 0, meter: 1.2 },
+  { key: "medium", lanes: 4, ratio: 0.58, min: 1.0, max: 2.5, gap: 0.19, chord: 0.1, meter: 0.8 },
+  { key: "hard", lanes: 5, ratio: 0.8, min: 1.3, max: 3.5, gap: 0.13, chord: 0.16, meter: 0.5 },
+  { key: "expert", lanes: 5, ratio: 1, min: 1.6, max: 5.5, gap: 0.09, chord: 0.22, meter: 0.3 },
 ];
 
 const r3 = (x) => Math.round(x * 1000) / 1000;
@@ -166,6 +170,26 @@ function localMedian(values, times, i, span) {
   return arr[arr.length >> 1] || 0;
 }
 
+/* ---------------- pitch at a moment (for lanes) ---------------- */
+// Bass pitch class just after an attack, from a long FFT (fine enough to tell low notes apart).
+function makeBassPc(x, rate) {
+  const NF = 4096, fft = makeFFT(NF), win = new Float32Array(NF);
+  for (let i = 0; i < NF; i++) win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / NF);
+  const hz = rate / NF, lo = Math.ceil(50 / hz), hi = Math.floor(300 / hz);
+  const pcBin = new Int8Array(hi + 1);
+  for (let k = lo; k <= hi; k++) pcBin[k] = ((Math.round(12 * Math.log2((k * hz) / 440)) % 12) + 12 + 9) % 12;
+  const re = new Float32Array(NF), im = new Float32Array(NF), c = new Float64Array(12);
+  return (t) => {
+    const o = Math.round((t + 0.015) * rate);
+    for (let i = 0; i < NF; i++) { re[i] = (x[o + i] || 0) * win[i]; im[i] = 0; }
+    fft(re, im);
+    c.fill(0);
+    for (let k = lo; k <= hi; k++) c[pcBin[k]] += Math.sqrt(re[k] * re[k] + im[k] * im[k]);
+    let best = 0; for (let p = 1; p < 12; p++) if (c[p] > c[best]) best = p;
+    return best;
+  };
+}
+
 /* ---------------- main ---------------- */
 export function autoChart(samples, rate, meta = {}, onProgress) {
   const f = analyze(samples, rate, (p) => onProgress && onProgress("analyze", p));
@@ -173,7 +197,8 @@ export function autoChart(samples, rate, meta = {}, onProgress) {
   const period = estimatePeriod(env, f.fps);
   const beatFrames = trackBeats(env, period);
   onProgress && onProgress("notes", 0);
-  const toSec = (fr) => fr / f.fps + 512 / rate / 2; // frame centre
+  // frame → seconds; the flux peaks ~15 ms before the attack is heard, measured against hand-made charts
+  const toSec = (fr) => fr / f.fps + 512 / rate / 2 + 0.015;
   const beats = beatFrames.map(toSec);
   const beatLen = period / f.fps;
 
@@ -181,112 +206,130 @@ export function autoChart(samples, rate, meta = {}, onProgress) {
   const sortedRms = Float32Array.from(f.rms).sort();
   const rmsMed = sortedRms[sortedRms.length >> 1] || 1e-6;
   const loud = (fr) => f.rms[Math.max(0, Math.min(f.frames - 1, fr))] > rmsMed * 0.18;
+  let loudFrames = 0; for (let i = 0; i < f.frames; i++) if (f.rms[i] > rmsMed * 0.18) loudFrames++;
+  const activeSeconds = Math.max(1, loudFrames / f.fps);
 
   // downbeat phase: beat index (mod 4) with the most low-end attack
   const phaseScore = [0, 0, 0, 0];
   beatFrames.forEach((fr, i) => (phaseScore[i % 4] += peakNear(f.low, fr, 2)));
   const phase = phaseScore.indexOf(Math.max(...phaseScore));
 
-  // 3. grid slots
-  const slots = [];
+  // 3. 16th-note grid
+  const grid = [];
   for (let i = 0; i < beatFrames.length; i++) {
     const a = beatFrames[i], b = i + 1 < beatFrames.length ? beatFrames[i + 1] : a + period;
-    for (const [frac, level] of [[0, 0], [0.25, 2], [0.5, 1], [0.75, 2]]) {
-      const fr = Math.round(a + (b - a) * frac);
-      if (fr >= f.frames || !loud(fr)) continue;
-      slots.push({ fr, t: toSec(fr), level, strength: peakNear(env, fr, 2), down: frac === 0 && (i - phase) % 4 === 0, beat: i });
-    }
+    for (const [frac, level] of [[0, 0], [0.25, 2], [0.5, 1], [0.75, 2]]) grid.push({ fr: a + (b - a) * frac, level, down: frac === 0 && (((i - phase) % 4) + 4) % 4 === 0 });
   }
-  const times = slots.map((s) => s.t), strengths = slots.map((s) => s.strength);
-  slots.forEach((s, i) => { s.z = s.strength - localMedian(strengths, times, i, 4); });
-  const activeSeconds = Math.max(1, new Set(slots.map((s) => Math.floor(s.t))).size);
+  const gridT = grid.map((g) => toSec(g.fr));
 
-  // 4. selection per difficulty (nested)
+  // 4. attacks actually heard: peaks of the onset envelope, snapped to the grid when close
+  const half = Math.round(f.fps * 0.2), snap = 0.035;
+  const bySlot = new Map();
+  for (let t = 3; t < f.frames - 3; t++) {
+    const v = env[t];
+    if (v <= 0.3 || !loud(t)) continue;
+    let isMax = true; for (let u = t - 3; u <= t + 3; u++) if (env[u] > v) { isMax = false; break; }
+    if (!isMax) continue;
+    let m = 0, c = 0; for (let u = Math.max(0, t - half); u <= Math.min(f.frames - 1, t + half); u++) { m += env[u]; c++; }
+    const strength = v - m / c;
+    if (strength <= 0) continue;
+    const sec = toSec(t);
+    let lo = 0, hi = gridT.length; while (lo < hi) { const md = (lo + hi) >> 1; if (gridT[md] < sec) lo = md + 1; else hi = md; }
+    let gi = lo; if (gi > 0 && (gi >= gridT.length || sec - gridT[gi - 1] < gridT[gi] - sec)) gi--;
+    const onGrid = gi >= 0 && gi < gridT.length && Math.abs(gridT[gi] - sec) <= snap;
+    const key = onGrid ? gi : -t - 1;
+    const cand = { t: onGrid ? gridT[gi] : sec, fr: t, strength, level: onGrid ? grid[gi].level : 3, down: onGrid && grid[gi].down };
+    const prev = bySlot.get(key);
+    if (!prev || prev.strength < strength) bySlot.set(key, cand);
+  }
+  const cands = [...bySlot.values()].sort((a, b) => a.t - b.t);
+  // harmonic novelty: does the pitch content change at this attack? (a new chord/note vs. a drum hit)
+  const chromaAvg = (a, b) => { const c = new Float64Array(12); for (let k = Math.max(0, a); k < Math.min(f.frames, b); k++) for (let p = 0; p < 12; p++) c[p] += f.chroma[k * 12 + p]; return c; };
+  for (const c of cands) {
+    const x = chromaAvg(c.fr - 10, c.fr - 1), y = chromaAvg(c.fr + 1, c.fr + 10);
+    let xy = 0, xx = 0, yy = 0; for (let p = 0; p < 12; p++) { xy += x[p] * y[p]; xx += x[p] * x[p]; yy += y[p] * y[p]; }
+    const nov = 1 - xy / (Math.sqrt(xx * yy) || 1);
+    c.strength *= 1 + 1.5 * Math.min(1, nov * 4);
+  }
+  // relative strength: compared with the attacks around it (a quiet verse still gets its own notes)
+  const strs = cands.map((c) => c.strength), ctimes = cands.map((c) => c.t);
+  cands.forEach((c, i) => { c.z = c.strength / (localMedian(strs, ctimes, i, 4) || 1); });
+  const metric = (c) => (c.level === 0 ? 1 : c.level === 1 ? 0.55 : c.level === 2 ? 0.1 : -0.6) + (c.down ? 0.5 : 0);
+
+  // 5. difficulties, nested: each one keeps the best notes of the one above
   const chosen = {};
-  let carry = new Set();
-  for (const d of DIFFS) {
-    const target = Math.round(d.nps * activeSeconds);
-    const cand = slots
-      .map((s, i) => ({ s, i, score: s.z + (s.level === 0 ? 0.7 : s.level === 1 ? 0.3 : 0) + (s.down ? 0.3 : 0) }))
-      .filter((c) => d.levels.includes(c.s.level) && c.s.strength > 0.25)
-      .sort((a, b) => b.score - a.score);
-    const pick = new Set(carry);
-    const taken = [...pick].map((i) => slots[i].t).sort((a, b) => a - b);
-    const ok = (t) => {
+  let pool = cands.map((_, i) => i);
+  for (const d of [...DIFFS].reverse()) {
+    // expert: every clear attack (z ≥ 0.95); the others: a share of expert — always within the level's density range
+    const want = d.key === "expert" ? pool.filter((i) => cands[i].z >= 0.95).length : chosen.expert.length * d.ratio;
+    const target = Math.round(Math.min(pool.length, Math.max(d.min * activeSeconds, Math.min(d.max * activeSeconds, want))));
+    const order = [...pool].sort((a, b) => (cands[b].z + d.meter * metric(cands[b])) - (cands[a].z + d.meter * metric(cands[a])));
+    const taken = [];
+    const free = (t) => {
       let lo = 0, hi = taken.length; while (lo < hi) { const m = (lo + hi) >> 1; if (taken[m] < t) lo = m + 1; else hi = m; }
-      return (lo >= taken.length || taken[lo] - t >= d.gap) && (lo === 0 || t - taken[lo - 1] >= d.gap);
+      return { ok: (lo >= taken.length || taken[lo] - t >= d.gap) && (lo === 0 || t - taken[lo - 1] >= d.gap), at: lo };
     };
-    for (const c of cand) {
-      if (pick.size >= target) break;
-      if (pick.has(c.i) || !ok(c.s.t)) continue;
-      pick.add(c.i);
-      let lo = 0, hi = taken.length; while (lo < hi) { const m = (lo + hi) >> 1; if (taken[m] < c.s.t) lo = m + 1; else hi = m; }
-      taken.splice(lo, 0, c.s.t);
+    const pick = [];
+    for (const i of order) {
+      if (pick.length >= target) break;
+      const { ok, at } = free(cands[i].t);
+      if (!ok) continue;
+      pick.push(i); taken.splice(at, 0, cands[i].t);
     }
-    chosen[d.key] = [...pick].sort((a, b) => a - b);
-    carry = pick;
+    chosen[d.key] = pick.sort((a, b) => a - b);
+    pool = chosen[d.key];
   }
 
-  // 5. lanes, chords, sustains
-  const pcAt = (fr) => {
-    const c = new Float32Array(12);
-    for (let k = fr; k < Math.min(f.frames, fr + 4); k++) for (let p = 0; p < 12; p++) c[p] += f.chroma[k * 12 + p];
-    let best = 0; for (let p = 1; p < 12; p++) if (c[p] > c[best]) best = p;
-    return best;
-  };
-  const heightAt = (fr) => { let s = 0, n = 0; for (let k = fr; k < Math.min(f.frames, fr + 4); k++) if (f.cent[k]) { s += f.cent[k]; n++; } return n ? s / n : 0; };
-  const slotPc = slots.map((s) => pcAt(s.fr)), slotH = slots.map((s) => heightAt(s.fr));
-  const zSorted = slots.map((s) => s.z).sort((a, b) => b - a);
+  // 6. lanes follow the bass line: same note → same fret, up/down with the interval; phrases restart near the middle
+  const bassPc = makeBassPc(samples, rate);
+  const pcs = new Map();
+  for (const i of chosen.expert) pcs.set(i, bassPc(cands[i].t));
+  for (const d of DIFFS) for (const i of chosen[d.key]) if (!pcs.has(i)) pcs.set(i, bassPc(cands[i].t));
+  const zAll = (key) => chosen[key].map((i) => cands[i].z).sort((a, b) => b - a);
 
   const diffs = {};
   for (const d of DIFFS) {
-    const idx = chosen[d.key];
-    const notes = [];
-    const nl = d.lanes;
-    const chordCut = d.chord ? zSorted[Math.floor(zSorted.length * d.chord)] ?? Infinity : Infinity;
-    let prevLane = Math.floor(nl / 2), prevPc = -1, prevH = 0, prevT = -9;
+    const idx = chosen[d.key], nl = d.lanes, notes = [];
+    const zs = zAll(d.key);
+    const chordCut = d.chord ? zs[Math.floor(zs.length * d.chord)] ?? Infinity : Infinity;
+    let lane = Math.floor(nl / 2), prevPc = -1, prevT = -9, dir = 1;
     for (let j = 0; j < idx.length; j++) {
-      const i = idx[j], s = slots[i];
-      // local height range → base lane
-      let lo = Infinity, hi = -Infinity;
-      for (let k = Math.max(0, j - 12); k < Math.min(idx.length, j + 12); k++) { const h = slotH[idx[k]]; if (h < lo) lo = h; if (h > hi) hi = h; }
-      const norm = hi > lo ? (slotH[i] - lo) / (hi - lo) : 0.5;
-      let lane = Math.round(norm * (nl - 1));
-      const pc = slotPc[i];
-      if (prevPc >= 0) {
-        const quick = s.t - prevT < 0.32;
-        if (pc === prevPc && quick) lane = prevLane;               // same note repeated fast → same fret
-        else if (lane === prevLane) lane = prevLane + (slotH[i] > prevH ? 1 : slotH[i] < prevH ? -1 : (j % 2 ? 1 : -1)); // otherwise move with the contour
-        if (lane > nl - 1) lane = prevLane - 1;
-        if (lane < 0) lane = prevLane + 1;
-        const maxJump = nl === 3 ? 1 : 2;
-        lane = Math.max(prevLane - maxJump, Math.min(prevLane + maxJump, lane));
+      const c = cands[idx[j]], pc = pcs.get(idx[j]);
+      if (prevPc < 0 || c.t - prevT > 1.0) {
+        lane = Math.min(nl - 1, Math.max(0, Math.round(((pc % 12) / 11) * (nl - 1) * 0.6 + (nl - 1) * 0.2)));
+      } else {
+        const iv = ((pc - prevPc + 18) % 12) - 6;
+        if (iv !== 0) {
+          const step = nl === 3 || Math.abs(iv) <= 2 ? 1 : 2;
+          dir = Math.sign(iv);
+          let nxt = lane + dir * step;
+          if (nxt > nl - 1 || nxt < 0) nxt = lane - dir * step; // no room: bounce back
+          lane = Math.max(0, Math.min(nl - 1, nxt));
+        }
       }
-      lane = Math.max(0, Math.min(nl - 1, lane));
-      const t = s.t;
       // sustain if the sound keeps ringing until the next note
-      const nextT = j + 1 < idx.length ? slots[idx[j + 1]].t : t + beatLen * 4;
-      const gap = nextT - t;
+      const nextT = j + 1 < idx.length ? cands[idx[j + 1]].t : c.t + beatLen * 4;
+      const gap = nextT - c.t;
       let dur = 0;
-      if (gap >= beatLen * d.susBeats) {
-        const fr0 = s.fr, fr1 = Math.min(f.frames - 1, s.fr + Math.round((gap * f.fps) / 2));
+      if (gap >= beatLen * 2) {
+        const fr0 = c.fr, fr1 = Math.min(f.frames - 1, c.fr + Math.round((gap * f.fps) / 2));
         let held = 0, act = 0, cnt = 0;
         for (let k = fr0 + 3; k <= fr1; k++) { held += f.rms[k]; act += env[k]; cnt++; }
-        // ringing (loudness holds) without new attacks in between → a held note
         if (cnt && held / cnt > f.rms[fr0] * 0.6 && act / cnt < 0.45) dur = Math.max(0, gap - Math.min(beatLen * 0.25, 0.18));
       }
-      notes.push([r3(t), lane, r3(dur)]);
-      if (s.z >= chordCut && s.level === 0 && nl >= 4) {
-        const other = lane + 2 <= nl - 1 ? lane + 2 : lane - 2;
-        if (other >= 0) notes.push([r3(t), other, r3(dur)]);
+      notes.push([r3(c.t), lane, r3(dur)]);
+      if (c.z >= chordCut && c.level <= 1 && nl >= 4) {
+        const w = nl >= 5 ? 2 : 1;
+        const other = lane + w <= nl - 1 ? lane + w : lane - w;
+        if (other >= 0) notes.push([r3(c.t), other, r3(dur)]);
       }
-      prevLane = lane; prevPc = pc; prevH = slotH[i]; prevT = s.t;
+      prevPc = pc; prevT = c.t;
     }
     notes.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
     diffs[d.key] = { lanes: [...new Set(notes.map((n) => n[1]))].sort((a, b) => a - b), notes };
   }
 
-  // 6. sections where the bar energy changes noticeably
+  // 7. sections where the bar energy changes noticeably
   const bars = [];
   for (let i = phase; i + 4 < beatFrames.length; i += 4) {
     let s = 0, n = 0; for (let k = beatFrames[i]; k < beatFrames[i + 4]; k++) { s += f.rms[k]; n++; }
@@ -302,14 +345,14 @@ export function autoChart(samples, rate, meta = {}, onProgress) {
   if (bars.length) sections.unshift([r3(bars[0].t), ""]);
 
   const lastNote = Math.max(0, ...Object.values(diffs).flatMap((d) => d.notes.map((n) => n[0] + n[2])));
-  const beatList = beats.filter((t) => t <= lastNote + 8).map((t, i) => [r3(t), (i - phase) % 4 === 0 ? 1 : 0]);
+  const beatList = beats.filter((t) => t <= lastNote + 8).map((t, i) => [r3(t), (((i - phase) % 4) + 4) % 4 === 0 ? 1 : 0]);
   return {
     v: 1,
     meta: { ...meta, charter: "Corde (automático)" },
     sections,
     beats: beatList,
     diffs,
-    auto: { bpm: Math.round((60 * f.fps) / period * 10) / 10 },
+    auto: { v: 2, bpm: Math.round((60 * f.fps) / period * 10) / 10 },
   };
 }
 
