@@ -14,8 +14,12 @@ import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminC
 import { findSongs, convertSong, findMp3Songs, convertMp3Song } from "./admin.js";
 import { fillDifficulties } from "./reduce.js";
 import * as sfx from "./sfx.js";
+import { energyCurve, energyAt } from "./energy.js";
+import { createMenuMusic } from "./music.js";
 
 const $ = (id) => document.getElementById(id);
+// New texts waiting for Gianni's OK: the tutorial's motion-permission alert and the "star power ready" reminder.
+const NEW_TEXTS = false;
 const LANE_CSS = ["--g", "--r", "--y", "--b", "--o"];
 const touch = isTouchDevice();
 
@@ -39,6 +43,7 @@ const demo = (() => {
   return { notes: a, beats };
 })();
 let demoNext = 0;
+const attract = { notes: null };
 
 /* ================= app state ================= */
 const app = {
@@ -47,6 +52,54 @@ const app = {
   game: null, paused: false,
   room: null, me: null, peers: [], rivals: {}, finals: {}, roomConfig: null, loadedSongId: null,
 };
+
+/* ================= menu music ================= */
+// A random library song plays while the menus are up (title and artist top right on a wide screen, under the
+// menu on a phone). It stops when a song starts and picks up again back in the menus.
+const MENU_MUSIC = ["home", "library", "setup", "settings", "mp", "lobby", "admin", "tutorial"];
+const wideMQ = matchMedia("(min-width: 1000px)");
+const music = createMenuMusic({ onChange: () => renderNowPlaying() });
+// Nothing is downloaded until the player first touches the page (browsers wouldn't play it before that anyway,
+// and visitors who leave right away cost no bandwidth).
+let musicArmed = false;
+function armMusic() {
+  if (musicArmed) return;
+  musicArmed = true;
+  ["pointerdown", "keydown"].forEach((t) => removeEventListener(t, armMusic, true));
+  syncMenuMusic();
+}
+["pointerdown", "keydown"].forEach((t) => addEventListener(t, armMusic, { capture: true, passive: true }));
+function syncMenuMusic() {
+  if (!musicArmed) return renderNowPlaying();
+  if (MENU_MUSIC.includes(app.screen) && !app.game && !document.hidden) music.play(); else music.pause();
+  renderNowPlaying();
+}
+let npSong = null;
+function renderNowPlaying() {
+  const el = $("nowPlaying"), info = music.info(), wide = wideMQ.matches;
+  // a wide screen has it fixed in the corner; a phone has it in the home menu, under the buttons
+  if (wide && el.parentElement !== document.body) document.body.insertBefore(el, $("toast"));
+  if (!wide && el.parentElement === document.body) document.querySelector("#s-home .menu").after(el);
+  el.classList.toggle("fixed", wide);
+  el.classList.toggle("muted", info.muted);
+  const roomy = app.screen === "home" || innerWidth >= 1400; // beside a centred panel only when it can't overlap it
+  const onMenu = MENU_MUSIC.includes(app.screen) && !app.game && roomy;
+  el.hidden = !online || !(info.muted || (info.playing && info.song)) || (wide && !onMenu);
+  if (info.song && info.song !== npSong) {
+    npSong = info.song;
+    $("npTitle").textContent = info.song.name;
+    $("npArtist").textContent = info.song.artist || "";
+    const cov = coverOf(info.song);
+    $("npCover").hidden = !cov; if (cov) $("npCover").src = cov;
+  }
+  $("npMute").setAttribute("aria-pressed", String(info.muted));
+}
+$("npMute").onclick = () => { settings.menuMusic = music.muted; save(); music.setMuted(!music.muted); syncMenuMusic(); };
+$("npSkip").onclick = () => music.skip();
+wideMQ.addEventListener?.("change", renderNowPlaying);
+addEventListener("resize", () => renderNowPlaying());
+document.addEventListener("visibilitychange", () => syncMenuMusic());
+music.setMuted(settings.menuMusic === false);
 
 /* ================= navigation ================= */
 const SCREENS = ["home", "library", "setup", "settings", "mp", "lobby", "pause", "results", "loading", "admin", "tutorial"];
@@ -62,6 +115,7 @@ function show(name, push = true) {
   $("hud").hidden = !(app.game && ["play", "pause", "settings"].includes(name));
   if (name === "play") $("hud").hidden = false;
   if (name === "home") renderHomeBoard();
+  syncMenuMusic();
 }
 function back() {
   if (app.screen === "settings" && app.settingsFromPause) { backToPause(); return; }
@@ -82,7 +136,7 @@ document.querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => {
 document.addEventListener("click", (e) => {
   if (app.screen === "play") return;
   const b = e.target.closest("#ui button, #ui label.btn");
-  if (!b || b.disabled) return;
+  if (!b || b.disabled || b.classList.contains("np-btn")) return;
   try { b.matches("[data-back]") ? sfx.back() : sfx.click(); } catch {}
 });
 
@@ -91,7 +145,7 @@ function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = fals
 function loading(label, p) { $("loadLabel").textContent = label; $("loadBar").style.width = Math.round((p || 0) * 100) + "%"; }
 
 // ?debug exposes the app to automated tests (never needed by players)
-if (new URLSearchParams(location.search).has("debug")) window.__corde = { app, R };
+if (new URLSearchParams(location.search).has("debug")) window.__corde = { app, R, music };
 
 /* ================= home ================= */
 $("homeFoot").textContent = online ? "Biblioteca en línea" : "Modo local · conecta Supabase para la biblioteca y el multijugador";
@@ -124,6 +178,8 @@ async function renderHomeBoard() {
 }
 $("homeTabs").onclick = (e) => { const b = e.target.closest("button"); if (!b || b.dataset.v === homeTab) return; homeTab = b.dataset.v; renderHomeBoard(); };
 renderHomeBoard();
+// the library list is needed for the menu music right away (it's small)
+if (online) listSongs().then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list); syncMenuMusic(); }).catch(() => {});
 
 /* ================= library ================= */
 const fmtLen = (ms) => { if (!ms) return ""; const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
@@ -175,28 +231,36 @@ function renderSongs() {
 $("libSearch").oninput = renderSongs;
 
 // Random song: pick the difficulty, then a random song that has it starts right away (never the same one twice in a row).
-$("randomBtn").onclick = () => {
-  const open = $("randomDiffs").hidden;
-  $("randomDiffs").hidden = !open; $("randomBtn").setAttribute("aria-expanded", String(open));
-};
-$("randomDiffs").onclick = async (e) => {
-  const b = e.target.closest("button[data-d]");
-  if (!b || app.loadingRandom) return;
-  const diff = b.dataset.d;
-  const has = app.songs.filter((s) => (s.diffs?.[diff]?.n || 0) > 0);
-  const pool = has.length > 1 ? has.filter((s) => s.id !== app.lastRandomId) : has;
-  if (!pool.length) return;
-  const s = pool[Math.floor(Math.random() * pool.length)];
-  app.lastRandomId = s.id; app.loadingRandom = true;
-  $("randomDiffs").hidden = true; $("randomBtn").setAttribute("aria-expanded", "false");
-  try {
-    await loadLibrarySong(s);
-    settings.lastDiff = diff; save();
-    openSetup(); // so "Salir" from the pause lands on this song's screen
-    withTutorial(() => startGame({ lanes: deviceLanes(), diff: app.diff }));
-  } catch (err) { toast(err.message); show("library", false); }
-  finally { app.loadingRandom = false; }
-};
+// The same box is in the library and on the results screen.
+function randomBox(btn, diffs, fromResults) {
+  $(btn).onclick = () => {
+    const open = $(diffs).hidden;
+    $(diffs).hidden = !open; $(btn).setAttribute("aria-expanded", String(open));
+    if (open && fromResults) $(diffs).scrollIntoView({ block: "nearest", behavior: "smooth" });
+  };
+  $(diffs).onclick = async (e) => {
+    const b = e.target.closest("button[data-d]");
+    if (!b || app.loadingRandom) return;
+    const diff = b.dataset.d;
+    if (!app.songs.length) { try { app.songs = await listSongs(); } catch {} }
+    const has = app.songs.filter((s) => (s.diffs?.[diff]?.n || 0) > 0);
+    const pool = has.length > 1 ? has.filter((s) => s.id !== app.lastRandomId && s.id !== app.song?.id) : has;
+    if (!pool.length) return;
+    const s = pool[Math.floor(Math.random() * pool.length)];
+    app.lastRandomId = s.id; app.loadingRandom = true;
+    $(diffs).hidden = true; $(btn).setAttribute("aria-expanded", "false");
+    if (fromResults) { app.mode = "solo"; app.history = ["home", "library"]; }
+    try {
+      await loadLibrarySong(s);
+      settings.lastDiff = diff; save();
+      openSetup(); // so "Salir" from the pause lands on this song's screen
+      withTutorial(() => startGame({ lanes: deviceLanes(), diff: app.diff }));
+    } catch (err) { toast(err.message); show("library", false); }
+    finally { app.loadingRandom = false; }
+  };
+}
+randomBox("randomBtn", "randomDiffs", false);
+randomBox("resRandomBtn", "resRandomDiffs", true);
 
 async function pickLibrarySong(s) {
   if (app.mode === "pick") { // host choosing for the room
@@ -365,6 +429,45 @@ function activateStar() {
   if (!g || app.paused || app.rewinding || app.failing) return;
   g.activateStar(); // the frame loop reacts to the "starOn" event
 }
+/* ---------- star power feedback ---------- */
+// a white-blue spark flies from the frets into the meter, which flashes when it lands
+function starComet(lane) {
+  const m = $("mult").getBoundingClientRect();
+  const x0 = R.laneScreenX(Math.min(lane ?? 2, (app.lanes || 5) - 1)), y0 = R.strikeScreenY() - 20;
+  const x1 = m.left + m.width / 2, y1 = m.top + m.height / 2;
+  const xm = (x0 + x1) / 2 + (x1 < x0 ? -40 : 40), ym = Math.min(y0, y1) + (y0 - y1) * 0.25 - 60;
+  const dur = 620;
+  const fly = (cls, delay, scale) => {
+    const el = document.createElement("div"); el.className = "star-comet" + cls;
+    document.body.appendChild(el);
+    const a = el.animate([
+      { transform: `translate(${x0}px, ${y0}px) scale(${1.5 * scale})`, opacity: 0 },
+      { transform: `translate(${x0}px, ${y0 - 30}px) scale(${1.4 * scale})`, opacity: 1, offset: 0.12 },
+      { transform: `translate(${xm}px, ${ym}px) scale(${1.05 * scale})`, opacity: 1, offset: 0.55 },
+      { transform: `translate(${x1}px, ${y1}px) scale(${0.55 * scale})`, opacity: 0.9 },
+    ], { duration: dur, delay, easing: "cubic-bezier(.45,0,.7,.55)", fill: "both" });
+    a.onfinish = () => el.remove();
+    return a;
+  };
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { starGain(); return; }
+  setTimeout(() => { if (!app.starShown) starGain(); }, dur + 300); // in case the animation never finishes
+  fly("", 0, 1).finished.then(starGain).catch(() => {});
+  fly(" tail", 45, 0.8); fly(" tail", 90, 0.6);
+}
+let gainT = 0;
+function starGain() {
+  const el = $("mult");
+  el.classList.remove("gain"); void el.offsetWidth; el.classList.add("gain");
+  clearTimeout(gainT); gainT = setTimeout(() => el.classList.remove("gain"), 800);
+  for (const k of ["star", "mult"]) delete hudCache[k]; // the meter catches up now, with the flash
+  app.starShown = true;
+}
+// "star power ready" reminder (top left) if the player doesn't use it within a couple of seconds
+const tip = { at: 0, hideAt: 0 };
+function starTipHow() {
+  return touch ? (liftOn() ? "Levanta el celular" : "Toca el multiplicador") : "Pulsa Enter";
+}
+function hideStarTip() { tip.at = 0; tip.hideAt = 0; $("spTip").hidden = true; }
 if (liftOn()) onLift(activateStar);
 let tut = { i: 0, done: null, fromSettings: false };
 function withTutorial(fn) {
@@ -381,6 +484,7 @@ function openTutorial({ done = null, fromSettings = false } = {}) {
   $("tutStarHow").textContent = touch && motionAvailable() ? "Actívalo levantando el celular, como una guitarra." : "Actívalo con Enter.";
   $("motionBtn").hidden = !(touch && motionNeedsPermission() && settings.motion !== "granted");
   $("motionNote").hidden = !(touch && settings.motion === "denied");
+  $("tutAlert").hidden = true;
   showTutCard();
   show("tutorial", !fromSettings);
 }
@@ -397,19 +501,36 @@ function finishTutorial() {
   const fn = tut.done; tut.done = null;
   if (fn) fn();
 }
-$("tutNext").onclick = () => { if (tut.i < 2) { tut.i++; showTutCard(); } else finishTutorial(); };
-$("tutSkip").onclick = finishTutorial;
-$("motionBtn").onclick = async () => {
+// iPhone: going on without ever answering the motion permission gets a short explanation first
+let tutPending = null;
+const motionUnasked = () => NEW_TEXTS && touch && motionNeedsPermission() && !settings.motion;
+function tutGuard(next) {
+  if (!motionUnasked()) return next();
+  tutPending = next;
+  $("tutAlert").hidden = false;
+  $("tutAlertYes").focus();
+}
+$("tutNext").onclick = () => {
+  if (tut.i === 1) return tutGuard(() => { tut.i++; showTutCard(); });
+  if (tut.i < 2) { tut.i++; showTutCard(); } else finishTutorial();
+};
+$("tutSkip").onclick = () => tutGuard(finishTutorial);
+async function askMotion() {
   const ok = await requestMotion();
   settings.motion = ok ? "granted" : "denied"; save();
   $("motionBtn").hidden = true; // asked once: iPhone won't show the prompt again anyway
   $("motionNote").hidden = ok;
   if (ok) onLift(activateStar);
-};
+  return ok;
+}
+$("motionBtn").onclick = askMotion;
+$("tutAlertYes").onclick = async () => { $("tutAlert").hidden = true; await askMotion(); const n = tutPending; tutPending = null; n && n(); };
+$("tutAlertNo").onclick = () => { $("tutAlert").hidden = true; const n = tutPending; tutPending = null; n && n(); };
 $("openTutorial").onclick = () => openTutorial({ fromSettings: true });
 $("mult").addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); activateStar(); });
 
 /* ================= gameplay ================= */
+const energyCache = new WeakMap(); // decoded song → its energy curve (worked out once per song)
 function startGame({ lanes, diff, practice = null }) {
   stopGame();
   const player = new Player(app.decoded);
@@ -419,6 +540,9 @@ function startGame({ lanes, diff, practice = null }) {
   app.game = new Game({ chart: app.chart, diff, lanes, player, offsetMs: settings.offsetMs, songOffsetMs: app.songOffsetMs || 0, look: +settings.speed, autoSync: settings.autoSync, practice, canFail });
   app.practice = practice ? { ...practice, loopAt: Math.min(practice.to + 1.2, player.duration - (app.songOffsetMs || 0) / 1000 - 0.2) } : null;
   app.failing = false;
+  if (!energyCache.has(app.decoded)) energyCache.set(app.decoded, energyCurve(app.decoded.map((s) => s.buffer)));
+  app.energy = energyCache.get(app.decoded);
+  app.starWasReady = false; app.starShown = true; hideStarTip();
   $("practiceTag").hidden = !practice;
   $("hud").classList.toggle("mp", app.mode === "mp");
   $("failFx").classList.remove("on");
@@ -443,7 +567,7 @@ function keepLearnedSync(g) {
   if (target !== settings.offsetMs) { settings.offsetMs = target; save(); }
 }
 function stopGame() {
-  app.practice = null; app.failing = false; R.setHype(0.5);
+  app.practice = null; app.failing = false; R.setHype(0.5); hideStarTip();
   if (!app.game) return;
   keepLearnedSync(app.game);
   app.game.player.stop();
@@ -453,7 +577,7 @@ function stopGame() {
 function pauseGame() {
   if (!app.game || app.paused || app.game.ended || app.failing) return;
   if (app.mode === "mp") return toast("En multijugador no se puede pausar.");
-  app.paused = true; app.game.player.pause(); show("pause");
+  app.paused = true; app.game.player.pause(); hideStarTip(); show("pause");
 }
 function resumeGame() {
   if (!app.game || !app.paused) return;
@@ -493,6 +617,8 @@ function finishGame() {
   $("resAcc").textContent = Math.round(sum.acc * 100) + "%";
   $("resCombo").textContent = sum.maxCombo;
   $("againBtn").hidden = app.mode === "mp";
+  $("resRandomBox").hidden = app.mode === "mp" || !online;
+  $("resRandomDiffs").hidden = true; $("resRandomBtn").setAttribute("aria-expanded", "false");
   $("menuBtn").textContent = app.mode === "mp" ? "Volver a la sala" : "Menú";
   if (app.mode === "mp") { app.room.send("final", { name: app.me.name, ...sum }); app.finals[app.me.id] = { name: app.me.name, ...sum }; }
   renderRanking();
@@ -655,14 +781,14 @@ function updateHUD(g, t) {
   setHud("score", Math.round(g.score), (v) => ($("score").textContent = v.toLocaleString("es-CO")));
   setHud("combo", g.combo, (v) => ($("combo").textContent = v));
   const m = g.baseMultiplier, shown = g.multiplier;
-  const starState = g.starOn ? " star-on" : g.starMeter >= STAR_READY ? " star-ready" : "";
-  setHud("mult", shown + starState, () => { $("multText").textContent = "×" + shown; $("mult").className = "mult x" + m + starState; });
+  const starState = g.starOn ? " star-on" : g.starMeter >= STAR_READY && app.starShown ? " star-ready" : "";
+  setHud("mult", shown + starState, () => { $("multText").textContent = "×" + shown; const gain = $("mult").classList.contains("gain"); $("mult").className = "mult x" + m + starState + (gain ? " gain" : ""); });
   const fill = m >= 4 ? 10 : g.combo % 10;
   setHud("ring", m * 100 + fill + (g.starOn ? 1000 : 0), () => {
     const col = g.starOn ? "#3fbfff" : ["#f2e8d8", "#f5c518", "#1fd14a", "#ff7a1a"][m - 1];
     ringSegs.forEach((s, i) => s.setAttribute("stroke", i < fill ? col : "rgba(255,255,255,.1)"));
   });
-  setHud("star", Math.round(g.starMeter * 100), (v) => $("starFill").setAttribute("stroke-dasharray", `${v} 100`));
+  if (app.starShown) setHud("star", Math.round(g.starMeter * 100), (v) => $("starFill").setAttribute("stroke-dasharray", `${v} 100`));
   // rock meter needle: -60° (red, about to fail) … +60° (green)
   setHud("rock", Math.round(g.rock * 60), (v) => ($("rockNeedle").style.transform = `rotate(${(v / 60) * 120 - 60}deg)`));
   setHud("danger", g.canFail && g.rock < 0.25, (v) => $("rock").classList.toggle("danger", v));
@@ -690,13 +816,14 @@ let beatCursor = { arr: null, i: 0 };
 function visibleBeats(beats, t, look) {
   if (beatCursor.arr !== beats) beatCursor = { arr: beats, i: 0 };
   let i = beatCursor.i;
-  while (i > 0 && beats[i - 1][0] > t - 0.5) i--;
-  while (i < beats.length && beats[i][0] <= t - 0.5) i++;
+  while (i > 0 && beats[i - 1][0] > t - 2) i--;
+  while (i < beats.length && beats[i][0] <= t - 2) i++;
   beatCursor.i = i;
   let j = i; while (j < beats.length && beats[j][0] < t + look) j++;
   return beats.slice(i, j);
 }
 let prev = performance.now(), lastNet = 0;
+const en = { e: 0.55, p: 0 };
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - prev) / 1000); prev = now;
@@ -705,7 +832,8 @@ function frame(now) {
     const rw = app.rewinding, k = Math.min(1, (now - rw.start) / rw.dur);
     const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; // ease in-out
     const t = rw.from + (rw.to - rw.from) * e;
-    R.render({ t, look: g.look, notes: g.notes, from: 0, pressed: g.pressed, beats: visibleBeats(g.beats, t, g.look), dt, star: g.starOn });
+    energyAt(app.energy, t - g.offset + g.songOffset, en);
+    R.render({ t, look: g.look, notes: g.notes, from: 0, pressed: g.pressed, beats: visibleBeats(g.beats, t, g.look), dt, star: g.starOn, energy: en.e, punch: en.p });
     if (k >= 1 && !rw.done) {
       rw.done = true;
       g.player.resume().then(() => { g.resumeFrom(rw.to); app.rewinding = null; app.paused = false; });
@@ -723,8 +851,13 @@ function frame(now) {
       }
       else if (ev.type === "hold") R.holdSpark(ev.lane);
       else if (ev.type === "miss" || ev.type === "ghost") judge("Fallo", "#ff2a22");
-      else if (ev.type === "starPhrase") { R.starPhrase(); sfx.starChime(); }
-      else if (ev.type === "starOn") { const el = $("starPop"); el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); sfx.starOn(); }
+      else if (ev.type === "starPhrase") {
+        R.starPhrase(); sfx.starChime();
+        app.starShown = false; starComet(ev.lane);
+        if (ev.ready && !app.starWasReady) { app.starWasReady = true; setTimeout(() => app.game === g && !g.starOn && sfx.starReady(), 640); tip.at = now + 2600; }
+        else if (ev.ready && !g.starOn && $("spTip").hidden) tip.at = now + 1400;
+      }
+      else if (ev.type === "starOn") { const el = $("starPop"); el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); sfx.starOn(); hideStarTip(); app.starWasReady = false; }
       else if (ev.type === "fail") failSong();
     }
     g.events.length = 0;
@@ -733,8 +866,14 @@ function frame(now) {
       app.paused = true; g.player.pause(); g.restartPractice();
       app.rewinding = { from: t, to: Math.max(0, app.practice.from - 3), start: now, dur: 1100 };
     }
+    if (NEW_TEXTS) {
+      if (tip.at && now >= tip.at && !g.starOn && g.starMeter >= STAR_READY && !app.paused) { tip.at = 0; tip.hideAt = now + 5500; $("spTipHow").textContent = starTipHow(); $("spTip").hidden = false; }
+      if (tip.hideAt && (now >= tip.hideAt || g.starOn || app.paused)) { tip.hideAt = 0; $("spTip").hidden = true; }
+    }
     R.setHype(Math.min(1, 0.15 + g.rock * 0.65 + Math.min(0.2, g.combo / 250)));
-    R.render({ t, look: g.look, notes: g.notes, from: g.next, pressed: g.pressed, beats: visibleBeats(g.beats, t, g.look), dt, star: g.starOn });
+    energyAt(app.energy, t - g.offset + g.songOffset, en);
+    R.render({ t, look: g.look, notes: g.notes, from: g.next, pressed: g.pressed, beats: visibleBeats(g.beats, t, g.look), dt, star: g.starOn,
+      starReady: g.starMeter >= STAR_READY && !g.starOn && app.starShown, energy: en.e, punch: en.p });
     updateHUD(g, t);
     if (app.mode === "mp" && app.room && now - lastNet > 300) {
       lastNet = now;
@@ -744,16 +883,21 @@ function frame(now) {
     }
     if (g.ended) finishGame();
   } else {
-    // attract mode behind the menus
-    const t = now / 1000 % (demo.notes[demo.notes.length - 1].t - 2);
-    if (demoNext > 0 && demo.notes[demoNext - 1].t > t) { demoNext = 0; demo.notes.forEach((n) => (n.state = 0)); }
+    // attract mode behind the menus: the menu song's own notes, in time with it (or a demo pattern when it's silent)
+    const m = music.show();
+    let t, notes, beats, energy = 0.55, punch = 0;
+    if (m) { t = m.t; notes = m.notes; beats = m.beats; energy = m.energy; punch = m.punch; }
+    else { t = now / 1000 % (demo.notes[demo.notes.length - 1].t - 2); notes = demo.notes; beats = demo.beats; }
+    if (attract.notes !== notes) { attract.notes = notes; demoNext = 0; notes.forEach((n) => (n.state = 0)); while (demoNext < notes.length && notes[demoNext].t < t - 0.05) notes[demoNext++].state = 1; }
+    if (demoNext > 0 && notes[demoNext - 1].t > t + 0.05) { demoNext = 0; notes.forEach((n) => (n.state = 0)); while (demoNext < notes.length && notes[demoNext].t < t - 0.05) notes[demoNext++].state = 1; }
     const pressed = [false, false, false, false, false];
-    while (demoNext < demo.notes.length && demo.notes[demoNext].t <= t) {
-      const n = demo.notes[demoNext++]; n.state = 1; R.hit(n.lane, false);
+    while (demoNext < notes.length && notes[demoNext].t <= t) {
+      const n = notes[demoNext++]; n.state = 1; R.hit(n.lane, !!n.dur);
     }
-    const from = Math.max(0, demoNext - 8);
-    for (let i = from; i < demoNext; i++) { const n = demo.notes[i]; n.holding = !!(n.dur && t < n.t + n.dur); if (n.holding) pressed[n.lane] = true; }
-    R.render({ t, look: 1.6, notes: demo.notes, from, pressed, beats: visibleBeats(demo.beats, t, 1.6), dt });
+    const from = Math.max(0, demoNext - 12);
+    for (let i = from; i < demoNext; i++) { const n = notes[i]; n.holding = !!(n.dur && t < n.t + n.dur); if (n.holding) { pressed[n.lane] = true; R.holdSpark(n.lane); } }
+    R.setHype(0.6);
+    R.render({ t, look: 1.6, notes, from, pressed, beats: visibleBeats(beats, t, 1.6), dt, energy, punch });
   }
 }
 requestAnimationFrame(frame);
@@ -945,7 +1089,7 @@ function renderRanking() {
 }
 
 // expose for debugging / tests
-window.__corde = { app, R };
+window.__corde = { app, R, music };
 
 /* ================= admin uploads ================= */
 const adm = { songs: [], busy: false };

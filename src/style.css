@@ -311,10 +311,49 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 
 /* ---------- star power ---------- */
 .mult { pointer-events: auto; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
-.mult .star-track { fill: none; stroke: rgba(63,191,255,.13); stroke-width: 3.6; }
-.mult .star-fill { fill: none; stroke: #3fbfff; stroke-width: 4; stroke-linecap: round; stroke-dasharray: 0 100; transition: stroke-dasharray .25s ease-out; filter: drop-shadow(0 0 3px rgba(63,191,255,.8)); }
+/* star meter: a thick blue ring around the multiplier, in four segments (each star phrase fills one) */
+.mult .star-ring { position: absolute; inset: -13px; width: calc(100% + 26px); height: calc(100% + 26px); transform: rotate(-90deg); overflow: visible; pointer-events: none; }
+.star-ring .track { fill: none; stroke: rgba(6,16,26,.88); stroke-width: 7.5; }
+.star-ring .fill { fill: none; stroke: #2fb4ff; stroke-width: 6; stroke-dasharray: 0 100; transition: stroke-dasharray .45s cubic-bezier(.2,.9,.25,1), stroke .25s; filter: drop-shadow(0 0 4px rgba(63,191,255,.95)); }
+.star-ring .notch { stroke: #05070a; stroke-width: 2.6; }
 .mult.star-ready { animation: starReady 1.1s ease-in-out infinite; }
-.mult.star-ready .star-fill { stroke: #7fd8ff; }
+.mult.star-ready .star-ring .fill { stroke: #9fe8ff; filter: drop-shadow(0 0 6px #3fbfff) drop-shadow(0 0 12px rgba(63,191,255,.8)); }
+.mult.star-on .star-ring .fill { stroke: #7fdcff; filter: drop-shadow(0 0 8px #3fbfff); }
+/* a phrase just completed: the meter flashes white and the multiplier jumps */
+.mult.gain { animation: multGain .75s cubic-bezier(.2,.9,.3,1.2); }
+.mult.gain .star-ring .fill { stroke: #ffffff; filter: drop-shadow(0 0 6px #fff) drop-shadow(0 0 16px #6fd0ff); transition: stroke-dasharray .45s cubic-bezier(.2,.9,.25,1); }
+@keyframes multGain { 0% { transform: scale(1); } 30% { transform: scale(1.22); } 100% { transform: scale(1); } }
+/* ready: a crown of blue fire burning around the multiplier (tongues point outwards, bent upwards) */
+.sp-fire { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .35s; z-index: 1; }
+.mult.star-ready .sp-fire { opacity: 1; }
+.sp-fire i { position: absolute; inset: 0; }
+.sp-fire i::before { content: ""; position: absolute; left: 50%; top: -40px; width: 15px; height: 36px; margin-left: -7.5px; transform-origin: 50% 100%;
+  border-radius: 50% 50% 50% 50% / 78% 78% 22% 22%; filter: blur(.7px);
+  background: radial-gradient(ellipse 50% 64% at 50% 84%, #ffffff 0 12%, #c4f3ff 28%, #3fb4ff 54%, rgba(30,90,255,0) 76%);
+  animation: spFlame .7s ease-in-out infinite alternate; }
+.sp-fire i:nth-child(1) { transform: rotate(-135deg); } .sp-fire i:nth-child(1)::before { animation-duration: .62s; animation-delay: -.3s; }
+.sp-fire i:nth-child(2) { transform: rotate(-90deg); } .sp-fire i:nth-child(2)::before { animation-duration: .8s; animation-delay: -.1s; }
+.sp-fire i:nth-child(3) { transform: rotate(-45deg); } .sp-fire i:nth-child(3)::before { animation-duration: .7s; animation-delay: -.5s; }
+.sp-fire i:nth-child(4) { transform: rotate(0deg); } .sp-fire i:nth-child(4)::before { animation-duration: .74s; }
+.sp-fire i:nth-child(5) { transform: rotate(45deg); } .sp-fire i:nth-child(5)::before { animation-duration: .66s; animation-delay: -.25s; }
+.sp-fire i:nth-child(6) { display: none; } /* would cover the score */ .sp-fire i:nth-child(6)::before { animation-duration: .78s; animation-delay: -.4s; }
+.sp-fire i:nth-child(7) { transform: rotate(135deg); } .sp-fire i:nth-child(7)::before { animation-duration: .68s; animation-delay: -.15s; }
+@keyframes spFlame { 0% { transform: scale(.85, .62) skewX(-8deg); opacity: .6; } 50% { transform: scale(1.08, 1.05) skewX(6deg); opacity: 1; } 100% { transform: scale(.9, 1.28) skewX(-4deg); opacity: .85; } }
+.mult.star-ready::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; pointer-events: none; box-shadow: 0 0 0 2px rgba(120,215,255,.9), 0 0 18px 4px rgba(63,191,255,.8), inset 0 0 14px rgba(63,191,255,.6); animation: spRing .55s ease-in-out infinite alternate; }
+@keyframes spRing { from { opacity: .55; } to { opacity: 1; } }
+/* the white-blue spark that flies from the frets into the meter when a phrase is completed */
+.star-comet { position: fixed; left: 0; top: 0; width: 24px; height: 24px; margin: -12px 0 0 -12px; border-radius: 50%; pointer-events: none; z-index: 6; will-change: transform, opacity;
+  background: radial-gradient(circle, #fff 0 28%, #c8f0ff 44%, rgba(63,191,255,.65) 62%, rgba(63,191,255,0) 72%); box-shadow: 0 0 16px 6px rgba(80,200,255,.75), 0 0 40px 12px rgba(63,191,255,.35); }
+.star-comet.tail { width: 14px; height: 14px; margin: -7px 0 0 -7px; opacity: .6; box-shadow: 0 0 10px 4px rgba(80,200,255,.5); }
+/* "star power ready" reminder, under the score */
+.sp-tip { position: absolute; left: 16px; top: calc(max(14px, env(safe-area-inset-top)) + 92px); display: flex; align-items: center; gap: 10px; max-width: min(320px, calc(100vw - 32px)); padding: 9px 14px 9px 10px;
+  background: linear-gradient(180deg, rgba(10,42,68,.92), rgba(5,18,32,.92)); border-radius: 3px; box-shadow: 0 0 0 1px #000, inset 0 0 0 1px rgba(111,208,255,.55), 0 0 22px rgba(63,191,255,.45), 0 8px 20px rgba(0,0,0,.5);
+  animation: spTipIn .45s cubic-bezier(.2,.9,.3,1.15), spTipPulse 1.4s ease-in-out .45s infinite; }
+.sp-tip svg { width: 26px; height: 26px; flex: none; fill: #e9f8ff; filter: drop-shadow(0 0 6px #3fbfff); }
+.sp-tip b { display: block; font: 700 17px/1.1 var(--display); letter-spacing: .05em; text-transform: uppercase; color: #dff5ff; text-shadow: 0 0 10px rgba(63,191,255,.8), 0 1px 0 #000; }
+.sp-tip span span { display: block; font: 600 15px/1.2 var(--body); color: #9fd8f5; }
+@keyframes spTipIn { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+@keyframes spTipPulse { 50% { box-shadow: 0 0 0 1px #000, inset 0 0 0 1px rgba(160,228,255,.9), 0 0 34px rgba(63,191,255,.8), 0 8px 20px rgba(0,0,0,.5); } }
 @keyframes starReady { 0%, 100% { box-shadow: 0 0 0 1px #000, 0 0 10px rgba(63,191,255,.35), inset 0 0 12px rgba(63,191,255,.15); } 50% { box-shadow: 0 0 0 1px #000, 0 0 26px rgba(63,191,255,.85), inset 0 0 18px rgba(63,191,255,.35); } }
 .mult.star-on { box-shadow: 0 0 0 1px #000, 0 0 30px rgba(63,191,255,.9), inset 0 0 22px rgba(63,191,255,.45); }
 .mult.star-on b { color: #9fe4ff !important; text-shadow: 0 0 14px #3fbfff, 0 2px 0 #000 !important; }
@@ -391,7 +430,7 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 @keyframes taRing { 0% { stroke-dasharray: 10 100; } 60%, 100% { stroke-dasharray: 75 100; } }
 .ta-mult { fill: #131010; stroke: #000; stroke-width: 2; }
 .ta-x { fill: #9fe4ff; font: 700 28px var(--display); text-anchor: middle; }
-.ta-gem.star { fill: #f4f8ff; }
+.ta-gem.star { fill: #f4f8ff; stroke: #bfe8ff; stroke-width: 1.5; stroke-linejoin: round; filter: drop-shadow(0 0 5px rgba(160,220,255,.9)); }
 .ta-needle { transform-origin: 60px 64px; transform-box: view-box; animation: taNeedle 3s ease-in-out infinite; }
 @keyframes taNeedle { 0%, 100% { transform: rotate(50deg); } 45% { transform: rotate(-55deg); } 60% { transform: rotate(-30deg); } }
 .tut-dots { display: flex; gap: 8px; justify-content: center; }
@@ -400,4 +439,57 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .tut-actions { width: 100%; justify-content: space-between; }
 .tut-actions button { min-width: 120px; }
 @media (max-width: 480px) { .tut-card { min-height: 260px; } .tut-card h2 { font-size: 26px; } .tut-actions button { min-width: 0; flex: 1; } }
-@media (prefers-reduced-motion: reduce) { .ta-gem.g2, .ta-hit, .ta-ring, .ta-needle, .mult.star-ready, .rock.danger { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .ta-gem.g2, .ta-hit, .ta-ring, .ta-needle, .mult.star-ready, .mult.star-ready::after, .rock.danger, .sp-fire i::before, .sp-tip, .mult.gain, .np-eq i { animation: none; } }
+
+/* ---------- tutorial: asking before going on without the motion permission ---------- */
+.tutorial { position: relative; }
+.tut-alert { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; padding: 14px; background: rgba(8,5,4,.78); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); animation: tutIn .25s ease-out; }
+.tut-alert-box { display: flex; flex-direction: column; align-items: center; gap: 12px; max-width: 380px; padding: 22px 18px 18px; text-align: center;
+  background: linear-gradient(180deg, #2c2724, #131010); border-radius: 4px; box-shadow: 0 0 0 1px #000, inset 0 0 0 1px #4a433e, 0 20px 50px rgba(0,0,0,.7); }
+.tut-alert-box h3 { margin: 0; font: 700 24px/1.05 var(--display); text-transform: uppercase; letter-spacing: .04em; color: var(--ink); filter: drop-shadow(0 2px 0 #000); }
+.tut-alert-box .hint { max-width: 36ch; }
+.tut-alert-box .row { width: 100%; justify-content: center; }
+.tut-alert-box .row button { flex: 1 1 140px; }
+.tut-alert-art { width: 64px; height: 64px; }
+.tut-alert-art .ph { fill: #1a1512; stroke: #d8d4cc; stroke-width: 2.5; transform-origin: 32px 48px; animation: tiltPhone 1.8s ease-in-out infinite; }
+.tut-alert-art .wv { fill: none; stroke: #3fbfff; stroke-width: 2.5; stroke-linecap: round; opacity: .8; }
+@keyframes tiltPhone { 0%, 100% { transform: rotate(0); } 40% { transform: rotate(-24deg); } 60% { transform: rotate(-24deg); } }
+
+/* ---------- results: another random song ---------- */
+.res-random { border-top: 1px solid #000; box-shadow: 0 -1px 0 rgba(255,255,255,.05); padding-top: 14px; }
+
+/* ---------- menu music: now playing ---------- */
+.now-playing { display: flex; align-items: center; gap: 10px; pointer-events: auto; min-width: 0; max-width: 100%;
+  padding: 7px 8px 7px 12px; background: linear-gradient(180deg, rgba(44,39,36,.92), rgba(19,16,16,.92)); border-radius: 3px;
+  box-shadow: 0 0 0 1px #000, inset 0 0 0 1px #3d3733, 0 10px 26px rgba(0,0,0,.55); animation: tutIn .4s ease-out; }
+.now-playing.fixed { position: fixed; z-index: 4; top: max(16px, env(safe-area-inset-top)); right: 16px; width: min(340px, calc(100vw - 32px)); }
+.np-eq { display: flex; align-items: flex-end; gap: 2px; width: 18px; height: 16px; flex: none; }
+.np-eq i { flex: 1; background: linear-gradient(180deg, var(--gold), var(--fire)); height: 30%; border-radius: 1px; animation: npEq .9s ease-in-out infinite alternate; transform-origin: bottom; }
+.np-eq i:nth-child(2) { animation-duration: .6s; animation-delay: -.2s; } .np-eq i:nth-child(3) { animation-duration: .75s; animation-delay: -.5s; } .np-eq i:nth-child(4) { animation-duration: .55s; animation-delay: -.1s; }
+@keyframes npEq { 0% { height: 20%; } 100% { height: 100%; } }
+.now-playing.muted .np-eq i { animation: none; height: 20%; background: #4a433e; }
+.np-cover { width: 38px; height: 38px; object-fit: cover; flex: none; box-shadow: 0 0 0 1px #000, 0 0 0 2px #3d3733; }
+.np-text { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.15; }
+.np-text b { font: 700 16px var(--display); text-transform: uppercase; letter-spacing: .03em; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.np-text span { font: 500 14px var(--body); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.np-btn { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 50%; padding: 0; background: radial-gradient(circle at 50% 35%, #3a3430, #141110); box-shadow: 0 0 0 1px #000, inset 0 0 0 1px #4a433e; }
+.np-btn:hover { filter: brightness(1.25); }
+.np-btn svg { width: 18px; height: 18px; fill: var(--ink); }
+#npMute svg path.on, #npMute svg path.off { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; }
+#npMute svg path.off { display: none; }
+.now-playing.muted #npMute svg path.on { display: none; } .now-playing.muted #npMute svg path.off { display: block; stroke: var(--red-hi); }
+.now-playing.muted .np-text, .now-playing.muted #npSkip, .now-playing.muted .np-cover { display: none; }
+.now-playing.muted { padding: 6px; }
+.now-playing.muted.fixed { width: auto; }
+/* on a phone it sits in the home menu, under the buttons */
+.home .now-playing { width: min(380px, 100%); margin-top: -18px; }
+.home .now-playing.muted { width: auto; }
+
+/* phones: smaller multiplier, so the meter and its fire sit closer; the reminder goes under the progress bar */
+@media (max-width: 480px) {
+  .mult .star-ring { inset: -11px; width: calc(100% + 22px); height: calc(100% + 22px); }
+  .sp-fire i::before { top: -35px; width: 13px; height: 32px; margin-left: -6.5px; }
+  .sp-tip { top: calc(max(14px, env(safe-area-inset-top)) + 124px); }
+  .tut-alert-box button.primary { font-size: 20px !important; }
+}
+.tut-alert-box button { white-space: nowrap; }

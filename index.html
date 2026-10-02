@@ -11,12 +11,15 @@
 </head>
 <body>
 <canvas id="stage" aria-label="Escenario"></canvas>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="dice" viewBox="0 0 24 24"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm2.5 3a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM7.5 15a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></symbol></svg>
 
 <!-- ===== HUD ===== -->
 <div id="hud" hidden>
   <div class="hud-score">
     <div class="mult" id="mult" role="button" aria-label="Poder estrella">
-      <svg viewBox="0 0 64 64" aria-hidden="true"><circle class="star-track" cx="32" cy="32" r="30.5"/><circle class="star-fill" id="starFill" cx="32" cy="32" r="30.5" pathLength="100"/><g id="multRing"></g></svg>
+      <div class="sp-fire" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <svg class="star-ring" viewBox="0 0 92 92" aria-hidden="true"><circle class="track" cx="46" cy="46" r="42"/><circle class="fill" id="starFill" cx="46" cy="46" r="42" pathLength="100"/><path class="notch" d="M88 46h-6M46 88v-6M4 46h6M46 4v6"/></svg>
+      <svg viewBox="0 0 64 64" aria-hidden="true"><g id="multRing"></g></svg>
       <b id="multText">×1</b>
     </div>
     <div>
@@ -42,6 +45,7 @@
     </svg>
   </div>
   <div class="star-pop" id="starPop">¡PODER ESTRELLA!</div>
+  <div class="sp-tip" id="spTip" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg><span><b>¡Poder estrella listo!</b><span id="spTipHow"></span></span></div>
   <div class="fail-fx" id="failFx"></div>
   <div class="judge" id="judge"></div>
   <div class="streak" id="streak"></div>
@@ -82,7 +86,7 @@
       <header class="bar"><button class="back" data-back>Volver</button><h2 id="libTitle">Canciones</h2></header>
       <input type="search" id="libSearch" placeholder="Buscar canción o artista" autocomplete="off">
       <div class="random" id="randomBox">
-        <button class="btn random-btn" id="randomBtn" aria-expanded="false" aria-controls="randomDiffs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm2.5 3a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM7.5 15a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg>Canción al azar</button>
+        <button class="btn random-btn" id="randomBtn" aria-expanded="false" aria-controls="randomDiffs"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#dice"/></svg>Canción al azar</button>
         <div class="seg" id="randomDiffs" hidden><button data-d="easy">Fácil</button><button data-d="medium">Media</button><button data-d="hard">Difícil</button><button data-d="expert">Experto</button></div>
       </div>
       <div class="songs" id="songList"></div>
@@ -273,6 +277,10 @@
         <button class="primary" id="againBtn">Otra vez</button>
         <button id="menuBtn">Menú</button>
       </div>
+      <div class="random res-random" id="resRandomBox">
+        <button class="btn random-btn" id="resRandomBtn" aria-expanded="false" aria-controls="resRandomDiffs"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#dice"/></svg>Canción al azar</button>
+        <div class="seg" id="resRandomDiffs" hidden><button data-d="easy">Fácil</button><button data-d="medium">Media</button><button data-d="hard">Difícil</button><button data-d="expert">Experto</button></div>
+      </div>
     </div>
   </section>
 
@@ -294,7 +302,7 @@
         <svg class="tut-art" viewBox="0 0 240 120" aria-hidden="true">
           <circle cx="120" cy="60" r="44" class="ta-ring-bg"/><circle cx="120" cy="60" r="44" class="ta-ring" pathLength="100"/>
           <circle cx="120" cy="60" r="34" class="ta-mult"/><text x="120" y="70" class="ta-x">×8</text>
-          <ellipse cx="34" cy="40" rx="15" ry="6.5" class="ta-gem star"/><ellipse cx="206" cy="84" rx="15" ry="6.5" class="ta-gem star"/><ellipse cx="44" cy="92" rx="15" ry="6.5" class="ta-gem star"/>
+          <polygon points="34.0,32.9 37.3,37.5 46.4,37.8 39.3,41.0 41.6,45.8 34.0,43.1 26.4,45.8 28.7,41.0 21.6,37.8 30.7,37.5" class="ta-gem star"/><polygon points="206.0,76.8 209.3,81.5 218.4,81.8 211.3,85.0 213.6,89.8 206.0,87.1 198.4,89.8 200.7,85.0 193.6,81.8 202.7,81.5" class="ta-gem star"/><polygon points="44.0,84.8 47.3,89.5 56.4,89.8 49.3,93.0 51.6,97.8 44.0,95.1 36.4,97.8 38.7,93.0 31.6,89.8 40.7,89.5" class="ta-gem star"/>
         </svg>
         <h2>Poder estrella</h2>
         <p class="hint">Las notas con estrella llenan la barra azul. Con la mitad llena, actívalo y tus puntos valen el doble.</p>
@@ -310,6 +318,14 @@
         <h2>Medidor de rock</h2>
         <p class="hint">La aguja sube cuando aciertas y baja cuando fallas. En Difícil y Experto, si llega al fondo, pierdes la canción.</p>
       </article>
+      <div class="tut-alert" id="tutAlert" role="alertdialog" aria-modal="true" aria-labelledby="tutAlertT" aria-describedby="tutAlertP" hidden>
+        <div class="tut-alert-box">
+          <svg class="tut-alert-art" viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="10" width="20" height="38" rx="4" class="ph"/><path d="M48 18a14 14 0 0 1 0 20M54 13a21 21 0 0 1 0 30" class="wv"/></svg>
+          <h3 id="tutAlertT">¿Seguir sin movimiento?</h3>
+          <p class="hint" id="tutAlertP">Sin este permiso no podrás activar el poder estrella levantando el celular: tendrás que tocar el multiplicador en plena canción, y ahí es fácil perder notas. Puedes darlo después en Ajustes › Ver tutorial.</p>
+          <div class="row"><button id="tutAlertNo">Seguir sin permiso</button><button class="primary" id="tutAlertYes">Permitir movimiento</button></div>
+        </div>
+      </div>
       <div class="tut-dots" aria-hidden="true"><i></i><i></i><i></i></div>
       <div class="row tut-actions"><button id="tutSkip">Saltar</button><button class="primary" id="tutNext">Siguiente</button></div>
     </div>
@@ -323,6 +339,13 @@
   </section>
 </div>
 
+<div class="now-playing" id="nowPlaying" hidden>
+  <span class="np-eq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+  <img class="np-cover" id="npCover" alt="" hidden>
+  <span class="np-text"><b id="npTitle"></b><span id="npArtist"></span></span>
+  <button class="np-btn" id="npSkip" aria-label="Otra canción"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5v13l9-6.5zM15 5.5v13l0 0 4 0V5.5z" /></svg></button>
+  <button class="np-btn" id="npMute" aria-label="Silenciar música" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="spk" d="M4 9h4l5-4v14l-5-4H4z"/><path class="on" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/><path class="off" d="M16.5 9.5l5 5M21.5 9.5l-5 5"/></svg></button>
+</div>
 <div class="toast" id="toast" hidden></div>
 <script type="module" src="/src/main.js"></script>
 </body>

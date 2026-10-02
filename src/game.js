@@ -138,7 +138,7 @@ export class Game {
         if (!ph.lost && ++ph.hit === ph.notes.length && !ph.done) {
           ph.done = true;
           this.starMeter = Math.min(1, this.starMeter + 0.25);
-          this.events.push({ type: "starPhrase", ready: this.starMeter >= STAR_READY });
+          this.events.push({ type: "starPhrase", ready: this.starMeter >= STAR_READY, lane });
         }
       }
       this.events.push({ type: "hit", lane, sustain: best.holding, err, star: best.star != null && best.star >= 0 });

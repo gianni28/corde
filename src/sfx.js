@@ -125,7 +125,16 @@ export function finale(stars) {
 /** A star phrase completed: a bright little arpeggio. */
 export function starChime() {
   const c = bus(), t = c.currentTime + 0.01;
-  [E4 * 2, 987.77, E4 * 4].forEach((f, i) => note(f, t + i * 0.06, { dur: 0.5, gain: 0.16, dist: false }));
+  [E4 * 2, 987.77, E4 * 4].forEach((f, i) => note(f, t + i * 0.06, { dur: 0.5, gain: 0.2, dist: false }));
+}
+/** Star power is ready to use: a rising sparkle with a shimmer on top, clearly different from the chime. */
+export function starReady() {
+  const c = bus(), t = c.currentTime + 0.02;
+  [E4 * 2, 1318.51, 1975.53, E4 * 8, 1975.53 * 2].forEach((f, i) => note(f, t + i * 0.075, { dur: 0.9, gain: 0.15, dist: false }));
+  const src = c.createBufferSource(); src.buffer = noise(c);
+  const hp = c.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 6000;
+  const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.05, t + 0.3); g.gain.linearRampToValueAtTime(0, t + 1.0);
+  src.connect(hp).connect(g); panTo(c, g, 0).connect(out); src.start(t, 0, 1.1);
 }
 /** Star power on: a rising whoosh, a big chord and the crowd going up. */
 export function starOn() {

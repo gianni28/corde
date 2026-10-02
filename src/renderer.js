@@ -6,6 +6,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { createCrowd, createBand } from "./stagecrew.js";
 
 export const LANE_HEX = [0x1fd14a, 0xe8202c, 0xf5c518, 0x1f6fe0, 0xf57a12];
 const HL = 24; // highway length (world units)
@@ -141,7 +142,9 @@ function smokeTex() {
 }
 
 // Fire flipbook: a few frames of licking flames, drawn as stacked additive blobs.
-function fireFrames(n = 6) {
+const FIRE = [[255, 250, 220], [255, 190, 60], [255, 110, 20], [200, 40, 10]];
+const BLUE_FIRE = [[240, 252, 255], [150, 225, 255], [50, 150, 255], [20, 60, 210]];
+function fireFrames(n = 6, pal = FIRE) {
   const frames = [];
   for (let f = 0; f < n; f++) {
     frames.push(canvasTex(128, 256, (g, w, h) => {
@@ -155,7 +158,7 @@ function fireFrames(n = 6) {
           const x = bx + Math.sin(p * 5 + f * 1.3 + k) * 10 * p;
           const r = (1 - p) * 30 + 6;
           const heat = 1 - p;
-          const col = heat > 0.75 ? [255, 250, 220] : heat > 0.45 ? [255, 190, 60] : heat > 0.2 ? [255, 110, 20] : [200, 40, 10];
+          const col = heat > 0.75 ? pal[0] : heat > 0.45 ? pal[1] : heat > 0.2 ? pal[2] : pal[3];
           const rg = g.createRadialGradient(x, y, 0, x, y, r);
           rg.addColorStop(0, `rgba(${col},${0.22 + heat * 0.2})`); rg.addColorStop(1, `rgba(${col},0)`);
           g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2);
@@ -216,6 +219,9 @@ export function createRenderer(canvas) {
   const stageWash = new THREE.SpotLight(0xffb070, 140, 60, 0.6, 0.8, 1.5);
   stageWash.position.set(0, 20, -20); stageWash.target.position.set(0, 0, -40); bg.add(stageWash, stageWash.target);
   const pyroLight = new THREE.PointLight(0xff7a20, 0, 40, 1.5); pyroLight.position.set(0, 4, -22); bg.add(pyroLight);
+  // front light on the band so they read as people, not just outlines
+  const bandKey = new THREE.SpotLight(0xffe2c0, 380, 90, 0.42, 0.7, 1.2);
+  bandKey.position.set(0, 17, -6); bandKey.target.position.set(0, 4, -38); bg.add(bandKey, bandKey.target);
 
   /* --- venue --- */
   const stage = new THREE.Group();
@@ -264,7 +270,10 @@ export function createRenderer(canvas) {
   drum(1.6, 1.6, 0, 2.9, 1.4, Math.PI / 2); // kick, facing the crowd
   drum(0.75, 0.6, -1.0, 4.7, 0.6, 0.5); drum(0.85, 0.7, 1.0, 4.7, 0.6, 0.5); // rack toms
   drum(1.0, 1.0, 2.6, 2.6, 0.6, 0.15); drum(0.75, 0.35, -2.4, 3.1, 0.9, 0.3); // floor tom, snare
-  const cymbal = (r, x, y, z, rz) => { const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.98, 0.04, 40), brass); c.position.set(x, y, z); c.rotation.set(0.5, 0, rz); kit.add(c);
+  // cymbals stay out of the baked mesh: the drummer hits them (they wobble and flash)
+  const cymGroup = new THREE.Group(); cymGroup.position.copy(kit.position); bg.add(cymGroup);
+  const cymList = [];
+  const cymbal = (r, x, y, z, rz) => { const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.98, 0.04, 40), brass.clone()); c.position.set(x, y, z); c.rotation.set(0.5, 0, rz); cymGroup.add(c); cymList.push(c);
     const st = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, y - 1.3, 6), chrome); st.position.set(x, (y + 1.3) / 2, z - 0.3); kit.add(st); };
   cymbal(1.2, -3.4, 6.2, 0.4, 0.3); cymbal(1.35, 3.6, 6.5, 0.2, -0.3); cymbal(0.7, -4.2, 4.2, 1.2, 0.1); cymbal(1.0, 0.2, 7.0, -0.8, 0);
 
@@ -345,72 +354,11 @@ export function createRenderer(canvas) {
   }
   let pyroT = 9;
 
-  // crowd + band: backlit silhouettes (flat cut-outs with a warm rim light), cheap enough for phones
-  // rim light only on the top edges (the stage lights are above and behind them)
-  const silTex = (w, h, draw, rim = 0.5) => canvasTex(w, h, (g) => {
-    g.save(); g.shadowColor = `rgba(255,150,70,${rim})`; g.shadowBlur = Math.max(2, Math.round(w * 0.02)); g.shadowOffsetY = -Math.max(2, Math.round(w * 0.018));
-    g.fillStyle = "#000"; g.strokeStyle = "#000"; draw(g); g.restore();
-    g.fillStyle = "#040202"; g.strokeStyle = "#040202"; draw(g);
-  });
-  const person = (arms) => (g) => {
-    g.lineCap = "round"; g.lineJoin = "round";
-    g.beginPath(); g.ellipse(64, 100, 20, 23, 0, 0, Math.PI * 2); g.fill();
-    g.fillRect(54, 112, 20, 24);
-    g.beginPath(); g.moveTo(16, 288); g.lineTo(22, 160); g.quadraticCurveTo(26, 132, 64, 128); g.quadraticCurveTo(102, 132, 106, 160); g.lineTo(112, 288); g.closePath(); g.fill();
-    g.lineWidth = 17;
-    const arm = (sx, sy, cx, cy, hx, hy) => { g.beginPath(); g.moveTo(sx, sy); g.quadraticCurveTo(cx, cy, hx, hy); g.stroke(); g.beginPath(); g.arc(hx, hy, 10, 0, 7); g.fill(); };
-    if (arms === 1) arm(98, 146, 114, 96, 104, 30);
-    if (arms === 2) { arm(30, 146, 14, 96, 26, 28); arm(98, 146, 114, 96, 102, 28); }
-    if (arms === 3) { arm(30, 146, 24, 116, 54, 74); arm(98, 146, 104, 116, 74, 74); }
-  };
-  const PW = 128, PH = 288, PERSON_H = 10.5, PERSON_W = PERSON_H * PW / PH;
-  const personGeo = new THREE.PlaneGeometry(PERSON_W, PERSON_H); personGeo.translate(0, PERSON_H / 2, 0);
-  const crowdN = isMobile ? 14 : 24, CROWD_Y = -14.2;
-  const crowd = [0, 1, 2, 3].map((arms) => {
-    // the crowd stands between us and the stage: drawn over the floor, only heads and arms show at the bottom
-    // dark figures lit faintly from the stage above: a warm gradient, no outline (outlines look like scribbles at low res)
-    const tex = canvasTex(PW, PH, (g) => {
-      const gr = g.createLinearGradient(0, 0, 0, PH); gr.addColorStop(0, "#4d2816"); gr.addColorStop(0.42, "#140a06"); gr.addColorStop(1, "#030202");
-      g.fillStyle = gr; g.strokeStyle = gr; person(arms)(g);
-    });
-    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false, fog: false });
-    const m = new THREE.InstancedMesh(personGeo, mat, crowdN); m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.renderOrder = 5;
-    const spots = [];
-    for (let k = 0; k < crowdN; k++) {
-      const side = k % 2 ? 1 : -1, row = Math.floor(Math.random() * 3);
-      spots.push({ x: side * rnd(4.5, 22), z: -6 - row * 2.6 + rnd(-0.6, 0.6), y: CROWD_Y + rnd(-0.6, 0.6) + row * 0.9, ph: rnd(0, 0.35), amp: rnd(0.5, 1.2), sway: rnd(0, 6.28), sc: rnd(0.92, 1.08), show: Math.random() });
-    }
-    bg.add(m);
-    return { m, spots, arms };
-  });
-  // rock poses: wide stance, boots, jacket, long hair; guitar slung low
-  const legs = (g, l, r) => { g.lineWidth = 34; g.beginPath(); g.moveTo(l[0], 236); g.lineTo(l[1], 366); g.moveTo(r[0], 236); g.lineTo(r[1], 366); g.stroke(); g.beginPath(); g.ellipse(l[1] - 6, 372, 24, 12, 0, 0, 7); g.ellipse(r[1] + 6, 372, 24, 12, 0, 0, 7); g.fill(); };
-  const torso = (g, cx) => { g.beginPath(); g.moveTo(cx - 40, 250); g.lineTo(cx - 44, 150); g.quadraticCurveTo(cx - 40, 120, cx, 116); g.quadraticCurveTo(cx + 40, 120, cx + 44, 150); g.lineTo(cx + 40, 250); g.closePath(); g.fill(); };
-  const headSil = (g, cx, hair) => { g.beginPath(); g.ellipse(cx, 86, 24, 28, 0, 0, 7); g.fill(); if (hair) { g.beginPath(); g.moveTo(cx - 24, 80); g.quadraticCurveTo(cx - 34, 130, cx - 30, 150); g.lineTo(cx + 30, 150); g.quadraticCurveTo(cx + 34, 130, cx + 24, 80); g.closePath(); g.fill(); } g.fillRect(cx - 12, 104, 24, 20); };
-  const guitarist = (bass) => (g) => {
-    g.lineCap = "round"; g.lineJoin = "round";
-    legs(g, [108, 76], [150, 186]); torso(g, 128); headSil(g, 128, true);
-    g.beginPath(); g.ellipse(110, 238, 52, 36, -0.45, 0, 7); g.fill(); // guitar body
-    g.lineWidth = 13; g.beginPath(); g.moveTo(124, 226); g.lineTo(bass ? 252 : 240, bass ? 116 : 130); g.stroke(); // neck
-    g.lineWidth = 22; g.beginPath(); g.moveTo(96, 146); g.quadraticCurveTo(70, 200, 112, 232); g.stroke(); // strumming arm
-    g.beginPath(); g.moveTo(160, 146); g.quadraticCurveTo(196, 178, bass ? 218 : 208, bass ? 144 : 154); g.stroke(); // fretting arm
-  };
-  const singer = (g) => {
-    g.lineCap = "round"; g.lineJoin = "round";
-    legs(g, [120, 96], [158, 176]); torso(g, 138); headSil(g, 138, true);
-    g.lineWidth = 8; g.beginPath(); g.moveTo(62, 380); g.lineTo(86, 112); g.stroke(); // mic stand
-    g.beginPath(); g.ellipse(90, 100, 10, 15, 0.3, 0, 7); g.fill();
-    g.lineWidth = 22; g.beginPath(); g.moveTo(108, 148); g.quadraticCurveTo(80, 152, 92, 112); g.stroke(); // hand on the mic
-    g.beginPath(); g.moveTo(168, 148); g.quadraticCurveTo(206, 112, 214, 56); g.stroke(); // fist up
-  };
-  const BW = 256, BH = 384, BAND_H = 8.6, BAND_W = BAND_H * BW / BH;
-  const bandGeo = new THREE.PlaneGeometry(BAND_W, BAND_H); bandGeo.translate(0, BAND_H / 2, 0);
-  const band = [[guitarist(false), -7.4, -38], [guitarist(true), 7.6, -39], [singer, 0.6, -35]].map(([draw, x, z], i) => {
-    const m = new THREE.Mesh(bandGeo, new THREE.MeshBasicMaterial({ map: silTex(BW, BH, draw, 0.4), transparent: true, depthWrite: false, fog: false }));
-    m.position.set(x, -0.9, z); if (i === 1) m.scale.x = -1; bg.add(m);
-    return { m, x, ph: i * 0.37 };
-  });
+  // crowd in front of the stage + the band on it (see stagecrew.js); both follow the beat and the song's energy
+  const crowd = createCrowd(bg, camera, { max: isMobile ? 56 : 96, dotTex: softDotTex() });
+  const band = createBand(bg, { kitPos: kit.position, cymbals: cymList });
   let hype = 0.5, hypeS = 0.5;
+  const rimCol = new THREE.Color();
 
   bg.add(bake(stage));
 
@@ -483,7 +431,16 @@ export function createRenderer(canvas) {
   const gemDome = mk(gemDomeGeo, glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.05, roughness: 0.1 }), 0.16));
   const gemRing = mk(gemRingGeo, new THREE.MeshStandardMaterial({ color: 0xf2eee6, metalness: 0.1, roughness: 0.25, emissive: 0xffffff, emissiveIntensity: 0.12 }));
   const tails = mk(new THREE.BoxGeometry(1, 1, 1), glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 }), 0.35));
-  [gemBody, gemDome, tails].forEach((m) => m.setColorAt(0, new THREE.Color()));
+  // star-phrase notes are white stars (like the classics), with a glow under them that doesn't need bloom (phones)
+  const starShape = new THREE.Shape();
+  for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + (i * Math.PI) / 5, r = i % 2 ? 0.2 : 0.47; i ? starShape.lineTo(Math.cos(a) * r, Math.sin(a) * r) : starShape.moveTo(Math.cos(a) * r, Math.sin(a) * r); }
+  const starGeo = new THREE.ExtrudeGeometry(starShape, { depth: 0.07, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.045, bevelSegments: 2 });
+  starGeo.rotateX(-Math.PI / 2); starGeo.translate(0, 0.07, 0);
+  const starGem = mk(starGeo, glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.1, roughness: 0.2, emissive: 0xe4f4ff, emissiveIntensity: 0.95 }), 0.45));
+  const haloGeo = new THREE.PlaneGeometry(1, 1); haloGeo.rotateX(-Math.PI / 2);
+  const halos = mk(haloGeo, new THREE.MeshBasicMaterial({ map: softDotTex(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+  halos.renderOrder = 2;
+  [gemBody, gemDome, tails, starGem, halos].forEach((m) => m.setColorAt(0, new THREE.Color()));
 
   // hit fire + sparks
   const flames = [];
@@ -491,6 +448,22 @@ export function createRenderer(canvas) {
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: fire[0], transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
     sp.center.set(0.5, 0.04); hwy.add(sp); flames.push({ sp, t: 9, f: 0 });
   }
+  // star power ready: blue fire burning at both ends of the strike line
+  const blueFire = fireFrames(6, BLUE_FIRE);
+  const readyFire = [];
+  for (let k = 0; k < 4; k++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: blueFire[k % 6], transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+    sp.center.set(0.5, 0.04); sp.visible = false; hwy.add(sp); readyFire.push(sp);
+  }
+  let readyGlow = 0;
+  // star phrase completed: a white flash over every fret
+  const flareTex = softDotTex();
+  const flares = [];
+  for (let i = 0; i < 5; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: flareTex, color: 0xeaf6ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+    sp.visible = false; hwy.add(sp); flares.push(sp);
+  }
+  let phraseT = 9;
   const SPARKS = 240;
   const sparkGeo = new THREE.BufferGeometry();
   const spPos = new Float32Array(SPARKS * 3), spCol = new Float32Array(SPARKS * 3);
@@ -501,15 +474,15 @@ export function createRenderer(canvas) {
   sparks.frustumCulled = false; hwy.add(sparks);
   let sparkIdx = 0;
   let sparkBlue = false;
-  function burst(x, n, white = false) {
+  function burst(x, n, white = false, blue = false, power = 1) {
     for (let k = 0; k < n; k++) {
       const i = sparkIdx++ % SPARKS;
       spPos[i * 3] = x + rnd(-0.25, 0.25); spPos[i * 3 + 1] = 0.25; spPos[i * 3 + 2] = rnd(-0.1, 0.1);
-      sparkVel[i * 3] = rnd(-1.8, 1.8); sparkVel[i * 3 + 1] = rnd(2, 5.5); sparkVel[i * 3 + 2] = rnd(-0.6, 1.2);
-      sparkLife[i] = rnd(0.35, 0.7);
+      sparkVel[i * 3] = rnd(-1.8, 1.8) * power; sparkVel[i * 3 + 1] = rnd(2, 5.5) * power; sparkVel[i * 3 + 2] = rnd(-0.6, 1.2);
+      sparkLife[i] = rnd(0.35, 0.7) * Math.sqrt(power);
       const hot = Math.random();
       if (white) { spCol[i * 3] = 0.85 + hot * 0.15; spCol[i * 3 + 1] = 0.92 + hot * 0.08; spCol[i * 3 + 2] = 1; }
-      else if (sparkBlue) { spCol[i * 3] = 0.35 + hot * 0.3; spCol[i * 3 + 1] = 0.75 + hot * 0.2; spCol[i * 3 + 2] = 1; }
+      else if (sparkBlue || blue) { spCol[i * 3] = 0.35 + hot * 0.3; spCol[i * 3 + 1] = 0.75 + hot * 0.2; spCol[i * 3 + 2] = 1; }
       else { spCol[i * 3] = 1; spCol[i * 3 + 1] = 0.45 + hot * 0.5; spCol[i * 3 + 2] = hot * 0.35; }
     }
   }
@@ -537,11 +510,24 @@ export function createRenderer(canvas) {
       flames[i].sp.position.set(laneX(i), 0.15, 0.05);
       // a lane that goes away must not leave its fire behind (the frame loop only animates the active lanes)
       if (!on) { flames[i].t = 9; flames[i].sp.visible = false; flames[i].sp.material.opacity = 0; }
+      flares[i].position.set(laneX(i), 0.3, 0.05); if (!on) flares[i].visible = false;
     }
+    readyFire.forEach((sp, k) => sp.position.set((k % 2 ? 1 : -1) * (w / 2 + 0.2 + (k > 1 ? 0.12 : 0)), 0.08, 0.05 + (k > 1 ? -0.15 : 0)));
     fitCamera();
   }
-  // a crowd at the bottom only fits beside the neck on wide screens; on a phone held upright the neck fills it
-  const showCrowd = (aspect) => crowd.forEach((c) => (c.m.visible = aspect >= 0.9));
+  // The crowd is laid out in screen space beside the neck: find where the neck's edge is on screen, row by row.
+  function layoutCrowd(aspect) {
+    const hw = (lanes * LW + 0.5) / 2 + 0.16, pts = [];
+    for (let z = 3; z >= -HL + 3; z -= 0.5) { tmpV.set(-hw, 0.05, z).project(camera); pts.push([tmpV.y, tmpV.x]); }
+    const top = pts[pts.length - 1][0];
+    const edgeX = (y) => {
+      if (y > top + 0.02) return null; // above the far end of the neck
+      if (y <= pts[0][0]) return pts[0][1];
+      for (let i = 1; i < pts.length; i++) if (pts[i][0] >= y) { const [y0, x0] = pts[i - 1], [y1, x1] = pts[i]; return x0 + ((x1 - x0) * (y - y0)) / Math.max(1e-6, y1 - y0); }
+      return pts[pts.length - 1][1];
+    };
+    crowd.layout(aspect, Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2), edgeX);
+  }
 
   let W = 1, H = 1;
   const baseCam = new THREE.Vector3();
@@ -550,7 +536,6 @@ export function createRenderer(canvas) {
     const aspect = W / H;
     const portrait = aspect < 0.9;
     camera.aspect = aspect;
-    showCrowd(aspect);
     camera.fov = portrait ? 66 : 52;
     const pitch = portrait ? 0.6 : 0.42;
     const tf = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
@@ -564,6 +549,8 @@ export function createRenderer(canvas) {
     camera.rotation.set(-pitch, 0, 0);
     camera.updateProjectionMatrix(); camera.updateMatrixWorld();
     baseCam.copy(camera.position);
+    layoutCrowd(aspect);
+    band.layout(portrait);
   }
 
   /* --- quality levels (auto mode steps down the moment frames get slow) --- */
@@ -609,10 +596,14 @@ export function createRenderer(canvas) {
   let frameNo = 0;
 
   const WHITE = new THREE.Color(1, 1, 1);
-  const STAR_BODY = new THREE.Color(0x0a6cff), STAR_DOME = new THREE.Color(0x3fb4ff), STAR_NOTE = new THREE.Color(0xf4f8ff);
+  // star power on: HDR colours so the notes glow (instance colours also feed the emissive term)
+  const STAR_ON_BODY = new THREE.Color(0.1, 1.15, 2.6), STAR_ON_DOME = new THREE.Color(0.75, 1.9, 2.8), STAR_ON_GEM = new THREE.Color(0.55, 1.5, 2.6);
+  const STAR_ON_HALO = new THREE.Color(0.15, 0.7, 1.25), STAR_HALO = new THREE.Color(0.7, 0.85, 1.1), STAR_WHITE = new THREE.Color(1.5, 1.6, 1.75), STAR_TAIL = new THREE.Color(0.15, 1.1, 2.4);
+  const Y_AXIS = new THREE.Vector3(0, 1, 0);
   const BOARD_WARM = new THREE.Color(0xffffff), BOARD_STAR = new THREE.Color(0x7cc6ff), EDGE_WARM = new THREE.Color(0xfff2e0), EDGE_STAR = new THREE.Color(0x6fd8ff);
   const LIGHT_WARM = new THREE.Color(0xffa860), LIGHT_STAR = new THREE.Color(0x5ab8ff);
-  let starGlow = 0;
+  let starGlow = 0, peopleDt = 0;
+  const beatTrack = { count: 0, bar: 0, lastT: -1e9, prevT: -1e9, len: 0.5 };
   const tmpM = new THREE.Matrix4(), tmpC = new THREE.Color(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
   const Z_AXIS = new THREE.Vector3(0, 0, 1);
   // warm club palettes per song section: [front PARs, back PARs]
@@ -623,6 +614,7 @@ export function createRenderer(canvas) {
   function firePyro() { pyroT = 0; pyro.forEach((p) => (p.t = 0)); }
 
   const api = {
+    _internals: { camera, baseCam, bg },
     setLanes: layoutLanes,
     // "auto" | "high" | "low"
     setQualityLevel(q) {
@@ -650,8 +642,8 @@ export function createRenderer(canvas) {
     miss() {},
     /** How excited the crowd is, 0–1 (follows the rock meter and star power). */
     setHype(v) { hype = Math.max(0, Math.min(1, v)); },
-    /** A star phrase was completed: white sparks over every fret. */
-    starPhrase() { for (let i = 0; i < lanes; i++) burst(laneX(i), 8, true); },
+    /** A star phrase was completed: a white flash and a fountain of white sparks over every fret. */
+    starPhrase() { phraseT = 0; for (let i = 0; i < lanes; i++) burst(laneX(i), 16, true, false, 1.35); },
     laneFromClientX(x, rect) {
       let best = 0, bd = 1e9;
       for (let i = 0; i < lanes; i++) {
@@ -664,54 +656,88 @@ export function createRenderer(canvas) {
     strikeScreenY() { tmpV.set(0, 0, 0).project(camera); return ((1 - tmpV.y) / 2) * H; },
     laneScreenX(i) { tmpV.set(laneX(i), 0, 0).project(camera); return ((tmpV.x + 1) / 2) * W; },
 
-    // state: { t, look, notes:[{t,lane,dur,state,holding}], from, pressed[], beats[[t,bar]], dt }
+    // state: { t, look, notes:[{t,lane,dur,state,holding}], from, pressed[], beats[[t,bar]], dt, star, starReady, energy, punch }
     render(state) {
-      const { t, look, notes, from = 0, pressed = [], beats = [], dt = 0.016, star = false } = state;
+      const { t, look, notes, from = 0, pressed = [], beats = [], dt = 0.016, star = false, starReady = false, energy = 0.55, punch = 0 } = state;
       const speed = HL / look;
       const zOf = (time) => -(time - t) * speed;
       const now = performance.now() / 1000;
+      const E = energy;
 
       let pulse = 0;
       for (let i = 0; i < beats.length; i++) { const d = t - beats[i][0]; if (d >= 0 && d < 0.3) pulse = Math.max(pulse, (1 - d / 0.3) * (beats[i][1] ? 1 : 0.55)); }
 
-      // lights
-      colA.lerp(tmpC.setHex(palettes[pal][0]), 0.03); colB.lerp(tmpC.setHex(palettes[pal][1]), 0.03);
+      // where we are in the beat and in the bar (counted as beats go by; reset when time jumps back)
+      let li = -1;
+      for (let i = 0; i < beats.length; i++) { if (beats[i][0] <= t) li = i; else break; }
+      if (t < beatTrack.prevT - 0.05) { beatTrack.lastT = -1e9; }
+      beatTrack.prevT = t;
+      let phase = 0;
+      if (li >= 0) {
+        const b0 = beats[li][0];
+        if (b0 > beatTrack.lastT + 1e-4) { beatTrack.count++; beatTrack.bar = beats[li][1] ? 0 : (beatTrack.bar + 1) % 4; beatTrack.lastT = b0; }
+        const nb = beats[li + 1];
+        if (nb) beatTrack.len = Math.max(0.15, nb[0] - b0);
+        phase = Math.min(1, (t - b0) / beatTrack.len);
+      }
+      const bpos = beatTrack.count + phase;
+
+      // lights: brighter, punchier and changing colour faster when the song is loud; dim and warm when it's calm
+      const lerpK = 0.015 + 0.03 * E;
+      colA.lerp(tmpC.setHex(palettes[pal][0]), lerpK); colB.lerp(tmpC.setHex(palettes[pal][1]), lerpK);
+      const pk = pulse * (0.35 + 0.9 * E) + punch * 0.35 * E;
       [colA, colB].forEach((col, row) => {
-        glows[row].material.color.copy(col).multiplyScalar(0.7 + pulse * 0.6);
+        glows[row].material.color.copy(col).multiplyScalar(0.45 + 0.45 * E + pk * 0.6);
         coneMats[row].uniforms.uColor.value.copy(col);
-        coneMats[row].uniforms.uI.value = (0.1 + pulse * 0.14) * (0.88 + 0.12 * Math.sin(now * 7 + row));
+        coneMats[row].uniforms.uI.value = (0.05 + 0.08 * E + pk * 0.14) * (0.88 + 0.12 * Math.sin(now * (3 + 6 * E) + row));
       });
-      wallSpots.forEach((s, i) => { s.color.copy(i === 1 ? colB : colA); s.intensity = 200 + pulse * 140; });
-      stageWash.color.copy(colA); stageWash.intensity = 110 + pulse * 70;
+      wallSpots.forEach((s, i) => { s.color.copy(i === 1 ? colB : colA); s.intensity = 110 + 160 * E + pk * 150; });
+      stageWash.color.copy(colA); stageWash.intensity = 85 + 60 * E + pk * 70;
+      bandKey.intensity = 260 + 160 * E + pk * 120;
       strikeLight.intensity = 1.4 + pulse * 0.8;
       edgeMat.emissiveIntensity = 0.5 + pulse * 0.35;
       // star power: the neck, its edges and the strike light turn blue
       starGlow += ((star ? 1 : 0) - starGlow) * Math.min(1, dt * 6);
+      readyGlow += ((starReady && !star ? 1 : 0) - readyGlow) * Math.min(1, dt * 5);
+      phraseT += dt;
+      const flash = phraseT < 0.5 ? Math.pow(1 - phraseT / 0.5, 2) : 0;
       sparkBlue = star;
       board.material.emissive.copy(BOARD_WARM).lerp(BOARD_STAR, starGlow);
-      board.material.emissiveIntensity = 0.35 + starGlow * 0.3;
-      edgeMat.emissive.copy(EDGE_WARM).lerp(EDGE_STAR, starGlow);
-      edgeMat.emissiveIntensity += starGlow * 0.5;
-      strikeLight.color.copy(LIGHT_WARM).lerp(LIGHT_STAR, starGlow);
-
-      // crowd jumps on the beat (more, and with arms up, when it's excited); the band sways
-      hypeS += (Math.max(hype, starGlow * 0.95) - hypeS) * Math.min(1, dt * 1.5);
-      let phase = 0;
-      for (let i = beats.length - 1; i >= 0; i--) if (beats[i][0] <= t) { const nb = beats[i + 1]; phase = nb ? (t - beats[i][0]) / Math.max(0.15, nb[0] - beats[i][0]) : 0; break; }
-      for (const c of crowd) {
-        for (let k = 0; k < c.spots.length; k++) {
-          const p = c.spots[k];
-          const up = c.arms === 0 || p.show < hypeS * 0.8 - 0.1; // arms-up fans only join when the crowd is into it
-          const jump = up ? p.amp * (0.25 + hypeS) * Math.max(0, Math.sin(((phase + p.ph) % 1) * Math.PI)) : 0;
-          tmpM.compose(tmpV.set(p.x, up ? p.y + jump : -60, p.z), tmpQ.setFromAxisAngle(Z_AXIS, Math.sin(now * 1.3 + p.sway) * 0.05), tmpS.set(p.sc, p.sc, 1));
-          c.m.setMatrixAt(k, tmpM);
-        }
-        c.m.instanceMatrix.needsUpdate = true;
+      board.material.emissiveIntensity = 0.35 + starGlow * 0.3 + flash * 0.9;
+      edgeMat.emissive.copy(EDGE_WARM).lerp(EDGE_STAR, Math.max(starGlow, readyGlow * (0.55 + 0.45 * Math.sin(now * 9))));
+      edgeMat.emissiveIntensity += starGlow * 0.5 + readyGlow * 0.6 + flash * 2;
+      strikeLight.color.copy(LIGHT_WARM).lerp(LIGHT_STAR, Math.max(starGlow, readyGlow * 0.7));
+      strikeLight.intensity += flash * 3 + readyGlow * 0.6;
+      // phrase completed: white flares on every fret
+      for (let i = 0; i < lanes; i++) {
+        const fl = flares[i];
+        fl.visible = flash > 0.01;
+        if (fl.visible) { fl.material.opacity = flash; const sc = 1.2 + (1 - flash) * 2.2; fl.scale.set(sc, sc, 1); }
       }
-      for (const b of band) {
-        const k = ((phase + b.ph) % 1) * Math.PI * 2;
-        b.m.rotation.z = Math.sin(k) * (0.025 + hypeS * 0.05);
-        b.m.position.y = -0.9 + Math.max(0, Math.sin(k)) * hypeS * 0.35;
+      // ready: blue fire at both ends of the strike line, and blue sparks rising from it
+      readyFire.forEach((sp, k) => {
+        sp.visible = readyGlow > 0.02;
+        if (!sp.visible) return;
+        sp.material.map = blueFire[(Math.floor(now * 20) + k * 2) % blueFire.length];
+        sp.material.opacity = readyGlow * (k > 1 ? 0.6 : 0.95);
+        const fl = 1 + 0.12 * Math.sin(now * 23 + k * 2);
+        sp.scale.set((k > 1 ? 0.7 : 0.95) * fl, (k > 1 ? 1.35 : 2.0) * fl * (0.7 + 0.3 * readyGlow), 1);
+      });
+      if (readyGlow > 0.5 && Math.random() < dt * 22) { const side = Math.random() < 0.5 ? -1 : 1; burst(side * ((lanes * LW + 0.5) / 2 + 0.2), 1, false, true, 0.8); }
+
+      camera.position.set(baseCam.x + Math.sin(now * 0.3) * 0.05, baseCam.y + pulse * 0.025 * (0.4 + E), baseCam.z);
+
+      // the people: crowd and band (only worked out on frames where the venue is redrawn)
+      hypeS += (Math.max(hype, starGlow * 0.95) - hypeS) * Math.min(1, dt * 1.5);
+      peopleDt += dt;
+      if (frameNo % LEVELS[level].bgEvery === 0) {
+        rimCol.copy(colA).lerp(colB, 0.35).multiplyScalar(0.55 + 0.5 * E + pk * 0.5);
+        if (starGlow > 0.01) rimCol.lerp(tmpC.setHex(0x3fb4ff).multiplyScalar(1.1), starGlow * 0.75);
+        const fdt = Math.min(0.1, peopleDt); peopleDt = 0;
+        camera.updateMatrixWorld();
+        const f = { bpos, ph: phase, bar: beatTrack.bar, E: Math.min(1, E + starGlow * 0.12), P: punch, hype: hypeS, star: starGlow, dt: fdt, now, rim: rimCol };
+        crowd.update(f, camera);
+        band.update(f);
       }
 
       haze.forEach((h) => { h.s.position.x += h.v * dt; if (h.s.position.x > 34) h.s.position.x = -34; if (h.s.position.x < -34) h.s.position.x = 34; });
@@ -733,7 +759,6 @@ export function createRenderer(canvas) {
       });
       pyroLight.intensity = pyroT < 1.1 ? (1 - pyroT / 1.1) * 900 : 0;
 
-      camera.position.set(baseCam.x + Math.sin(now * 0.3) * 0.05, baseCam.y + pulse * 0.025, baseCam.z);
       boardTex.offset.y = (t * speed) / 6;
 
       // fret bars
@@ -749,12 +774,14 @@ export function createRenderer(canvas) {
       frets.count = fi; frets.instanceMatrix.needsUpdate = true;
 
       // gems + tails
-      let gi = 0, ti = 0;
+      let gi = 0, ti = 0, si = 0, hi = 0;
+      const starPulse = 0.85 + 0.15 * Math.sin(now * 9);
       for (let i = from; i < notes.length; i++) {
         const n = notes[i];
         if (n.t - t > look * 1.02) break;
         if (n.hide) continue;
         const x = laneX(n.lane);
+        const isStar = n.star >= 0 && n.state !== 2;
         if (n.dur > 0 && n.t + n.dur > t && ti < MAX_GEMS) {
           const z0 = n.holding ? 0 : Math.min(0.4, zOf(n.t));
           const z1 = Math.max(-HL, zOf(n.t + n.dur));
@@ -763,25 +790,38 @@ export function createRenderer(canvas) {
             const dead = n.state === 2 || (n.state === 1 && !n.holding);
             const wob = n.holding ? Math.sin(now * 45 + i) * 0.035 : 0;
             tmpM.compose(tmpV.set(x + wob, 0.075, z1 + len / 2), tmpQ.identity(), tmpS.set(n.holding ? 0.2 : 0.16, 0.045, len));
-            tails.setMatrixAt(ti, tmpM);
-            if (dead) tmpC.setHex(0x2e2a28); else if (star) tmpC.copy(STAR_BODY); else tmpC.setHex(LANE_HEX[n.lane]);
+            if (dead) tmpC.setHex(0x2e2a28); else if (star) tmpC.copy(STAR_TAIL); else if (isStar) tmpC.copy(STAR_WHITE); else tmpC.setHex(LANE_HEX[n.lane]);
             if (n.holding) tmpC.multiplyScalar(1.6);
-            tails.setColorAt(ti, tmpC); ti++;
+            tails.setColorAt(ti, tmpC);
+            tails.setMatrixAt(ti, tmpM); ti++;
           }
         }
         if (n.state === 1) continue;
         const z = zOf(n.t);
         if (z > 1.4 || gi >= MAX_GEMS) continue;
+        if (isStar) {
+          // a white star (blue while star power is on), with a soft glow under it
+          tmpQ.setFromAxisAngle(Y_AXIS, Math.sin(now * 2.2 + i) * 0.35);
+          tmpM.compose(tmpV.set(x, 0.05, z), tmpQ, tmpS.setScalar(0.95 * (0.96 + 0.06 * starPulse)));
+          starGem.setMatrixAt(si, tmpM); starGem.setColorAt(si, star ? STAR_ON_GEM : WHITE); si++;
+          tmpM.compose(tmpV.set(x, 0.03, z), tmpQ.identity(), tmpS.set(1.9 * starPulse, 1, 1.9 * starPulse));
+          halos.setMatrixAt(hi, tmpM); halos.setColorAt(hi, star ? STAR_ON_HALO : STAR_HALO); hi++;
+          continue;
+        }
         tmpM.compose(tmpV.set(x, 0.05, z), tmpQ.identity(), tmpS.set(0.9, 0.9, 0.9));
         gemBase.setMatrixAt(gi, tmpM); gemBody.setMatrixAt(gi, tmpM); gemDome.setMatrixAt(gi, tmpM); gemRing.setMatrixAt(gi, tmpM);
         if (n.state === 2) { tmpC.setHex(0x24201e); gemBody.setColorAt(gi, tmpC); gemDome.setColorAt(gi, tmpC); }
-        else if (star) { gemBody.setColorAt(gi, STAR_BODY); gemDome.setColorAt(gi, STAR_DOME); }        // star power on: every note blue
-        else if (n.star >= 0) { gemBody.setColorAt(gi, STAR_NOTE); gemDome.setColorAt(gi, tmpC.setHex(LANE_HEX[n.lane]).lerp(WHITE, 0.45)); } // star phrase: white notes
+        else if (star) {
+          // star power on: every note turns electric blue and glows
+          gemBody.setColorAt(gi, STAR_ON_BODY); gemDome.setColorAt(gi, STAR_ON_DOME);
+          tmpM.compose(tmpV.set(x, 0.03, z), tmpQ.identity(), tmpS.set(1.45, 1, 1.45));
+          halos.setMatrixAt(hi, tmpM); halos.setColorAt(hi, STAR_ON_HALO); hi++;
+        }
         else { tmpC.setHex(LANE_HEX[n.lane]); gemBody.setColorAt(gi, tmpC); gemDome.setColorAt(gi, tmpC.lerp(WHITE, 0.1)); }
         gi++;
       }
       for (const m of [gemBase, gemBody, gemDome, gemRing]) { m.count = gi; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
-      tails.count = ti; tails.instanceMatrix.needsUpdate = true; if (tails.instanceColor) tails.instanceColor.needsUpdate = true;
+      for (const [m, c] of [[starGem, si], [halos, hi], [tails, ti]]) { m.count = c; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
 
       // buttons, strings, hit fire
       for (let i = 0; i < lanes; i++) {
