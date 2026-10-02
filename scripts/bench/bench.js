@@ -599,7 +599,7 @@ function autoChart(samples, rate, meta = {}, onProgress) {
   const gridT = grid.map((g) => toSec(g.fr));
 
   // 4. attacks actually heard: peaks of the onset envelope, snapped to the grid when close
-  const half = Math.round(f.fps * 0.2), snap = 0.045;
+  const half = Math.round(f.fps * 0.2), snap = (globalThis.__AC || {}).snap ?? 0.045;
   const bySlot = new Map();
   for (let t = 3; t < f.frames - 3; t++) {
     const v = env[t];
@@ -619,6 +619,20 @@ function autoChart(samples, rate, meta = {}, onProgress) {
     if (!prev || prev.strength < strength) bySlot.set(key, cand);
   }
   const cands = [...bySlot.values()].sort((a, b) => a.t - b.t);
+  {
+    const O = globalThis.__AC || {};
+    // harmonic novelty: does the pitch content change at this attack? (a new chord/note vs. a drum hit)
+    const chromaAvg = (a, b) => { const c = new Float64Array(12); for (let k = Math.max(0, a); k < Math.min(f.frames, b); k++) for (let p = 0; p < 12; p++) c[p] += f.chroma[k * 12 + p]; return c; };
+    for (const c of cands) {
+      const x = chromaAvg(c.fr - 10, c.fr - 1), y = chromaAvg(c.fr + 1, c.fr + 10);
+      let xy = 0, xx = 0, yy = 0; for (let p = 0; p < 12; p++) { xy += x[p] * y[p]; xx += x[p] * x[p]; yy += y[p] * y[p]; }
+      c.nov = 1 - xy / (Math.sqrt(xx * yy) || 1);
+      let lowShare = 0; { let fl = 0, lw = 0; for (let k = c.fr - 1; k <= c.fr + 1; k++) { fl += f.flux[k] || 0; lw += f.low[k] || 0; } lowShare = fl ? lw / fl : 0; }
+      c.lowShare = lowShare;
+      if (O.chromaW) c.strength *= 1 + O.chromaW * Math.min(1, c.nov * 4);
+      if (O.lowPen) c.strength *= 1 - O.lowPen * Math.max(0, lowShare - 0.3);
+    }
+  }
   // relative strength: compared with the attacks around it (a quiet verse still gets its own notes)
   const strs = cands.map((c) => c.strength), ctimes = cands.map((c) => c.t);
   cands.forEach((c, i) => { c.z = c.strength / (localMedian(strs, ctimes, i, 4) || 1); });
@@ -787,7 +801,6 @@ function syncError(samples, rate, noteTimes) {
 
 return { autoChart };
 })();
-
 (() => {
 const onsets = (notes) => [...new Set(notes.map((n) => Math.round(n[0] * 1000)))].map((t) => t / 1000).sort((a, b) => a - b);
 function match(a, b, tol) { let i = 0, j = 0, m = 0; const pairs = []; while (i < a.length && j < b.length) { const d = a[i] - b[j]; if (Math.abs(d) <= tol) { pairs.push([i, j]); m++; i++; j++; } else if (d < 0) i++; else j++; } return { m, pairs }; }
@@ -824,7 +837,9 @@ window.__bench = { done: false, rows: [] };
       }
       const delay = (s.audio_offset_ms || 0) / 1000;
       const row = { name: s.name, charter: s.charter };
-      for (const [k, mod] of [["old", window.__AC_OLD], ["new", window.__AC_NEW]]) {
+      const variants = [["old", window.__AC_OLD, null]].concat((window.__CONFIGS || [{}]).map((c, i) => ["v" + i, window.__AC_NEW, c]));
+      for (const [k, mod, cfg] of variants) {
+        globalThis.__AC = cfg || {};
         const a = mod.autoChart(mono, 22050, {});
         row[k] = Object.fromEntries(["easy", "medium", "hard", "expert"].map((d) => [d, score(a, human, delay, d)]));
         row[k].bpm = a.auto && a.auto.bpm;
