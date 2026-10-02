@@ -116,16 +116,18 @@
         <div class="diffs" id="setupDiffs"></div>
       </div>
       <p class="hint" id="setupHint"></p>
+      <div class="play-row">
+        <button class="primary" id="playBtn">Tocar</button>
+        <button class="btn practice-btn" id="practiceBtn" aria-expanded="false" aria-controls="practiceBox">Practicar</button>
+      </div>
+      <div class="practice-box" id="practiceBox" hidden>
+        <span class="label">Elige una parte</span>
+        <ol class="parts" id="practiceParts"></ol>
+      </div>
       <div class="board" id="setupBoard" hidden>
         <div class="board-head"><span class="label">Clasificación</span></div>
         <ol class="board-list"></ol>
         <p class="hint board-empty" hidden>Nadie ha tocado esta dificultad todavía.</p>
-      </div>
-      <button class="primary" id="playBtn">Tocar</button>
-      <button class="btn practice-btn" id="practiceBtn" aria-expanded="false" aria-controls="practiceBox">Practicar una parte</button>
-      <div class="practice-box" id="practiceBox" hidden>
-        <span class="label">Elige una parte</span>
-        <ol class="parts" id="practiceParts"></ol>
       </div>
     </div>
   </section>
@@ -229,6 +231,11 @@
       <p class="hint">Si el archivo se llama «Artista - Canción.mp3», uso ese nombre. La portada la saco del mismo MP3 o de una imagen con el mismo nombre.</p>
       <ul class="uploads" id="adminList"></ul>
       <p class="hint" id="adminStatus"></p>
+      <div class="field" id="autoBox" hidden>
+        <span class="label">Hechas desde MP3</span>
+        <p class="hint">Si subes la carpeta de Clone Hero de una de estas (aunque solo traiga Experto), reemplaza a la del MP3 sola y el juego arma los otros niveles a partir de Experto. También puedes borrarlas aquí.</p>
+        <ul class="uploads auto-list" id="autoList"></ul>
+      </div>
     </div>
   </section>
 
@@ -260,6 +267,7 @@
       <div class="sections" id="resSections" hidden>
         <span class="label">Por sección</span>
         <ol></ol>
+        <p class="hint" id="resSectionsHint">Toca una sección para practicarla.</p>
       </div>
       <ol class="ranking" id="ranking" hidden></ol>
       <p class="record" id="newRecord" hidden>¡Nuevo récord!</p>
