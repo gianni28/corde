@@ -284,6 +284,12 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .board { display: flex; flex-direction: column; gap: 8px; }
 .board-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .board-tag { font: 600 12px var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--ink); border: 1px solid #4a433e; padding: 3px 8px; }
+/* PC: switch between the 5- and 4-string boards (phones only play 4, so they keep the plain tag) */
+.lane-pick { display: inline-flex; border: 1px solid #000; border-radius: 3px; overflow: hidden; box-shadow: inset 0 0 0 1px #3d3733; }
+.lane-pick button { background: linear-gradient(180deg, #24201d, #141110); border: 0; padding: 4px 9px; font: 600 12px var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.lane-pick button + button { border-left: 1px solid #000; }
+.lane-pick button:hover { color: var(--ink); }
+.lane-pick button[aria-pressed="true"] { background: linear-gradient(180deg, #c4161c, #6e0808); color: #fff; text-shadow: 0 1px 0 #000; }
 .board-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
 .board-list li { display: grid; grid-template-columns: 28px 1fr auto auto; gap: 10px; align-items: center; padding: 7px 12px; background: rgba(0,0,0,.35); }
 .board-list li:nth-child(1) .pos { color: var(--gold); }

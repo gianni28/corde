@@ -84,12 +84,12 @@ $("homeFoot").textContent = online ? "Biblioteca en línea" : "Modo local · con
 
 // General board: "total" = sum of each player's best per song, "best" = each player's best single run.
 // Same string count as the device plays (5 on PC, 4 on phones); top 10 beside the menu, top 5 under it.
-let homeTab = "total", homeReq = 0;
+let homeTab = "total", homeLanes = 0, homeReq = 0;
 async function renderHomeBoard() {
   const el = $("homeBoard");
   if (!online) { el.hidden = true; return; }
-  const lanes = deviceLanes();
-  el.querySelector(".board-tag").textContent = `${lanes} cuerdas`;
+  const lanes = homeLanes || deviceLanes();
+  setLanePick(el, lanes);
   el.querySelectorAll("#homeTabs button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === homeTab)));
   const req = ++homeReq;
   let rows;
@@ -111,6 +111,18 @@ async function renderHomeBoard() {
   el.hidden = false;
 }
 $("homeTabs").onclick = (e) => { const b = e.target.closest("button"); if (!b || b.dataset.v === homeTab) return; homeTab = b.dataset.v; renderHomeBoard(); };
+onLanePick($("homeBoard"), (l) => { homeLanes = l; renderHomeBoard(); });
+
+// The string-count label of a board: a plain tag on phones, a 5 | 4 switch on PC (both can be played there).
+function setLanePick(el, lanes) {
+  const tag = el.querySelector(".board-tag"), pick = el.querySelector(".lane-pick");
+  tag.textContent = `${lanes} cuerdas`;
+  tag.hidden = !touch; pick.hidden = touch;
+  pick.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.l === lanes)));
+}
+function onLanePick(el, fn) {
+  el.querySelector(".lane-pick").onclick = (e) => { const b = e.target.closest("button"); if (b && b.getAttribute("aria-pressed") !== "true") fn(+b.dataset.l); };
+}
 renderHomeBoard();
 
 /* ================= library ================= */
@@ -270,7 +282,7 @@ function openSetup() {
   const cov = s.coverUrl || coverOf(s);
   $("setupCover").hidden = !cov; if (cov) $("setupCover").src = cov;
   app.diff = defaultDiff(app.chart, lanes);
-  app.boardLanes = lanes;
+  app.boardLanes = lanes; $("setupBoard")._view = 0;
   const draw = () => { renderDiffChips($("setupDiffs"), app.chart, lanes, app.diff, (k) => { app.diff = k; settings.lastDiff = k; save(); draw(); }); showBoard($("setupBoard"), 5); };
   draw();
   const keys = settings.keys.slice(0, lanes).map(keyLabel).join(" ");
@@ -358,7 +370,7 @@ function finishGame() {
   app.game = null;
   R.setLanes(5);
   $("newRecord").hidden = true; $("boardMe").hidden = true; $("nameAsk").hidden = true; $("resultsBoard").hidden = true;
-  app.boardLanes = app.lanes;
+  app.boardLanes = app.lanes; $("resultsBoard")._view = 0;
   if (app.mode !== "mp" && hasBoard()) {
     if (settings.name || !(sum.score > 0)) sendScore(sum); else { $("nameAsk").hidden = false; $("boardName").value = ""; app.pendingScore = sum; }
   }
@@ -393,12 +405,15 @@ $("nameAsk").onsubmit = (e) => {
   if (app.pendingScore) { sendScore(app.pendingScore); app.pendingScore = null; }
 };
 let boardReq = 0;
+// Shows the mode being played (5 on PC, 4 on phones) unless the PC switch picked the other one (el._view).
 async function showBoard(el, limit, myRank) {
   if (!hasBoard()) { el.hidden = true; return; }
   el.hidden = false;
-  // Each player only sees the board of the mode they play (5 strings on PC, 4 on phones).
-  const lanes = app.boardLanes || deviceLanes();
-  el.querySelector(".board-tag").textContent = `${lanes} cuerdas`;
+  el._limit = limit; el._rank = myRank;
+  const played = app.boardLanes || deviceLanes();
+  const lanes = el._view || played;
+  if (lanes !== played) myRank = null; // your position belongs to the board you played
+  setLanePick(el, lanes);
   const req = ++boardReq;
   let rows = [];
   try { rows = await topScores(app.song.id, app.diff, lanes, limit); } catch (e) { console.warn("leaderboard:", e.message); }
@@ -412,6 +427,10 @@ async function showBoard(el, limit, myRank) {
     ol.appendChild(li);
   });
   el.querySelector(".board-empty").hidden = rows.length > 0;
+}
+for (const id of ["setupBoard", "resultsBoard"]) {
+  const el = $(id);
+  onLanePick(el, (l) => { el._view = l; showBoard(el, el._limit, el._rank); });
 }
 $("againBtn").onclick = () => startGame({ lanes: app.lanes, diff: app.diff });
 $("menuBtn").onclick = () => { if (app.mode === "mp") { renderLobby(); show("lobby", false); } else { app.history = ["home"]; show("library", false); } };
