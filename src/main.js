@@ -10,7 +10,7 @@ import { decodeStems, Player, audioCtx, unlockAudio } from "./audio.js";
 import { Game, STAR_READY } from "./game.js";
 import { motionAvailable, motionNeedsPermission, motionReady, requestMotion, onLift, watchMotion, seen as motionSeen } from "./motion.js";
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
-import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, topScores, submitScore, generalBoard, dailyToday, dailyScores, submitDaily } from "./net.js";
+import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily } from "./net.js";
 import { VENUES, TO_ENCORE, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song } from "./admin.js";
 import { fillDifficulties } from "./reduce.js";
@@ -114,11 +114,11 @@ function show(name, push = true) {
   SCREENS.forEach((s) => ($("s-" + s).hidden = s !== name));
   $("hud").hidden = !(app.game && ["play", "pause", "settings"].includes(name));
   if (name === "play") $("hud").hidden = false;
-  if (name === "home") { renderHomeBoard(); renderDailyCard(); }
+  if (name === "home") { renderHomeBoard(); renderDailyCard(); if (online && !daily.day) loadDaily(); }
   if (name !== "settings") stopMotionTest();
   // the stage behind: the tour's venues in the tour and its songs, the usual bar everywhere else
   const look = name === "tour" ? tourLook
-    : ["play", "pause", "results"].includes(name) || (name === "settings" && app.game) ? (app.ctx?.kind === "tour" ? app.ctx.stage : "bar")
+    : ["play", "pause", "results"].includes(name) || app.game ? (app.ctx?.kind === "tour" ? app.ctx.stage : "bar")
     : name === "loading" ? null : "bar";
   if (look) R.setStage?.(look);
   syncMenuMusic();
@@ -199,7 +199,7 @@ async function renderHomeBoard() {
 $("homeTabs").onclick = (e) => { const b = e.target.closest("button"); if (!b || b.dataset.v === homeTab) return; homeTab = b.dataset.v; renderHomeBoard(); };
 renderHomeBoard();
 // the library list is needed for the menu music right away (it's small)
-if (online) listSongs().then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list); syncMenuMusic(); loadDaily(); }).catch(() => {});
+if (online) listSongs().then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list); syncMenuMusic(); }).catch(() => {}).finally(() => loadDaily());
 
 /* ================= personal bests ================= */
 // Your best run of each song and difficulty, kept in this browser: stars in the song list and on the difficulty
@@ -586,7 +586,7 @@ function finishDuo() {
   });
   sfx.finale(Math.max(...sums.map((x) => x.stars)));
   $("resFail").hidden = true; $("soloRes").hidden = true; $("duoRes").hidden = false;
-  $("againBtn").hidden = false; $("otherSongBtn").hidden = false; $("menuBtn").textContent = "Menú";
+  $("againBtn").hidden = false; $("againBtn").classList.add("primary"); $("otherSongBtn").hidden = false; $("menuBtn").textContent = "Menú";
   $("resRandomBox").hidden = true;
   show("results");
 }
@@ -594,11 +594,14 @@ $("otherSongBtn").onclick = () => { app.mode = "duo"; openLibrary(); app.history
 
 /* ================= song of the day ================= */
 // The same song for everyone each day (Colombia's calendar; the server picks it), with a board of the day per
-// difficulty. Your streak of days in a row is kept in this browser.
+// difficulty and strings. Your streak of days in a row is kept in this browser (and shared with its other tabs).
 const DAILY_KEY = "corde.daily.v1";
-let dailyLog = { days: [] };
-try { dailyLog = { days: [], ...(JSON.parse(localStorage.getItem(DAILY_KEY) || "{}") || {}) }; } catch {}
-const daily = { day: null, songId: null, scores: null, diff: null, loading: null };
+const readDailyLog = () => { try { const d = JSON.parse(localStorage.getItem(DAILY_KEY) || "{}"); return Array.isArray(d?.days) ? d.days : []; } catch { return []; } };
+let dailyLog = { days: readDailyLog() };
+// boards: "diff:lanes" → { rows, total, mine } | "error" (missing while loading)
+const daily = { day: null, songId: null, diff: null, boards: {}, loading: null, offset: 0, retryAt: 0 };
+// the server's clock: a phone with its clock off still counts down to the real midnight
+const serverNow = () => Date.now() + daily.offset;
 const dayShift = (day, k) => { const [y, m, d] = day.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d + k)).toISOString().slice(0, 10); };
 // a new song at midnight in Colombia (UTC−5 all year)
 const dailyEnds = (day) => { const [y, m, d] = day.split("-").map(Number); return Date.UTC(y, m - 1, d + 1, 5); };
@@ -613,23 +616,34 @@ function dailyStreak(today = daily.day) {
 }
 // today's song played from the song list also counts for the day (via: where to go back to afterwards)
 function dailyCtxFor(song, via = null) {
-  return daily.day && song?.id === daily.songId && Date.now() < dailyEnds(daily.day) ? { kind: "daily", day: daily.day, songId: song.id, via } : null;
+  return daily.day && song?.id === daily.songId && serverNow() < dailyEnds(daily.day) ? { kind: "daily", day: daily.day, songId: song.id, via } : null;
 }
+// another tab (or the installed app) may have added days since this page loaded: merge, never overwrite
 function markDailyPlayed(day) {
-  if (dailyLog.days.includes(day)) return false;
-  dailyLog.days = [...dailyLog.days, day].sort().slice(-400);
-  try { localStorage.setItem(DAILY_KEY, JSON.stringify(dailyLog)); } catch {}
-  return true;
+  const days = new Set([...readDailyLog(), ...dailyLog.days]);
+  const fresh = !days.has(day);
+  days.add(day);
+  dailyLog.days = [...days].sort().slice(-400);
+  try { localStorage.setItem(DAILY_KEY, JSON.stringify({ days: dailyLog.days })); } catch {}
+  return fresh;
 }
+addEventListener("storage", (e) => {
+  if (e.key !== DAILY_KEY) return;
+  dailyLog.days = [...new Set([...readDailyLog(), ...dailyLog.days])].sort();
+  renderDailyCard();
+  if (app.screen === "daily") renderDaily();
+});
 function loadDaily(force = false) {
   if (!online) return Promise.resolve(null);
-  if (!force && daily.day && Date.now() < dailyEnds(daily.day)) return Promise.resolve(daily);
+  if (!force && daily.day && serverNow() < dailyEnds(daily.day)) return Promise.resolve(daily);
   if (daily.loading) return daily.loading;
   daily.loading = (async () => {
     try {
+      const t0 = Date.now();
       const r = await dailyToday();
       if (!r?.song_id) return null;
-      if (r.day !== daily.day) daily.scores = null;
+      if (Number.isFinite(r.now)) daily.offset = r.now - (t0 + Date.now()) / 2;
+      if (r.day !== daily.day || r.song_id !== daily.songId) daily.boards = {};
       daily.day = r.day; daily.songId = r.song_id;
       // a song uploaded today may not be in the list we have yet
       if (!app.songs.some((s) => s.id === r.song_id)) { try { app.songs = await listSongs(); } catch {} }
@@ -640,6 +654,8 @@ function loadDaily(force = false) {
   })();
   return daily.loading;
 }
+// a network blip at launch must not hide the song of the day for the whole session
+addEventListener("online", () => loadDaily(true));
 function renderDailyCard() {
   const s = dailySong(), el = $("dailyCard");
   el.hidden = !s;
@@ -656,12 +672,22 @@ function renderDailyCard() {
 }
 // the countdowns (home card and daily screen); at midnight the new song comes in by itself
 function tickDaily() {
-  if (!daily.day) return;
-  const left = dailyEnds(daily.day) - Date.now();
+  const now = serverNow();
+  if (!daily.day) { // not loaded yet (or the first try failed): keep trying now and then
+    if (online && now >= daily.retryAt && !daily.loading) { daily.retryAt = now + 30000; loadDaily(); }
+    return;
+  }
+  const left = dailyEnds(daily.day) - now;
   const txt = hms(left);
   if ($("dcTime").textContent !== txt) $("dcTime").textContent = txt;
   if (app.screen === "daily" && $("dailyTime").textContent !== txt) $("dailyTime").textContent = txt;
-  if (left <= 0 && !daily.loading) loadDaily(true).then(() => { if (app.screen === "daily") renderDaily(); });
+  if (left <= 0 && !daily.loading && now >= daily.retryAt) {
+    const was = daily.day;
+    loadDaily(true).then(() => {
+      if (daily.day === was) daily.retryAt = serverNow() + 15000; // the server isn't there yet: don't ask every second
+      if (app.screen === "daily") { renderDaily(); refreshDailyBoard(); }
+    });
+  }
 }
 setInterval(tickDaily, 1000);
 $("dailyCard").onclick = () => openDaily();
@@ -669,7 +695,8 @@ $("dailyCard").onclick = () => openDaily();
 async function openDaily(push = true) {
   $("dailyErr").hidden = true;
   show("daily", push);
-  const d = await loadDaily();
+  // always ask: the day may have changed, or today's pick may have been replaced
+  const d = await loadDaily(true);
   if (app.screen !== "daily") return;
   if (!d || !dailySong()) {
     $("dailyErr").textContent = online ? "No se pudo cargar la canción del día. Revisa tu conexión." : "La canción del día necesita la biblioteca en línea.";
@@ -680,6 +707,9 @@ async function openDaily(push = true) {
   refreshDailyBoard();
 }
 const fmtDay = (day) => new Date(day + "T12:00:00Z").toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+// the board a run goes to: the strings really used (a 5-string run of a chart without the 5th string is a 4-string run)
+const boardLanes = (s, diff, lanes = deviceLanes()) => (lanes === 5 && (s?.diffs?.[diff]?.lanes || [4]).includes(4) ? 5 : 4);
+const usesFifth = (s, diff) => (s?.diffs?.[diff]?.lanes || []).includes(4);
 function renderDaily() {
   const s = dailySong(); if (!s) return;
   const lanes = deviceLanes();
@@ -697,7 +727,7 @@ function renderDaily() {
   for (let k = 6; k >= 0; k--) {
     const d = dayShift(daily.day, -k), li = document.createElement("li");
     li.className = (dailyLog.days.includes(d) ? "on" : "") + (k === 0 ? " today" : "");
-    li.textContent = new Date(d + "T12:00:00Z").toLocaleDateString("es-CO", { weekday: "narrow", timeZone: "UTC" });
+    li.textContent = "DLMXJVS"[new Date(d + "T12:00:00Z").getUTCDay()]; // X for miércoles, as in Spanish calendars
     li.title = fmtDay(d);
     week.appendChild(li);
   }
@@ -713,34 +743,52 @@ function renderDaily() {
     b.className = "diff"; b.type = "button"; b.disabled = !n;
     b.setAttribute("aria-pressed", d.key === daily.diff);
     b.innerHTML = `${d.name}<span class="dots">${used.map((l) => `<i style="background:var(${LANE_CSS[l]})"></i>`).join("")}</span><small>${n} notas</small>`;
-    b.onclick = () => { daily.diff = d.key; renderDaily(); renderDailyBoard(); };
+    b.onclick = () => { daily.diff = d.key; renderDaily(); refreshDailyBoard(); };
     box.appendChild(b);
   }
   $("dailyPlay").textContent = played ? "Tocar otra vez" : "Tocar";
   tickDaily();
 }
+const boardKey = () => `${daily.diff}:${boardLanes(dailySong(), daily.diff)}`;
+// the board of the chosen difficulty: top 10, how many played, and your place even if you're not in the top 10
 async function refreshDailyBoard() {
-  const day = daily.day;
-  try { const rows = await dailyScores(day); if (day === daily.day) daily.scores = rows; } catch (e) { console.warn("daily board:", e.message); }
+  const s = dailySong(); if (!s || !daily.diff) return;
+  const key = boardKey(), day = daily.day, [diff, lanes] = [daily.diff, boardLanes(s, daily.diff)];
+  delete daily.boards[key];
   if (app.screen === "daily") renderDailyBoard();
+  try {
+    const b = await dailyBoard({ day, songId: s.id, diff, lanes, me: (settings.name || "").trim().toLowerCase() });
+    if (day === daily.day) daily.boards[key] = b;
+  } catch (e) { console.warn("daily board:", e.message); if (day === daily.day) daily.boards[key] = "error"; }
+  if (app.screen === "daily" && key === boardKey()) renderDailyBoard();
 }
 function renderDailyBoard() {
-  const all = (daily.scores || []).filter((r) => r.diff === daily.diff);
+  const b = daily.boards[boardKey()], s = dailySong();
   const ol = $("dailyBoard").querySelector(".board-list"); ol.innerHTML = "";
+  const empty = $("dailyBoard").querySelector(".board-empty");
   const me = (settings.name || "").trim().toLowerCase();
-  all.slice(0, 10).forEach((r, i) => {
+  const name = DIFFS.find((d) => d.key === daily.diff)?.name || "";
+  const strings = usesFifth(s, daily.diff) ? ` · ${boardLanes(s, daily.diff)} cuerdas` : "";
+  $("dailyMe").hidden = true;
+  if (!b || b === "error") {
+    $("dailyCount").textContent = b ? "" : "Cargando…";
+    empty.hidden = b !== "error";
+    empty.innerHTML = b === "error" ? `No se pudo cargar la clasificación. <button class="link" type="button">Reintentar</button>` : "";
+    if (b === "error") empty.querySelector("button").onclick = refreshDailyBoard;
+    return;
+  }
+  b.rows.forEach((r, i) => {
     const li = document.createElement("li");
     if (me && r.name.trim().toLowerCase() === me) li.className = "me";
-    li.innerHTML = `<span class="pos">${i + 1}</span><span class="n"></span><span class="a">${Math.round((r.acc || 0) * 100)}%</span><span class="s">${r.score.toLocaleString("es-CO")}</span>`;
+    const acc = Math.round(Math.min(1, Math.max(0, +r.acc || 0)) * 100);
+    li.innerHTML = `<span class="pos">${i + 1}</span><span class="n"></span><span class="a">${acc}%</span><span class="s">${r.score.toLocaleString("es-CO")}</span>`;
     li.querySelector(".n").textContent = r.name;
     ol.appendChild(li);
   });
-  $("dailyBoard").querySelector(".board-empty").hidden = !!all.length || daily.scores == null;
-  const name = DIFFS.find((d) => d.key === daily.diff)?.name || "";
-  $("dailyCount").textContent = daily.scores == null ? "Cargando…" : `${all.length} ${all.length === 1 ? "jugador" : "jugadores"} hoy en ${name}`;
-  const mine = me ? all.findIndex((r) => r.name.trim().toLowerCase() === me) : -1;
-  $("dailyMe").hidden = mine < 10;
-  if (mine >= 10) $("dailyMe").textContent = `Tu puesto: #${mine + 1} con ${all[mine].score.toLocaleString("es-CO")}`;
+  empty.hidden = b.rows.length > 0;
+  empty.textContent = "Nadie ha tocado esta dificultad hoy. ¡Sé el primero!";
+  $("dailyCount").textContent = `${b.total} ${b.total === 1 ? "jugador" : "jugadores"} hoy en ${name}${strings}`;
+  if (b.mine && b.mine.rank > 10) { $("dailyMe").textContent = `Tu puesto: #${b.mine.rank} con ${b.mine.score.toLocaleString("es-CO")}`; $("dailyMe").hidden = false; }
 }
 $("dailyPlay").onclick = async () => {
   const s = dailySong(); if (!s || !daily.day) return;
@@ -757,10 +805,11 @@ async function sendDaily(sum, ctx, diff, lanes) {
   try {
     const r = await submitDaily({ day: ctx.day, song_id: ctx.songId, diff, lanes, name: settings.name, secret: playerSecret(),
       score: sum.score, acc: sum.acc, max_combo: sum.maxCombo, stars: sum.stars });
-    const dn = DIFFS.find((d) => d.key === diff).name;
+    const s = app.songs.find((x) => x.id === ctx.songId);
+    const dn = DIFFS.find((d) => d.key === diff).name + (usesFifth(s, diff) ? ` (${r.lanes} cuerdas)` : "");
     el.textContent = `Puesto #${r.rank} de ${r.players} hoy en ${dn}` + (r.newRecord ? "" : ` · tu mejor de hoy: ${r.best.toLocaleString("es-CO")}`);
-    daily.scores = null;
-  } catch (e) { el.textContent = "No se pudo guardar en la clasificación del día."; console.warn("daily:", e.message); }
+    daily.boards = {};
+  } catch (e) { el.textContent = /Espera/.test(e.message) ? e.message : "No se pudo guardar en la clasificación del día."; console.warn("daily:", e.message); }
 }
 
 /* ================= tour ================= */
@@ -769,7 +818,7 @@ let tourOpen = null;   // the venue unfolded in the list
 let tourLook = "bar";  // the stage shown behind the tour screen: the venue you're looking at
 const tourNow = () => { const t = tourFor(tourDiff, app.songs); return t && { tour: t, prog: tourProgress(t, bestOf) }; };
 async function openTour(push = true) {
-  tourOpen = null;
+  tourOpen = null; tourLook = "bar"; // renderTour picks the venue as soon as the list is there
   show("tour", push);
   if (online && !app.songs.length) {
     $("tourList").innerHTML = `<p class="empty">Cargando la biblioteca…</p>`;
@@ -785,11 +834,12 @@ function renderTour() {
   const list = $("tourList"), tp = tourNow();
   if (!tp) {
     list.innerHTML = `<p class="empty">${online ? "La gira necesita al menos 12 canciones con esta dificultad en la biblioteca." : "La gira usa la biblioteca en línea: conecta el juego a Supabase."}</p>`;
-    $("tourStars").innerHTML = ""; $("tourRoad").innerHTML = "";
+    $("tourStars").innerHTML = ""; $("tourRoad").innerHTML = ""; $("tourDone").hidden = true;
+    tourLook = "bar"; if (app.screen === "tour") R.setStage?.("bar");
     return;
   }
   const { prog } = tp;
-  if (tourOpen == null || !prog.venues[tourOpen]?.open) tourOpen = prog.current;
+  if (tourOpen == null || (tourOpen >= 0 && !prog.venues[tourOpen]?.open)) tourOpen = prog.current;
   $("tourStars").innerHTML = `<span class="ts-star">★</span>${prog.stars}<small>/${prog.maxStars}</small>`;
   // the road: one stop per venue
   $("tourRoad").innerHTML = prog.venues.map((v, i) => `<i class="${v.complete ? "done" : v.open ? "open" : ""}${i === prog.current && !prog.done ? " here" : ""}"></i>`).join("");
@@ -806,7 +856,7 @@ function renderTour() {
       </button>`;
     card.querySelector(".venue-text b").textContent = v.venue.name;
     card.querySelector(".venue-text small").textContent = v.open ? v.venue.blurb
-      : vi > 0 ? `Supera el bis de ${prog.venues[vi - 1].venue.name} para tocar aquí.` : "";
+      : vi > 0 ? `Supera el bis ${prog.venues[vi - 1].venue.of} para tocar aquí.` : "";
     card.querySelector(".venue-head").onclick = () => { if (!v.open) return; tourOpen = tourOpen === vi ? -1 : vi; renderTour(); };
     if (expanded) {
       const ol = document.createElement("ol"); ol.className = "setlist";
@@ -836,9 +886,18 @@ function renderTour() {
   // the stage behind the list is the venue you're looking at
   tourLook = VENUES[tourOpen >= 0 ? tourOpen : prog.current].stage;
   if (app.screen === "tour") R.setStage?.(tourLook);
-  if (prog.done) $("tourRoad").classList.add("done"); else $("tourRoad").classList.remove("done");
+  $("tourRoad").classList.toggle("done", prog.done);
+  $("tourDone").hidden = !prog.done;
+  document.querySelector(".tour-rules").hidden = prog.done;
+  if (prog.done) {
+    const next = DIFFS[DIFFS.findIndex((d) => d.key === tourDiff) + 1];
+    $("tourDoneSub").textContent = prog.stars < prog.maxStars
+      ? `★ ${prog.stars} de ${prog.maxStars}: vuelve a tocar para llevar cada canción a 5 estrellas${next ? `, o prueba la gira en ${next.name}` : ""}.`
+      : `¡Las ${prog.maxStars} estrellas!${next ? ` ¿Te le mides a la gira en ${next.name}?` : " No queda nada más grande que esto."}`;
+  }
 }
 async function playTourSong(vi, si, diff = tourDiff) {
+  clearTimeout(app.celTimer);
   if (diff !== tourDiff) { tourDiff = diff; settings.tourDiff = diff; save(); }
   const tp = tourNow(); if (!tp) return;
   const v = tp.tour.venues[vi], s = v.songs[si], encore = si === v.songs.length - 1;
@@ -846,9 +905,9 @@ async function playTourSong(vi, si, diff = tourDiff) {
   if (!pv.open || (encore && !pv.encoreOpen)) return;
   const ctx = { kind: "tour", diff: tourDiff, venue: vi, song: si, encore, stage: v.stage, songId: s.id, before: tp.prog };
   R.setStage?.(v.stage);
-  try { await loadLibrarySong(s); } catch (e) { toast(e.message); show("tour", false); return; }
+  try { await loadLibrarySong(s); } catch (e) { toast(e.message); openTour(false); return; }
   const lanes = deviceLanes();
-  if (!notesFor(app.chart, tourDiff, lanes).length) { toast("Esta canción no tiene notas en esta dificultad."); show("tour", false); return; }
+  if (!notesFor(app.chart, tourDiff, lanes).length) { toast("Esta canción no tiene notas en esta dificultad."); openTour(false); return; }
   const go = () => withTutorial(() => startGame({ lanes, diff: tourDiff, ctx }));
   if (encore) { sfx.encore(); celebrate({ kicker: v.name, title: "¡Otra! ¡Otra!", sub: `El público pide el bis: ${s.name}`, ms: 2600, kind: "encore", then: go }); }
   else go();
@@ -867,8 +926,11 @@ function finishCtx(sum) {
   $("dailyRes").hidden = ctx?.kind !== "daily";
   $("tourRes").hidden = ctx?.kind !== "tour";
   if (ctx?.kind === "daily") {
-    const fresh = markDailyPlayed(ctx.day), st = dailyStreak(ctx.day);
-    $("dailyResStreak").textContent = !st ? "" : st === 1 ? "Racha: 1 día · vuelve mañana para seguirla" : `Racha: ${st} días seguidos${fresh ? " · ¡sigue así!" : ""}`;
+    // only a finished run counts for the streak (getting booed off doesn't)
+    const counts = !sum.failed && sum.score > 0;
+    const fresh = counts && markDailyPlayed(ctx.day), st = dailyStreak(ctx.day);
+    $("dailyResStreak").textContent = !counts ? "No cuenta para tu racha: termina la canción."
+      : st === 1 ? "Racha: 1 día · vuelve mañana para seguirla" : `Racha: ${st} días seguidos${fresh ? " · ¡sigue así!" : ""}`;
     if (sum.failed || !(sum.score > 0)) $("dailyRank").textContent = "Las canciones fallidas no entran a la clasificación del día.";
     else if (settings.name) sendDaily(sum, ctx, app.diff, app.lanes);
     else { $("dailyRank").textContent = "Escribe tu nombre para entrar a la clasificación del día."; app.pendingDaily = [sum, ctx, app.diff, app.lanes]; }
@@ -883,12 +945,15 @@ function finishCtx(sum) {
   $("tourResVenue").textContent = `${v.venue.name} · ${ctx.encore ? "Bis" : `Canción ${ctx.song + 1} de ${v.set.length}`}`;
   const ch = tourChanges(ctx.before, after);
   const legend = ch.find((c) => c.kind === "legend"), venue = ch.find((c) => c.kind === "venue"), encore = ch.find((c) => c.kind === "encore");
+  const counted = !sum.failed && sum.score > 0;
   $("tourResMsg").textContent = sum.failed ? "No cuenta: el público te sacó del escenario. ¡Inténtalo otra vez!"
+    : !counted ? "No cuenta: toca al menos una nota. ¡Inténtalo otra vez!"
     : legend ? "¡Terminaste la gira! Eres leyenda del rock."
     : venue ? `¡Escenario superado! Siguiente parada: ${venue.next.name}`
     : encore ? "¡El público pide otra! Se abrió el bis."
     : `${after.stars} de ${after.maxStars} estrellas en la gira (${DIFFS.find((d) => d.key === ctx.diff).name})`;
-  const next = tourNextSong(after);
+  const nx = tourNextSong(after);
+  const next = nx && nx.song.id !== ctx.songId ? nx : null; // after a failed run "Otra vez" is the way
   const btn = $("tourNextBtn");
   btn.hidden = !next;
   if (next) {
@@ -897,7 +962,7 @@ function finishCtx(sum) {
   }
   // "Otra vez" stops being the main button when the tour has somewhere to go
   $("againBtn").classList.toggle("primary", !next);
-  if (legend) return () => { sfx.unlock(); R.pyro(); celebrate({ kicker: "Gira terminada", title: "¡Leyenda del rock!", sub: `Llenaste ${legend.venue.name}. ¿Te le mides a la gira en otra dificultad?`, ms: 4200, kind: "legend" }); };
+  if (legend) return () => { sfx.unlock(); R.pyro(); celebrate({ kicker: "Gira terminada", title: "¡Leyenda del rock!", sub: `Llenaste ${legend.venue.in || legend.venue.name}. ¿Te le mides a la gira en otra dificultad?`, ms: 4200, kind: "legend" }); };
   if (venue) return () => { sfx.unlock(); R.pyro(); celebrate({ kicker: "Nuevo escenario", title: venue.next.name, sub: venue.next.blurb, ms: 3600, kind: "venue" }); };
   if (encore) return () => { sfx.encore(); celebrate({ kicker: v.venue.name, title: "¡Otra! ¡Otra!", sub: "El público pide el bis.", ms: 2600, kind: "encore" }); };
   return null;
@@ -907,15 +972,23 @@ let celT = 0, celThen = null;
 function celebrate({ kicker = "", title, sub = "", ms = 3000, kind = "", then = null }) {
   const el = $("celebrate");
   $("celKicker").textContent = kicker; $("celTitle").textContent = title; $("celSub").textContent = sub;
-  el.className = "celebrate " + kind; el.hidden = false;
+  el.className = "celebrate" + (kind ? " cel-" + kind : ""); el.hidden = false; // cel-: never a HUD class (.streak)
   void el.offsetWidth; el.classList.add("show");
-  clearTimeout(celT); celThen = then;
+  clearTimeout(celT);
+  // a celebration shown on top of another one never swallows what was waiting to happen after it
+  const prev = celThen;
+  celThen = prev && then ? () => { prev(); then(); } : then || prev;
   celT = setTimeout(endCelebrate, ms);
 }
 function endCelebrate() {
   clearTimeout(celT);
   const el = $("celebrate"); el.classList.remove("show"); el.hidden = true;
   const f = celThen; celThen = null; f && f();
+}
+// a song is starting: whatever was on screen goes away (without running what it was waiting for)
+function dropCelebration() {
+  clearTimeout(app.celTimer); clearTimeout(celT); celThen = null;
+  const el = $("celebrate"); el.classList.remove("show"); el.hidden = true;
 }
 $("celebrate").onclick = endCelebrate;
 
@@ -1048,6 +1121,7 @@ function seatOn(player, flags, k) {
 // duo: { diffs: [d1, d2], names: [n1, n2] } for two players on one PC
 // ctx: what the run is part of — { kind: "daily", day, songId } or { kind: "tour", diff, venue, song, encore, stage, before }
 function startGame({ lanes, diff, practice = null, duo = null, ctx = null }) {
+  dropCelebration();
   stopGame();
   const player = new Player(app.decoded);
   player.missSfx = settings.missSfx;
@@ -1080,7 +1154,7 @@ function startGame({ lanes, diff, practice = null, duo = null, ctx = null }) {
   $("practiceTag").hidden = !practice;
   // where this song is being played: the tour venue (and the encore) or the song of the day
   $("ctxTag").hidden = !ctx || !!practice;
-  if (ctx) $("ctxTag").textContent = ctx.kind === "daily" ? "Canción del día" : `${VENUES[ctx.venue].name}${ctx.encore ? " · Bis" : ""}`;
+  if (ctx) $("ctxTag").textContent = ctx.kind === "daily" ? "Canción del día" : `${(touch && VENUES[ctx.venue].short) || VENUES[ctx.venue].name}${ctx.encore ? " · Bis" : ""}`;
   $("ctxTag").className = "practice-tag ctx-tag " + (ctx?.kind || "");
   $("hud").classList.toggle("mp", app.mode === "mp");
   $("failFx").classList.remove("on");
@@ -1142,7 +1216,9 @@ $("restartBtn").onclick = () => startGame({ lanes: app.lanes, diff: app.diff, pr
 // "Salir" goes back to where the song was picked
 $("quitBtn").onclick = () => {
   const duo = app.duo, ctx = app.ctx; stopGame(); R.setLanes(5);
-  if (ctx?.kind === "tour") openTour(false); else if (ctx?.kind === "daily" && !ctx.via) openDaily(false); else show(duo ? "duo" : "setup", false);
+  if (ctx?.kind === "tour") { app.history = ["home"]; openTour(false); }
+  else if (ctx?.kind === "daily" && !ctx.via) { app.history = ["home"]; openDaily(false); }
+  else show(duo ? "duo" : "setup", false);
 };
 document.addEventListener("visibilitychange", () => { if (document.hidden) pauseGame(); });
 
@@ -1187,7 +1263,9 @@ function finishGame() {
   }
   const celebration = finishCtx(sum);
   show("results");
-  celebration && setTimeout(celebration, 1500); // after the final chord and the crowd
+  // after the final chord and the crowd, and only if the player is still looking at the results
+  clearTimeout(app.celTimer);
+  if (celebration) app.celTimer = setTimeout(() => { if (app.screen === "results" && !celThen) celebration(); }, 1500);
 }
 
 // Rock meter at the bottom on Difícil/Experto: the band runs out of power, then the results say so
@@ -1281,8 +1359,8 @@ async function showBoard(el, limit, myRank) {
 $("againBtn").onclick = () => startGame({ lanes: app.lanes, diff: app.diff, duo: app.duo, ctx: againCtx() });
 $("menuBtn").onclick = () => {
   if (app.mode === "mp") { renderLobby(); show("lobby", false); }
-  else if (app.ctx?.kind === "tour") openTour(false);
-  else if (app.ctx?.kind === "daily" && !app.ctx.via) openDaily(false);
+  else if (app.ctx?.kind === "tour") { clearTimeout(app.celTimer); app.history = ["home"]; openTour(false); }
+  else if (app.ctx?.kind === "daily" && !app.ctx.via) { clearTimeout(app.celTimer); app.history = ["home"]; openDaily(false); }
   else if (app.duo) { app.duo = null; app.mode = "solo"; app.history = []; show("home", false); }
   else { app.history = ["home"]; show("library", false); }
 };

@@ -1,4 +1,5 @@
 // Corde — the tour: six venues, from a friend's garage to a stadium. Pure logic, no DOM.
+// (of: how Spanish says "the encore of …"; short: the name on the in-game tag on a phone)
 // Each difficulty has its own tour, built from the online library: songs sorted by how busy their chart is
 // (notes per second on that difficulty) and spread over the venues, easiest first. Each venue plays a setlist of
 // four songs; clear three and the crowd calls for an encore (the hardest song of the venue); clear the encore and
@@ -6,12 +7,12 @@
 // and its stars are your best on that difficulty, so quick play and the tour share progress.
 
 export const VENUES = [
-  { id: "garage", stage: "garage", name: "El garaje", blurb: "Donde empezó todo: tus amigos, un par de vecinos y el perro." },
-  { id: "bar", stage: "bar", name: "Bar La Cueva", blurb: "El primer toque pagado: humo, cerveza tibia y un público que no perdona." },
-  { id: "university", stage: "university", name: "Festival universitario", blurb: "Una carpa llena de estudiantes que vinieron a saltar." },
-  { id: "theater", stage: "theater", name: "El Gran Teatro", blurb: "Telón rojo, butacas llenas y un sonido impecable." },
-  { id: "festival", stage: "festival", name: "Festival Noches de Rock", blurb: "Al aire libre, de noche, frente a miles de personas." },
-  { id: "stadium", stage: "stadium", name: "El Estadio", blurb: "La última parada: cincuenta mil voces cantando contigo." },
+  { id: "garage", stage: "garage", name: "El garaje", of: "del garaje", blurb: "Donde empezó todo: tus amigos, un par de vecinos y el perro." },
+  { id: "bar", stage: "bar", name: "Bar La Cueva", of: "del Bar La Cueva", blurb: "El primer toque pagado: humo, cerveza tibia y un público que no perdona." },
+  { id: "university", stage: "university", name: "Festival universitario", short: "Fest. universitario", of: "del Festival universitario", blurb: "Una carpa llena de estudiantes que vinieron a saltar." },
+  { id: "theater", stage: "theater", name: "El Gran Teatro", of: "del Gran Teatro", blurb: "Telón rojo, butacas llenas y un sonido impecable." },
+  { id: "festival", stage: "festival", name: "Festival Noches de Rock", short: "Noches de Rock", of: "del Festival Noches de Rock", blurb: "Al aire libre, de noche, frente a miles de personas." },
+  { id: "stadium", stage: "stadium", name: "El Estadio", of: "del estadio", in: "el estadio", blurb: "La última parada: cincuenta mil voces cantando contigo." },
 ];
 export const SETLIST = 4;      // songs before the encore
 export const TO_ENCORE = 3;    // cleared songs that make the crowd ask for one more
@@ -29,7 +30,8 @@ function store(all) { try { localStorage.setItem(KEY, JSON.stringify(all)); } ca
 /**
  * The tour for one difficulty: { venues: [{ ...VENUE, songs: [5 library rows, the last one is the encore] }] }.
  * The setlists are saved the first time, so new uploads don't reshuffle a tour in progress; a song that left the
- * library is replaced by the unused song closest in difficulty. Returns null when the library is too small.
+ * library is replaced by the unused song closest in difficulty, and setlists grow (before the encore) when the
+ * library gets big enough for longer ones. Returns null when the library is too small.
  */
 export function tourFor(diff, library) {
   const pool = library.filter((s) => playable(s, diff));
@@ -43,18 +45,29 @@ export function tourFor(diff, library) {
 
   const all = load();
   let saved = all[diff]?.venues;
-  if (!Array.isArray(saved) || saved.length !== VENUES.length || saved.some((v) => !Array.isArray(v) || v.length !== per)) saved = null;
+  if (!Array.isArray(saved) || saved.length !== VENUES.length || saved.some((v) => !Array.isArray(v) || v.length < 2 || v.length > PER_VENUE)) saved = null;
   let ids;
+  // where song si of venue vi would sit in the difficulty ranking
+  const at = (vi, si, len) => Math.round(((vi * len + si) / Math.max(1, VENUES.length * len - 1)) * (sorted.length - 1));
   if (saved) {
-    // keep the saved setlists; swap out songs that are gone
+    // keep the saved setlists even if the library grew or changed (a tour in progress is never reshuffled):
+    // swap out songs that are gone, and when there's now room for longer setlists add songs before each encore
     const used = new Set(saved.flat().filter((id) => byId.has(id)));
-    ids = saved.map((v, vi) => v.map((id, si) => {
-      if (byId.has(id)) return id;
-      const want = Math.round(((vi * per + si) / (VENUES.length * per - 1)) * (sorted.length - 1));
-      const repl = nearestUnused(sorted, want, used);
-      used.add(repl.id);
-      return repl.id;
-    }));
+    ids = saved.map((v, vi) => {
+      const list = v.map((id, si) => {
+        if (byId.has(id)) return id;
+        const repl = nearestUnused(sorted, at(vi, si, v.length), used);
+        used.add(repl.id);
+        return repl.id;
+      });
+      while (list.length < per) {
+        const add = nearestUnused(sorted, at(vi, list.length - 1, per), used);
+        if (used.has(add.id)) break; // nothing left to add
+        used.add(add.id);
+        list.splice(list.length - 1, 0, add.id);
+      }
+      return list;
+    });
   } else {
     // spread the whole difficulty range over the tour, then keep each venue's hardest song for the encore
     const used = new Set(), picks = [];

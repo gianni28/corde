@@ -637,8 +637,12 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
   .daily-hero { grid-template-columns: 92px minmax(0, 1fr); gap: 14px; }
   .dh-art { width: 92px; height: 92px; }
   .dh-text h2 { font-size: 30px; }
-  .daily-meta { grid-template-columns: 1fr; }
-  .daily-streak { grid-template-columns: auto auto 1fr; }
+  .daily-meta { grid-template-columns: minmax(0, 1fr); }
+  /* the week gets its own row so today's circle never falls off a narrow phone */
+  .daily-streak { grid-template-columns: auto minmax(0, 1fr); row-gap: 8px; }
+  .daily-streak .week { grid-column: 1 / -1; justify-content: space-between; }
+  .daily-card .dc-state { white-space: normal; }
+  #s-daily .bar h2 { font-size: 26px; }
 }
 
 /* results: what the run meant for the song of the day / the tour */
@@ -697,6 +701,12 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .setlist li.encore.locked button { background: rgba(0,0,0,.3); box-shadow: inset 0 0 0 1px rgba(245,197,24,.18); }
 .setlist li.encore.locked .sl-text b { letter-spacing: .3em; color: var(--muted); }
 .tour-rules { margin: 0; }
+.tour-road.done::before { background: linear-gradient(90deg, #a06a00, var(--gold), #a06a00); height: 3px; box-shadow: 0 0 10px rgba(245,197,24,.6); }
+.tour-done { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: linear-gradient(100deg, rgba(245,197,24,.22), rgba(14,10,9,.85) 70%); box-shadow: inset 0 0 0 1px rgba(245,197,24,.5), 0 0 20px rgba(245,197,24,.15); }
+.tour-done svg { width: 30px; height: 30px; flex: none; fill: var(--gold); filter: drop-shadow(0 0 8px rgba(245,197,24,.8)); }
+.tour-done div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tour-done b { font: 700 19px var(--display); text-transform: uppercase; letter-spacing: .03em; color: #ffe8a0; }
+.tour-done small { color: var(--ink); font-size: 15px; }
 @media (max-width: 560px) {
   .venue-head { grid-template-columns: 32px minmax(0, 1fr) auto; gap: 10px; padding: 10px 10px 10px 14px; }
   .venue-num { width: 32px; height: 32px; font-size: 18px; }
@@ -706,11 +716,17 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
   .setlist img, .setlist .ph { width: 40px; height: 40px; }
   .sl-text b { font-size: 16px; }
   .tour-stars { font-size: 18px; }
+  /* narrow phones: the stars go under the title so long names stay readable */
+  .setlist button { grid-template-columns: 26px 40px minmax(0, 1fr); }
+  .sl-stars { grid-column: 3; grid-row: 2; font-size: 12px; letter-spacing: 0; margin-top: -6px; }
+  .sl-text small { white-space: normal; }
 }
 
 /* ---------- big moments: a new venue, an encore, a streak ---------- */
 .celebrate { position: fixed; inset: 0; z-index: 30; pointer-events: auto; display: grid; place-items: center; cursor: pointer; overflow: hidden;
-  background: radial-gradient(ellipse at 50% 50%, rgba(40,10,4,.55), rgba(5,3,2,.9) 70%); opacity: 0; transition: opacity .35s; }
+  transform: none; animation: none; box-shadow: none;
+  background: radial-gradient(ellipse at 50% 50%, rgba(24,8,4,.86), rgba(5,3,2,.96) 70%); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  opacity: 0; transition: opacity .35s; }
 .celebrate.show { opacity: 1; }
 .cel-rays { position: absolute; left: 50%; top: 50%; width: 160vmax; height: 160vmax; transform: translate(-50%, -50%); opacity: .28;
   background: repeating-conic-gradient(from 0deg, rgba(255,140,40,.55) 0 6deg, transparent 6deg 18deg); mask: radial-gradient(circle, #000 0 18%, transparent 55%); -webkit-mask: radial-gradient(circle, #000 0 18%, transparent 55%);
@@ -723,9 +739,16 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
   background: linear-gradient(180deg, #fff6c0 0%, #ffd23a 35%, #ff7a1a 65%, #c4161c 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
   -webkit-text-stroke: 2px #2a0805; filter: drop-shadow(0 5px 0 #000) drop-shadow(0 0 30px rgba(255,110,20,.7)); }
 .cel-sub { margin: 0; max-width: 40ch; font: 600 clamp(17px, 2.2vw, 22px)/1.3 var(--body); color: var(--ink); text-shadow: 0 2px 0 #000; }
-.celebrate.encore .cel-rays, .celebrate.legend .cel-rays { background: repeating-conic-gradient(from 0deg, rgba(255,215,90,.6) 0 6deg, transparent 6deg 18deg); }
-.celebrate.encore .cel-title { animation: celChant .84s ease-in-out infinite; }
+.celebrate.cel-encore .cel-rays, .celebrate.cel-legend .cel-rays { background: repeating-conic-gradient(from 0deg, rgba(255,215,90,.6) 0 6deg, transparent 6deg 18deg); }
+.celebrate.cel-encore .cel-title { animation: celChant .84s ease-in-out infinite; }
 @keyframes celChant { 50% { transform: scale(1.08); } }
-@media (prefers-reduced-motion: reduce) { .cel-rays, .celebrate.encore .cel-title, .tour-road i.here { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .cel-rays, .celebrate.cel-encore .cel-title, .tour-road i.here { animation: none; } }
 .ctx-tag.daily { background: linear-gradient(180deg, #ff8a1a, #a8400a); }
 .ctx-tag.tour { background: linear-gradient(180deg, #e8b51a, #8a5a00); color: #1a1004; text-shadow: none; }
+
+/* the back button never shrinks or wraps, whatever the title next to it */
+.bar .back { flex: none; white-space: nowrap; }
+.bar h2 { min-width: 0; }
+/* the in-game venue tag stays on one line */
+.ctx-tag { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 480px) { .ctx-tag { letter-spacing: .1em; } }
