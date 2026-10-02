@@ -3,6 +3,8 @@
 // so the same person on another browser or phone joins their existing entry. Rejects impossible scores
 // and answers with the best and position. player_key (hash of a secret kept in the browser) only lets a
 // browser that changes its name move its entry.
+// The string count is the one really played: a 5-string run of a difficulty whose chart never uses the
+// 5th string is a 4-string run (same notes), so it goes to the 4-string board.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -51,16 +53,18 @@ Deno.serve(async (req) => {
   if (score === 0) return json({ best: 0, rank: null, newRecord: false }); // empty runs stay off the board
 
   const key = await sha256(b.secret);
-  const board = { song_id: b.song_id, diff: b.diff, lanes: b.lanes };
+  const usesFifth = (song.diffs?.[b.diff]?.lanes ?? [4]).includes(4);
+  const lanes = b.lanes === 5 && usesFifth ? 5 : 4;
+  const stored = lanes === 4 && !usesFifth ? [4, 5] : [lanes]; // older rows of this board may say 5
+  const board = { song_id: b.song_id, diff: b.diff };
+  const find = async (col: string, val: string) => {
+    const { data } = await db.from("scores").select("id, score").match(board).in("lanes", stored).eq(col, val)
+      .order("score", { ascending: false }).limit(1);
+    return data?.[0] || null;
+  };
   // this name's entry (older data may hold several: take the best)...
-  const { data: same } = await db.from("scores").select("id, score").match(board).eq("name_key", name.toLowerCase())
-    .order("score", { ascending: false }).limit(1);
-  let prev = same?.[0] || null;
   // ...or this browser's entry under a previous name, which then takes the new name
-  if (!prev) {
-    const { data: mine } = await db.from("scores").select("id, score").match({ ...board, player_key: key }).maybeSingle();
-    prev = mine || null;
-  }
+  const prev = (await find("name_key", name.toLowerCase())) || (await find("player_key", key));
   const newRecord = !prev || score > prev.score;
   const row = {
     name, updated_at: new Date().toISOString(),
@@ -68,10 +72,10 @@ Deno.serve(async (req) => {
   };
   const { error } = prev
     ? await db.from("scores").update(row).eq("id", prev.id)
-    : await db.from("scores").insert({ ...board, player_key: key, ...row });
+    : await db.from("scores").insert({ ...board, lanes, player_key: key, ...row });
   if (error) return json({ error: error.message }, 500);
 
   const best = newRecord ? score : prev!.score;
-  const { count } = await db.from("board_song").select("name", { count: "exact", head: true }).match(board).gt("score", best);
-  return json({ best, rank: (count || 0) + 1, newRecord });
+  const { count } = await db.from("board_song").select("name", { count: "exact", head: true }).match({ ...board, lanes }).gt("score", best);
+  return json({ best, rank: (count || 0) + 1, newRecord, lanes });
 });

@@ -114,10 +114,10 @@ $("homeTabs").onclick = (e) => { const b = e.target.closest("button"); if (!b ||
 onLanePick($("homeBoard"), (l) => { homeLanes = l; renderHomeBoard(); });
 
 // The string-count label of a board: a plain tag on phones, a 5 | 4 switch on PC (both can be played there).
-function setLanePick(el, lanes) {
+function setLanePick(el, lanes, canPick = !touch) {
   const tag = el.querySelector(".board-tag"), pick = el.querySelector(".lane-pick");
   tag.textContent = `${lanes} cuerdas`;
-  tag.hidden = !touch; pick.hidden = touch;
+  tag.hidden = canPick; pick.hidden = !canPick;
   pick.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.l === lanes)));
 }
 function onLanePick(el, fn) {
@@ -410,10 +410,14 @@ async function showBoard(el, limit, myRank) {
   if (!hasBoard()) { el.hidden = true; return; }
   el.hidden = false;
   el._limit = limit; el._rank = myRank;
-  const played = app.boardLanes || deviceLanes();
-  const lanes = el._view || played;
+  // A run counts for the strings really used: a difficulty whose chart never touches the 5th string
+  // is the same on 4 or 5, so it only has a 4-string board (same rule as the server).
+  const fifth = (app.song.diffs?.[app.diff]?.lanes || [4]).includes(4);
+  const played = (app.boardLanes || deviceLanes()) === 5 && fifth ? 5 : 4;
+  const canPick = fifth && !touch;
+  const lanes = canPick ? el._view || played : played;
   if (lanes !== played) myRank = null; // your position belongs to the board you played
-  setLanePick(el, lanes);
+  setLanePick(el, lanes, canPick);
   const req = ++boardReq;
   let rows = [];
   try { rows = await topScores(app.song.id, app.diff, lanes, limit); } catch (e) { console.warn("leaderboard:", e.message); }
