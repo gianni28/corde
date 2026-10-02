@@ -90,8 +90,10 @@ function brickTex() {
   }, { repeat: true });
 }
 
+// [boards, slabs]: slabs is the same canvas before the tape goes on, for floors that stretch it (no extra random draws)
 function planksTex() {
-  return canvasTex(512, 512, (g, w, h) => {
+  let slabs;
+  const boards = canvasTex(512, 512, (g, w, h) => {
     const pw = 64;
     for (let x = 0; x < w; x += pw) {
       g.fillStyle = `hsl(25, 30%, ${rnd(8, 13)}%)`; g.fillRect(x, 0, pw, h);
@@ -99,8 +101,10 @@ function planksTex() {
       g.fillStyle = "#050302"; g.fillRect(x, 0, 2, h);
     }
     grime(g, w, h, 50, 0.3);
+    slabs = canvasTex(w, h, (s) => s.drawImage(g.canvas, 0, 0), { repeat: true });
     g.fillStyle = "rgba(200,200,190,.12)"; g.fillRect(rnd(0, w - 120), rnd(0, h), 120, 14); // gaffer tape
   }, { repeat: true });
+  return [boards, slabs];
 }
 
 function grilleTex() {
@@ -192,16 +196,18 @@ function bake(group) {
 /* ================= tour venues ================= */
 // One rig, re-tinted per venue: only colours, intensities and counts change, so a switch costs nothing.
 // pal: light colours per song section [front PARs, back PARs]; wall/floor: colour multipliers (linear, may go above 1);
-// gloss: floor [roughness, metalness]; boards: plank texture repeat; fog: [colour, near, far]; amb/key: venue fill lights;
-// spot: band key light [colour, strength]; light/beat/rim: rig brightness, how hard it hits the beat, rim light on the people;
+// gloss: floor [roughness, metalness]; boards: plank texture repeat (slabs: no tape, it stretches into a band);
+// fog: [colour, near, far]; amb/key: venue fill lights; spot: band key light [colour, strength];
+// light/beat/rim: rig brightness, how hard it hits the beat, rim light on the people;
 // glow/cone/back: PAR lens size, beam strength, back truss on; haze: [colour, opacity]; dust: [colour, opacity];
 // crowd: density; pyro: [opacity, size, light] (null: none); wide: two more columns; fire: [flame tint, light colour, cryo jets].
+const NO_PYRO = [0, 1, 0]; // garage: shared so render() doesn't allocate each frame
 const BAR_PAL = [[0xffb060, 0xff3a1a], [0xff2a14, 0xffc070], [0xfff0d0, 0xff6a10], [0xffc040, 0xd01010], [0xff7a20, 0xfff2e0]];
 const STAGES = {
   // a friend's garage: bare warm bulbs under a buzzing fluorescent tube, concrete, a handful of friends
   garage: {
     pal: [[0xffa04a, 0xc8ffe0], [0xffb466, 0xb0f5d4], [0xff9238, 0xd8ffea], [0xffbf7a, 0xa8f0cc]],
-    wall: [0.62, 0.78, 0.72], floor: [2.3, 3.2, 3.6], gloss: [0.9, 0], boards: [1.4, 3],
+    wall: [0.62, 0.78, 0.72], floor: [2.3, 3.2, 3.6], gloss: [0.9, 0], boards: [1.4, 3], slabs: true,
     fog: [0x0a0e0c, 26, 95], amb: [0xcdeedd, 0x0b100d, 0.75], key: [0xdcfff0, 0.95], spot: [0xffd8a8, 0.8],
     light: 0.55, beat: 0.4, rim: 0.75, glow: 0.7, cone: 0.45, back: 0, haze: [0x4c5c52, 0.35], dust: [0xe0f0e8, 0.35],
     crowd: 0.22, pyro: null, wide: false, fire: [0xffffff, 0xff7a20, false],
@@ -242,7 +248,7 @@ const STAGES = {
   stadium: {
     pal: [[0xffe0a0, 0xffb830], [0xffc850, 0xfff4e0], [0xfff4e0, 0xffa820], [0xffd070, 0xffffff], [0xffb840, 0xffeccc]],
     wall: [0.5, 0.52, 0.6], floor: [1.2, 1.2, 1.4], gloss: [0.22, 0.5], boards: [6, 6],
-    fog: [0x1c1814, 22, 80], amb: [0xfff0dc, 0x0c0a0c, 0.42], key: [0xfff4e4, 0.85], spot: [0xffffff, 0.85],
+    fog: [0x1c1814, 22, 80], amb: [0xfff0dc, 0x0c0a0c, 0.42], key: [0xfff4e4, 0.85], spot: [0xfff0dc, 0.6], // x light 1.6 ~ the club; any hotter clips the kick head white
     light: 1.6, beat: 1.2, rim: 1, glow: 1.6, cone: 1.8, back: 1, haze: [0x9a8870, 1.8], dust: [0xfff0c8, 0.8],
     crowd: 1.4, pyro: [1, 1.35, 1.7], wide: true, fire: [0xffffff, 0xff8a30, false],
   },
@@ -291,7 +297,8 @@ export function createRenderer(canvas) {
   const wall = new THREE.Mesh(new THREE.PlaneGeometry(140, 60), new THREE.MeshStandardMaterial({ map: brick, roughness: 0.95, metalness: 0 }));
   wall.position.set(0, 24, -60); stage.add(wall);
 
-  const planks = planksTex(); planks.repeat.set(16, 14);
+  const [planks, slabs] = planksTex(); planks.repeat.set(16, 14);
+  renderer.initTexture(slabs); // upload now so the first garage doesn't hitch
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(140, 120), new THREE.MeshStandardMaterial({ map: planks, roughness: 0.55, metalness: 0.15 }));
   floor.rotation.x = -Math.PI / 2; floor.position.set(0, -0.9, -20); stage.add(floor);
 
@@ -897,7 +904,8 @@ export function createRenderer(canvas) {
     palettes = S.pal; pal = ((section % palettes.length) + palettes.length) % palettes.length;
     colA.setHex(palettes[pal][0]); colB.setHex(palettes[pal][1]); // no slow fade from the last venue's colours
     wall.material.color.setRGB(...S.wall); floor.material.color.setRGB(...S.floor);
-    floor.material.roughness = S.gloss[0]; floor.material.metalness = S.gloss[1]; planks.repeat.set(...S.boards);
+    floor.material.roughness = S.gloss[0]; floor.material.metalness = S.gloss[1];
+    floor.material.map = S.slabs ? slabs : planks; floor.material.map.repeat.set(...S.boards); // same shader either way
     bgFog.color.setHex(S.fog[0]); bgFog.near = S.fog[1]; bgFog.far = S.fog[2];
     bgHemi.color.setHex(S.amb[0]); bgHemi.groundColor.setHex(S.amb[1]); bgHemi.intensity = S.amb[2];
     bgKey.color.setHex(S.key[0]); bgKey.intensity = S.key[1]; bandKey.color.setHex(S.spot[0]);
@@ -1036,7 +1044,7 @@ export function createRenderer(canvas) {
 
       // pyro
       pyroT += dt;
-      const [pyO, pyS, pyL] = S.pyro || [0, 1, 0], flames = S.fire[2] ? blueFire : fire;
+      const [pyO, pyS, pyL] = S.pyro || NO_PYRO, flames = S.fire[2] ? blueFire : fire;
       pyro.forEach((p) => {
         p.t += dt;
         const k = p.t / 1.1;
