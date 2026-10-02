@@ -38,6 +38,16 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) silentEl.pause(); else if (ctx) silentEl.play().catch(() => {});
 });
 
+/** Context for menu/result sounds: never suspended by the pause, so it can play while the song waits. */
+export function sfxCtx() {
+  if (!sfx) {
+    try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch {}
+    sfx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "interactive" });
+  }
+  if (sfx.state === "suspended") sfx.resume().catch(() => {});
+  return sfx;
+}
+
 export function audioCtx() {
   if (!ctx) {
     try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch {}

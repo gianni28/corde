@@ -12,6 +12,7 @@ import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from 
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, topScores, submitScore, generalBoard } from "./net.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song } from "./admin.js";
 import { fillDifficulties } from "./reduce.js";
+import * as sfx from "./sfx.js";
 
 const $ = (id) => document.getElementById(id);
 const LANE_CSS = ["--g", "--r", "--y", "--b", "--o"];
@@ -75,6 +76,14 @@ document.querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => {
   else if (to === "settings") { renderSettings(); show("settings"); }
   else if (to === "mp") { $("mpName").value = settings.name || ""; $("mpErr").hidden = true; show("mp"); }
 }));
+
+// every menu button gives a little pick sound (lower for "Volver"); nothing while playing
+document.addEventListener("click", (e) => {
+  if (app.screen === "play") return;
+  const b = e.target.closest("#ui button, #ui label.btn");
+  if (!b || b.disabled) return;
+  try { b.matches("[data-back]") ? sfx.back() : sfx.click(); } catch {}
+});
 
 let toastT;
 function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 3200); }
@@ -324,6 +333,7 @@ function startGame({ lanes, diff }) {
   show("play");
   unlockAudio();
   app.game.start();
+  sfx.intro(lanes, (i) => R.hit(i)); // the frets light up one by one with a little riff, like the classics
   try { navigator.wakeLock?.request("screen").then((l) => (app.wake = l)).catch(() => {}); } catch {}
 }
 // Keep what auto-sync learned only after a solid run, and move at most 30 ms per song so one bad game can't wreck the next.
@@ -374,6 +384,7 @@ function finishGame() {
   $("resSong").textContent = `${app.song.name} · ${DIFFS.find((d) => d.key === app.diff).name} · ${app.lanes} cuerdas`;
   $("resScore").textContent = sum.score.toLocaleString("es-CO");
   $("resStars").innerHTML = "★".repeat(sum.stars) + `<span class="off">${"★".repeat(5 - sum.stars)}</span>`;
+  sfx.finale(sum.stars); // a chord, then the crowd cheers or boos
   $("resHit").textContent = `${sum.hits}/${sum.total}`;
   $("resAcc").textContent = Math.round(sum.acc * 100) + "%";
   $("resCombo").textContent = sum.maxCombo;
