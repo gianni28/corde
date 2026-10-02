@@ -43,16 +43,24 @@
 <div id="ui">
   <!-- ===== HOME ===== -->
   <section class="screen home" id="s-home">
-    <div class="logo">
-      <div class="logo-fire" aria-hidden="true"></div>
-      <h1 data-text="Corde">Corde</h1>
+    <div class="home-main">
+      <div class="logo">
+        <div class="logo-fire" aria-hidden="true"></div>
+        <h1 data-text="Corde">Corde</h1>
+      </div>
+      <nav class="menu">
+        <button data-go="library" data-mode="solo">Jugar</button>
+        <button data-go="mp">Multijugador</button>
+        <button data-go="settings">Ajustes</button>
+      </nav>
+      <p class="foot" id="homeFoot"></p>
     </div>
-    <nav class="menu">
-      <button data-go="library" data-mode="solo">Jugar</button>
-      <button data-go="mp">Multijugador</button>
-      <button data-go="settings">Ajustes</button>
-    </nav>
-    <p class="foot" id="homeFoot"></p>
+    <aside class="panel board home-board" id="homeBoard" hidden>
+      <div class="board-head"><span class="label">Clasificación general</span><span class="board-tag"></span></div>
+      <div class="seg" id="homeTabs"><button data-v="total" aria-pressed="true">Total</button><button data-v="best" aria-pressed="false">Mejor canción</button></div>
+      <ol class="board-list"></ol>
+      <p class="hint board-empty" hidden>Todavía nadie ha jugado.</p>
+    </aside>
   </section>
 
   <!-- ===== LIBRARY ===== -->

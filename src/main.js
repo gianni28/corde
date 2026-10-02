@@ -9,7 +9,7 @@ import { DIFFS, midiToChart, chartTextToChart, parseIni, iniMeta, notesFor } fro
 import { decodeStems, Player, audioCtx, unlockAudio } from "./audio.js";
 import { Game } from "./game.js";
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
-import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, topScores, submitScore } from "./net.js";
+import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, topScores, submitScore, generalBoard } from "./net.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song } from "./admin.js";
 
 const $ = (id) => document.getElementById(id);
@@ -58,6 +58,7 @@ function show(name, push = true) {
   SCREENS.forEach((s) => ($("s-" + s).hidden = s !== name));
   $("hud").hidden = !(app.game && ["play", "pause", "settings"].includes(name));
   if (name === "play") $("hud").hidden = false;
+  if (name === "home") renderHomeBoard();
 }
 function back() {
   if (app.screen === "settings" && app.settingsFromPause) { backToPause(); return; }
@@ -80,6 +81,37 @@ function loading(label, p) { $("loadLabel").textContent = label; $("loadBar").st
 
 /* ================= home ================= */
 $("homeFoot").textContent = online ? "Biblioteca en línea" : "Modo local · conecta Supabase para la biblioteca y el multijugador";
+
+// General board: "total" = sum of each player's best per song, "best" = each player's best single run.
+// Same string count as the device plays (5 on PC, 4 on phones); top 10 beside the menu, top 5 under it.
+let homeTab = "total", homeReq = 0;
+async function renderHomeBoard() {
+  const el = $("homeBoard");
+  if (!online) { el.hidden = true; return; }
+  const lanes = deviceLanes();
+  el.querySelector(".board-tag").textContent = `${lanes} cuerdas`;
+  el.querySelectorAll("#homeTabs button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === homeTab)));
+  const req = ++homeReq;
+  let rows;
+  try { rows = await generalBoard(homeTab, lanes, innerWidth >= 1000 ? 10 : 5); }
+  catch (e) { console.warn("leaderboard:", e.message); return; }
+  if (req !== homeReq) return;
+  const me = (settings.name || "").trim().toLowerCase();
+  const ol = el.querySelector(".board-list"); ol.innerHTML = "";
+  rows.forEach((r, i) => {
+    const li = document.createElement("li");
+    if (me && r.name.trim().toLowerCase() === me) li.className = "me";
+    li.innerHTML = `<span class="pos">${i + 1}</span><span class="n"><span class="nm"></span>${homeTab === "best" ? "<small></small>" : ""}</span><span class="s"></span>`;
+    li.querySelector(".nm").textContent = r.name;
+    if (homeTab === "best") li.querySelector("small").textContent = r.song;
+    li.querySelector(".s").textContent = Number(homeTab === "total" ? r.total : r.score).toLocaleString("es-CO");
+    ol.appendChild(li);
+  });
+  el.querySelector(".board-empty").hidden = rows.length > 0;
+  el.hidden = false;
+}
+$("homeTabs").onclick = (e) => { const b = e.target.closest("button"); if (!b || b.dataset.v === homeTab) return; homeTab = b.dataset.v; renderHomeBoard(); };
+renderHomeBoard();
 
 /* ================= library ================= */
 const fmtLen = (ms) => { if (!ms) return ""; const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
@@ -328,7 +360,7 @@ function finishGame() {
   $("newRecord").hidden = true; $("boardMe").hidden = true; $("nameAsk").hidden = true; $("resultsBoard").hidden = true;
   app.boardLanes = app.lanes;
   if (app.mode !== "mp" && hasBoard()) {
-    if (settings.name) sendScore(sum); else { $("nameAsk").hidden = false; $("boardName").value = ""; app.pendingScore = sum; }
+    if (settings.name || !(sum.score > 0)) sendScore(sum); else { $("nameAsk").hidden = false; $("boardName").value = ""; app.pendingScore = sum; }
   }
   show("results");
 }
@@ -343,11 +375,12 @@ function playerSecret() {
   } catch { return "anon-" + Math.random().toString(36).slice(2) + Date.now(); }
 }
 async function sendScore(sum) {
+  if (!(sum.score > 0)) { showBoard($("resultsBoard"), 10); return; } // empty runs stay off the board
   try {
     const r = await submitScore({ song_id: app.song.id, diff: app.diff, lanes: app.lanes, secret: playerSecret(), name: settings.name,
       score: sum.score, acc: sum.acc, max_combo: sum.maxCombo, stars: sum.stars });
     $("newRecord").hidden = !r.newRecord;
-    $("boardMe").textContent = `Tu mejor puesto: #${r.rank}`; $("boardMe").hidden = false;
+    if (r.rank) { $("boardMe").textContent = `Tu mejor puesto: #${r.rank}`; $("boardMe").hidden = false; }
     showBoard($("resultsBoard"), 10, r.rank);
   } catch (e) { console.warn("leaderboard:", e.message); showBoard($("resultsBoard"), 10); }
 }
@@ -748,20 +781,20 @@ function renderAdmin() {
     li.querySelector("input").onchange = (e) => { s.on = e.target.checked; renderAdmin(); };
     ul.appendChild(li);
   });
-  const n = adm.songs.filter((s) => s.on && s.cls !== "ok").length;
-  $("adminUpload").textContent = adm.busy ? "Subiendo…" : n ? `Subir ${n} canción${n > 1 ? "es" : ""}` : "Subir";
+  const n = adm.songs.filter((s) => s.on && s.cls !== "ok" && s.cls !== "warn").length;
+  $("adminUpload").textContent = adm.busy ? "Subiendo…" : n ? `Subir ${n} ${n > 1 ? "canciones" : "canción"}` : "Subir";
   $("adminUpload").disabled = adm.busy || !n;
 }
 $("adminFolder").onchange = (e) => {
   adm.songs = findSongs(e.target.files).map((s, i) => ({ ...s, on: true }));
   $("adminStatus").textContent = adm.songs.length
-    ? `Encontré ${adm.songs.length} canción${adm.songs.length > 1 ? "es" : ""}. Desmarca las que no quieras subir.`
+    ? `Encontré ${adm.songs.length} ${adm.songs.length > 1 ? "canciones" : "canción"}. Desmarca las que no quieras subir.`
     : "No encontré canciones en esa carpeta. Cada canción necesita song.ini, notes.mid o notes.chart, y sus audios.";
   renderAdmin();
 };
 $("adminMp3").onchange = (e) => {
   const found = findMp3Songs(e.target.files).map((s) => ({ ...s, on: true }));
-  adm.songs = [...adm.songs.filter((s) => s.cls !== "ok"), ...found];
+  adm.songs = [...adm.songs.filter((s) => s.cls !== "ok" && s.cls !== "warn"), ...found];
   $("adminStatus").textContent = "";
   renderAdmin();
 };
@@ -773,12 +806,14 @@ $("adminUpload").onclick = async () => {
   adm.busy = true; renderAdmin();
   let ok = 0, bad = 0;
   for (const s of adm.songs) {
-    if (!s.on || s.cls === "ok") continue;
+    if (!s.on || s.cls === "ok" || s.cls === "warn") continue;
     const set = (status, p, cls) => { s.status = status; s.p = p; if (cls) s.cls = cls; renderAdmin(); };
     try {
       const conv = await (s.kind === "mp3" ? convertMp3Song : convertSong)(s, (txt, p) => set(txt, p * 0.85));
       await uploadSong(code, conv, (p) => set("Subiendo", 0.85 + p * 0.15));
-      set("Lista", 1, "ok"); ok++;
+      if (conv.warnMs) set(`Subida, pero revisa: las notas podrían ir desfasadas (unos ${conv.warnMs} ms)`, 1, "warn");
+      else set("Lista", 1, "ok");
+      ok++;
     } catch (e) { set(e.message || "Error", 0, "bad"); bad++; }
   }
   adm.busy = false; renderAdmin();

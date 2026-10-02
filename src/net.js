@@ -97,7 +97,18 @@ export function joinRoom(code, me, h) {
 /* ---------------- leaderboard ---------------- */
 export async function topScores(songId, diff, lanes, limit = 10) {
   if (!supabase) return [];
-  const { data, error } = await supabase.from("scores").select("name, score, acc, max_combo").match({ song_id: songId, diff, lanes }).order("score", { ascending: false }).order("updated_at").limit(limit);
+  const { data, error } = await supabase.from("board_song").select("name, score, acc, max_combo").match({ song_id: songId, diff, lanes }).order("score", { ascending: false }).order("updated_at").limit(limit);
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** Home screen boards: kind "total" (sum of best scores) or "best" (each player's best run). */
+export async function generalBoard(kind, lanes, limit = 10) {
+  if (!supabase) return [];
+  const q = kind === "total"
+    ? supabase.from("board_total").select("name, total, songs").eq("lanes", lanes).order("total", { ascending: false })
+    : supabase.from("board_best").select("name, score, song, artist, diff").eq("lanes", lanes).order("score", { ascending: false });
+  const { data, error } = await q.limit(limit);
   if (error) throw new Error(error.message);
   return data;
 }

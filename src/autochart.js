@@ -336,3 +336,39 @@ export function estimateOffset(samples, rate, noteTimes, maxShift = 0.6) {
   const median = sorted[sorted.length >> 1] || 1;
   return { offset: Math.round(best * 1000) / 1000, confidence: bestS / median };
 }
+
+/**
+ * Upload check for a hand-made chart. noteTimes are where the notes should sound in `samples` (seconds).
+ * Measures how far they sit from the attacks over the whole song and over each half (halves that disagree
+ * mean the chart drifts). Returns the worst believable error in seconds, or 0 when it looks fine or the
+ * audio is too ambiguous to tell — a false alarm is worse than a missed one here.
+ */
+export function syncError(samples, rate, noteTimes) {
+  const BIAS = 0.018; // this onset detector reads attacks ~18 ms early
+  const f = analyze(samples, rate);
+  const env = onsetEnvelope(f);
+  const centre = 512 / rate / 2;
+  const at = (sec) => { const x = (sec - centre) * f.fps; const i = Math.floor(x); if (i < 0 || i + 1 >= env.length) return 0; const w = x - i; return env[i] * (1 - w) + env[i + 1] * w; };
+  const times = [...new Set(noteTimes.map((t) => Math.round(t * 1000)))].sort((a, b) => a - b).map((t) => t / 1000);
+  const fit = (ts) => {
+    if (ts.length < 40) return null;
+    const scores = [];
+    let best = 0, bestS = -Infinity;
+    for (let ms = -250; ms <= 250; ms += 2) {
+      const d = ms / 1000; let s = 0;
+      for (const t of ts) s += Math.max(at(t + d - 0.012), at(t + d), at(t + d + 0.012));
+      scores.push(s);
+      if (s > bestS) { bestS = s; best = d; }
+    }
+    const sorted = [...scores].sort((a, b) => a - b);
+    return { err: best + BIAS, conf: bestS / (sorted[sorted.length >> 1] || 1) };
+  };
+  const sure = (r) => r && r.conf >= 4;
+  const all = fit(times);
+  const mid = times[times.length >> 1];
+  const a = fit(times.filter((t) => t < mid)), b = fit(times.filter((t) => t >= mid));
+  let worst = 0;
+  if (sure(all) && Math.abs(all.err) >= 0.06) worst = all.err;
+  if (sure(a) && sure(b) && Math.abs(a.err - b.err) >= 0.06) worst = Math.abs(a.err) > Math.abs(b.err) ? a.err : b.err;
+  return { worst, all, a, b }; // worst: seconds, 0 = fine
+}

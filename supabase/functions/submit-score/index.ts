@@ -1,6 +1,8 @@
 // Corde — submit a score to the leaderboard.
-// Keeps only each player's best per song + difficulty + string count, rejects impossible scores,
-// and answers with the player's best and position. The player's key is a hash of a secret kept in their browser.
+// One entry per NAME (case-insensitive) on each song + difficulty + string count, keeping the best score,
+// so the same person on another browser or phone joins their existing entry. Rejects impossible scores
+// and answers with the best and position. player_key (hash of a secret kept in the browser) only lets a
+// browser that changes its name move its entry.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -46,20 +48,30 @@ Deno.serve(async (req) => {
     return json({ error: "Puntaje no válido" }, 422);
   }
 
+  if (score === 0) return json({ best: 0, rank: null, newRecord: false }); // empty runs stay off the board
+
   const key = await sha256(b.secret);
   const board = { song_id: b.song_id, diff: b.diff, lanes: b.lanes };
-  const { data: prev } = await db.from("scores").select("id, score").match({ ...board, player_key: key }).maybeSingle();
+  // this name's entry (older data may hold several: take the best)...
+  const { data: same } = await db.from("scores").select("id, score").match(board).eq("name_key", name.toLowerCase())
+    .order("score", { ascending: false }).limit(1);
+  let prev = same?.[0] || null;
+  // ...or this browser's entry under a previous name, which then takes the new name
+  if (!prev) {
+    const { data: mine } = await db.from("scores").select("id, score").match({ ...board, player_key: key }).maybeSingle();
+    prev = mine || null;
+  }
   const newRecord = !prev || score > prev.score;
   const row = {
-    ...board, player_key: key, name, updated_at: new Date().toISOString(),
+    name, updated_at: new Date().toISOString(),
     ...(newRecord ? { score, acc: Number(b.acc) || 0, max_combo: Math.round(Number(b.max_combo) || 0), stars: Math.round(Number(b.stars) || 0) } : {}),
   };
   const { error } = prev
     ? await db.from("scores").update(row).eq("id", prev.id)
-    : await db.from("scores").insert(row);
+    : await db.from("scores").insert({ ...board, player_key: key, ...row });
   if (error) return json({ error: error.message }, 500);
 
   const best = newRecord ? score : prev!.score;
-  const { count } = await db.from("scores").select("id", { count: "exact", head: true }).match(board).gt("score", best);
+  const { count } = await db.from("board_song").select("name", { count: "exact", head: true }).match(board).gt("score", best);
   return json({ best, rank: (count || 0) + 1, newRecord });
 });

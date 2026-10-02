@@ -2,7 +2,7 @@
 // chart → chart.json, every non-guitar stem mixed → backing.mp3, guitar stem → guitar.mp3, album art → cover.jpg.
 import { Mp3Encoder } from "@breezystack/lamejs";
 import { midiToChart, chartTextToChart, parseIni, iniMeta, diffSummary } from "./chart.js";
-import { autoChart } from "./autochart.js";
+import { autoChart, syncError } from "./autochart.js";
 
 const RATE = 44100;
 const AUDIO = /\.(opus|ogg|mp3|wav|m4a|flac)$/i;
@@ -107,13 +107,30 @@ export async function convertSong(song, onStatus) {
   const hasGuitar = others.length > 0 && guitar.length > 0;
 
   const out = {};
+  const delay = (Math.round(+ini.delay) || 0) / 1000; // song.ini "delay": notes sound this much later in the audio
   const mixB = await mixStems(backingStems, (i, n) => onStatus(`Mezclando pistas ${i + 1}/${n}`, 0.05 + 0.15 * (i / n)));
-  out["backing.mp3"] = await encodeMp3(mixB, (p) => onStatus("Convirtiendo a MP3", 0.2 + 0.35 * p));
   const seconds = mixB.seconds;
+  // check 1: a note after the end of the audio means the chart is broken (or doesn't match this audio)
+  let lastNote = 0;
+  for (const d of Object.values(chart.diffs)) if (d.notes.length) lastNote = Math.max(lastNote, d.notes[d.notes.length - 1][0]);
+  if (lastNote + delay > seconds + 0.5) throw new Error("No se subió: hay notas después de que termina el audio");
+  out["backing.mp3"] = await encodeMp3(mixB, (p) => onStatus("Convirtiendo a MP3", 0.2 + 0.35 * p));
+  let mixG = null;
   if (hasGuitar) {
-    const mixG = await mixStems(guitar, () => onStatus("Preparando guitarra", 0.56));
+    mixG = await mixStems(guitar, () => onStatus("Preparando guitarra", 0.56));
     out["guitar.mp3"] = await encodeMp3(mixG, (p) => onStatus("Convirtiendo guitarra", 0.58 + 0.3 * p));
   }
+  // check 2: do the notes land on the attacks heard in the audio? (only warns: the song is still uploaded)
+  let warnMs = 0;
+  try {
+    const mono = new Float32Array(Math.floor(mixB.L.length / 2)); // 22.05 kHz mono of everything
+    const add = (m) => { if (!m) return; const n = Math.min(mono.length, m.L.length >> 1); for (let i = 0; i < n; i++) mono[i] += m.L[2 * i] + m.R[2 * i] + m.L[2 * i + 1] + m.R[2 * i + 1]; };
+    add(mixB); add(mixG);
+    await tick();
+    const notes = ["expert", "hard", "medium", "easy"].map((d) => chart.diffs[d]?.notes).find((n) => n && n.length) || [];
+    const err = syncError(mono, RATE / 2, notes.map((n) => n[0] + delay)).worst;
+    warnMs = err ? Math.round(Math.abs(err) * 100) * 10 : 0;
+  } catch (e) { console.warn("sync check:", e); }
   const art = find(/^album\.(jpe?g|png)$/i);
   if (art) { try { out["cover.jpg"] = await makeCover(art); } catch {} }
   out["chart.json"] = new Blob([JSON.stringify({ ...chart, rev: Date.now() })], { type: "application/json" }); // rev: every upload gets fresh file URLs
@@ -129,7 +146,7 @@ export async function convertSong(song, onStatus) {
     // the MP3 encoder pads ~25 ms at the start; song.ini "delay" (ms, positive = notes later) shifts the chart
     audio_offset_ms: 25 + (Math.round(+ini.delay) || 0),
   };
-  return { id, row, files: out };
+  return { id, row, files: out, warnMs };
 }
 
 /* ================= MP3 → auto-generated chart ================= */
