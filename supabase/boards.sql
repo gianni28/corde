@@ -40,3 +40,19 @@ from public.score_entries
 order by lanes, name_key, score desc, updated_at;
 
 grant select on public.score_entries, public.board_song, public.board_total, public.board_best to anon, authenticated;
+
+-- home screen boards with every string count together (what the game shows now)
+create view public.board_total_all with (security_invoker = true) as
+with best as (
+  select name_key, song_id, max(score) as score from public.score_entries group by name_key, song_id
+)
+select (select e.name from public.score_entries e where e.name_key = b.name_key order by e.updated_at desc limit 1) as name,
+  sum(b.score)::bigint as total,
+  count(*)::int as songs
+from best b
+group by b.name_key;
+create view public.board_best_all with (security_invoker = true) as
+select distinct on (name_key) name, score, diff, song_id, song, artist
+from public.score_entries
+order by name_key, score desc, updated_at;
+grant select on public.board_total_all, public.board_best_all to anon, authenticated;

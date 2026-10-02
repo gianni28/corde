@@ -465,6 +465,8 @@ export function createRenderer(canvas) {
       strings[i].mesh.visible = on; buttons[i].g.visible = on;
       strings[i].mesh.position.x = laneX(i); buttons[i].g.position.set(laneX(i), 0, 0);
       flames[i].sp.position.set(laneX(i), 0.15, 0.05);
+      // a lane that goes away must not leave its fire behind (the frame loop only animates the active lanes)
+      if (!on) { flames[i].t = 9; flames[i].sp.visible = false; flames[i].sp.material.opacity = 0; }
     }
     fitCamera();
   }
@@ -556,11 +558,13 @@ export function createRenderer(canvas) {
     setSection(i) { pal = ((i % palettes.length) + palettes.length) % palettes.length; if (i > 0) firePyro(); },
     pyro: firePyro,
     hit(lane, sustain) {
+      if (lane >= lanes) return;
       const f = flames[lane]; f.t = 0;
       strings[lane].vib = 1; strings[lane].glow = 1; buttons[lane].press = 1;
       burst(laneX(lane), sustain ? 6 : 14);
     },
     holdSpark(lane) {
+      if (lane >= lanes) return;
       if (Math.random() < 0.45) burst(laneX(lane), 1);
       const f = flames[lane]; if (f.t > 0.12) f.t = 0.12;
       strings[lane].glow = Math.max(strings[lane].glow, 0.7); strings[lane].vib = Math.max(strings[lane].vib, 0.4);

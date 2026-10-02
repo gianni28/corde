@@ -102,12 +102,12 @@ export async function topScores(songId, diff, lanes, limit = 10) {
   return data;
 }
 
-/** Home screen boards: kind "total" (sum of best scores) or "best" (each player's best run). */
-export async function generalBoard(kind, lanes, limit = 10) {
+/** Home screen boards, all string counts together: kind "total" (sum of best scores) or "best" (each player's best run). */
+export async function generalBoard(kind, limit = 10) {
   if (!supabase) return [];
   const q = kind === "total"
-    ? supabase.from("board_total").select("name, total, songs").eq("lanes", lanes).order("total", { ascending: false })
-    : supabase.from("board_best").select("name, score, song, artist, diff").eq("lanes", lanes).order("score", { ascending: false });
+    ? supabase.from("board_total_all").select("name, total, songs").order("total", { ascending: false })
+    : supabase.from("board_best_all").select("name, score, song, artist, diff").order("score", { ascending: false });
   const { data, error } = await q.limit(limit);
   if (error) throw new Error(error.message);
   return data;

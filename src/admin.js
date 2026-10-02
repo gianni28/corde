@@ -3,6 +3,7 @@
 import { Mp3Encoder } from "@breezystack/lamejs";
 import { midiToChart, chartTextToChart, parseIni, iniMeta, diffSummary } from "./chart.js";
 import { autoChart, syncError } from "./autochart.js";
+import { fillDifficulties } from "./reduce.js";
 
 const RATE = 44100;
 const AUDIO = /\.(opus|ogg|mp3|wav|m4a|flac)$/i;
@@ -97,6 +98,7 @@ export async function convertSong(song, onStatus) {
   meta.name = stripTags(meta.name); meta.artist = stripTags(meta.artist); meta.album = stripTags(meta.album);
   const mid = find(/^notes\.mid$/i), cht = find(/^notes\.chart$/i);
   const chart = mid ? midiToChart(await mid.arrayBuffer(), meta) : chartTextToChart(await cht.text(), meta);
+  fillDifficulties(chart); // Expert-only charts (or copies of Expert) get real easier levels
   const summary = diffSummary(chart);
   if (!Object.values(summary).some((d) => d.n > 0)) throw new Error("no tiene notas de guitarra");
 

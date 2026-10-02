@@ -1,5 +1,6 @@
 // Audio engine: decodes stems, plays them in sync, mutes the guitar on misses.
 let ctx = null;
+let sfx = null; // separate context for menu/result sounds, so they still play while the song is paused
 
 /* ---------- iPhone silent switch ----------
    Safari treats Web Audio as "ambient" sound, which the ring/silent switch mutes.
@@ -7,6 +8,7 @@ let ctx = null;
    2) Older iOS: a looping silent <audio> element switches the page into playback mode too. */
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 let silentEl = null;
+let held = false; // the song is paused: taps must not wake the audio back up (pause screen, settings…)
 function silentWavUrl() {
   const rate = 8000, n = rate; // 1 s of silence, 8-bit mono
   const b = new ArrayBuffer(44 + n), v = new DataView(b);
@@ -28,7 +30,8 @@ export function unlockAudio() {
     }
     if (silentEl.paused) silentEl.play().catch(() => {});
   }
-  if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
+  if (ctx && ctx.state === "suspended" && !held) ctx.resume().catch(() => {});
+  if (sfx && sfx.state === "suspended") sfx.resume().catch(() => {});
 }
 document.addEventListener("visibilitychange", () => {
   if (!silentEl) return;
@@ -129,12 +132,13 @@ export class Player {
     src.connect(lp).connect(g).connect(this.master || c.destination);
     src.start();
   }
-  async pause() { this.paused = true; await audioCtx().suspend(); }
-  async resume() { await audioCtx().resume(); this.paused = false; }
+  async pause() { this.paused = true; held = true; await audioCtx().suspend(); }
+  async resume() { held = false; await audioCtx().resume(); this.paused = false; }
   stop() {
     this.sources.forEach((s) => { try { s.stop(); } catch {} });
     this.sources = [];
     try { this.master.disconnect(); } catch {}
+    held = false;
     if (audioCtx().state === "suspended") audioCtx().resume();
     this.paused = false;
   }
