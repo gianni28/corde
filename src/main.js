@@ -303,7 +303,7 @@ function randomBox(btn, diffs, fromResults) {
       await loadLibrarySong(s);
       settings.lastDiff = diff; save();
       openSetup(); // so "Salir" from the pause lands on this song's screen
-      withTutorial(() => startGame({ lanes: deviceLanes(), diff: app.diff }));
+      withTutorial(() => startGame({ lanes: deviceLanes(), diff: app.diff, ctx: dailyCtxFor(app.song, "setup") }));
     } catch (err) { toast(err.message); show("library", false); }
     finally { app.loadingRandom = false; }
   };
@@ -437,7 +437,7 @@ function openSetup() {
   $("practiceBox").hidden = true; $("practiceBtn").setAttribute("aria-expanded", "false");
   show("setup");
 }
-$("playBtn").onclick = () => withTutorial(() => startGame({ lanes: deviceLanes(), diff: app.diff }));
+$("playBtn").onclick = () => withTutorial(() => startGame({ lanes: deviceLanes(), diff: app.diff, ctx: dailyCtxFor(app.song, "setup") }));
 
 /* ---------- practice one part ---------- */
 const mmss = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
@@ -610,6 +610,10 @@ function dailyStreak(today = daily.day) {
   let d = set.has(today) ? today : dayShift(today, -1), n = 0;
   while (set.has(d)) { n++; d = dayShift(d, -1); }
   return n;
+}
+// today's song played from the song list also counts for the day (via: where to go back to afterwards)
+function dailyCtxFor(song, via = null) {
+  return daily.day && song?.id === daily.songId && Date.now() < dailyEnds(daily.day) ? { kind: "daily", day: daily.day, songId: song.id, via } : null;
 }
 function markDailyPlayed(day) {
   if (dailyLog.days.includes(day)) return false;
@@ -834,7 +838,8 @@ function renderTour() {
   if (app.screen === "tour") R.setStage?.(tourLook);
   if (prog.done) $("tourRoad").classList.add("done"); else $("tourRoad").classList.remove("done");
 }
-async function playTourSong(vi, si) {
+async function playTourSong(vi, si, diff = tourDiff) {
+  if (diff !== tourDiff) { tourDiff = diff; settings.tourDiff = diff; save(); }
   const tp = tourNow(); if (!tp) return;
   const v = tp.tour.venues[vi], s = v.songs[si], encore = si === v.songs.length - 1;
   const pv = tp.prog.venues[vi];
@@ -888,7 +893,7 @@ function finishCtx(sum) {
   btn.hidden = !next;
   if (next) {
     btn.textContent = next.encore ? "Tocar el bis" : `Siguiente: ${next.song.name}`;
-    btn.onclick = () => { const vi = after.venues.findIndex((x) => x.venue.id === next.venue.id), si = next.venue.songs.indexOf(next.song); playTourSong(vi, si); };
+    btn.onclick = () => { const vi = after.venues.findIndex((x) => x.venue.id === next.venue.id), si = next.venue.songs.indexOf(next.song); playTourSong(vi, si, ctx.diff); };
   }
   // "Otra vez" stops being the main button when the tour has somewhere to go
   $("againBtn").classList.toggle("primary", !next);
@@ -1137,7 +1142,7 @@ $("restartBtn").onclick = () => startGame({ lanes: app.lanes, diff: app.diff, pr
 // "Salir" goes back to where the song was picked
 $("quitBtn").onclick = () => {
   const duo = app.duo, ctx = app.ctx; stopGame(); R.setLanes(5);
-  if (ctx?.kind === "tour") openTour(false); else if (ctx?.kind === "daily") openDaily(false); else show(duo ? "duo" : "setup", false);
+  if (ctx?.kind === "tour") openTour(false); else if (ctx?.kind === "daily" && !ctx.via) openDaily(false); else show(duo ? "duo" : "setup", false);
 };
 document.addEventListener("visibilitychange", () => { if (document.hidden) pauseGame(); });
 
@@ -1167,9 +1172,9 @@ function finishGame() {
     : pb.old && !pb.beat ? `Tu mejor: ${pb.old.score.toLocaleString("es-CO")}` : "";
   if (!$("pbLine").textContent) $("pbLine").hidden = true;
   $("againBtn").hidden = app.mode === "mp";
-  $("resRandomBox").hidden = app.mode === "mp" || !online || !!app.ctx;
+  $("resRandomBox").hidden = app.mode === "mp" || !online || (!!app.ctx && !app.ctx.via);
   $("resRandomDiffs").hidden = true; $("resRandomBtn").setAttribute("aria-expanded", "false");
-  $("menuBtn").textContent = app.mode === "mp" ? "Volver a la sala" : app.ctx?.kind === "tour" ? "Gira" : app.ctx?.kind === "daily" ? "Canción del día" : "Menú";
+  $("menuBtn").textContent = app.mode === "mp" ? "Volver a la sala" : app.ctx?.kind === "tour" ? "Gira" : app.ctx?.kind === "daily" && !app.ctx.via ? "Canción del día" : "Menú";
   if (app.mode === "mp") { app.room.send("final", { name: app.me.name, ...sum }); app.finals[app.me.id] = { name: app.me.name, ...sum }; }
   renderRanking();
   app.game = null;
@@ -1277,7 +1282,7 @@ $("againBtn").onclick = () => startGame({ lanes: app.lanes, diff: app.diff, duo:
 $("menuBtn").onclick = () => {
   if (app.mode === "mp") { renderLobby(); show("lobby", false); }
   else if (app.ctx?.kind === "tour") openTour(false);
-  else if (app.ctx?.kind === "daily") openDaily(false);
+  else if (app.ctx?.kind === "daily" && !app.ctx.via) openDaily(false);
   else if (app.duo) { app.duo = null; app.mode = "solo"; app.history = []; show("home", false); }
   else { app.history = ["home"]; show("library", false); }
 };
