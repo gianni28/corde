@@ -235,8 +235,8 @@ export function starPhrasesFor(chart, diffKey) {
     while (i < times.length && times[i] < nextStart) i++;
     if (i >= times.length) break;
     let j = i;
-    while (j < times.length && j - i < 8 && times[j] - times[i] < 5) j++;
-    if (j - i >= 4) out.push([times[i] - 0.005, times[j - 1] + 0.005]);
+    while (j < times.length && j - i < 8 && times[j] - times[i] < 7) j++; // sparse easy charts need the longer window
+    if (j - i >= 3) out.push([times[i] - 0.005, times[j - 1] + 0.005]);
     nextStart = times[j - 1] + 24;
     i = j;
   }
