@@ -18,7 +18,9 @@ export class Game {
     this.errs = []; // recent hit errors (s), used to learn the player's latency
     this.lastHit = new Array(5).fill(-9);
     this.look = look;
-    this.notes = notesFor(chart, diff, lanes).map((n) => ({ ...n, state: 0, holding: false }));
+    // notes past the end of the audio can never be played (a broken chart): drop them
+    const audioEnd = player.duration + this.offset - this.songOffset + 0.5;
+    this.notes = notesFor(chart, diff, lanes).filter((n) => n.t <= audioEnd).map((n) => ({ ...n, state: 0, holding: false }));
     this.beats = chart.beats;
     this.sections = chart.sections;
     this.score = 0; this.combo = 0; this.maxCombo = 0; this.hits = 0; this.perfects = 0; this.missed = 0;
