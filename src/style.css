@@ -109,7 +109,7 @@ output { font: 600 14px var(--display); letter-spacing: .04em; font-variant-nume
 .stack { display: flex; flex-direction: column; gap: 8px; }
 
 /* buttons */
-.btn, .row > button, .stack > button, .join > button, #createRoom, #playBtn, #startRound, #duoPlay {
+.btn, .row > button, .stack > button, .join > button, #createRoom, #playBtn, #startRound, #duoPlay, #dailyPlay, #tourNextBtn {
   position: relative; display: inline-block; cursor: pointer; padding: 12px 20px;
   font: 600 19px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--ink); text-shadow: 0 1px 0 #000;
   background: linear-gradient(180deg, #3a3430, #1b1715 60%, #120f0e); border: 1px solid #000; border-radius: 3px;
