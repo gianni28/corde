@@ -6,6 +6,12 @@
 <title>Corde</title>
 <meta name="description" content="Corde — juego de ritmo multijugador en el navegador. Toca la guitarra con el teclado o la pantalla táctil.">
 <meta name="theme-color" content="#0a0605">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Corde">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2307050a'/%3E%3Cg stroke-width='2.4'%3E%3Cpath d='M5 8h22' stroke='%232ee65a'/%3E%3Cpath d='M5 12h22' stroke='%23ff2e3c'/%3E%3Cpath d='M5 16h22' stroke='%23ffd21f'/%3E%3Cpath d='M5 20h22' stroke='%232a84ff'/%3E%3Cpath d='M5 24h22' stroke='%23ff8a1a'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="stylesheet" href="/src/style.css">
 </head>
@@ -15,17 +21,34 @@
 
 <!-- ===== HUD ===== -->
 <div id="hud" hidden>
+  <!-- one block per player (the second one is a copy, made for two players on one PC) -->
+  <div class="hud-p p1" id="hudP1">
   <div class="hud-score">
     <div class="mult" id="mult" role="button" aria-label="Poder estrella">
       <div class="sp-fire" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
       <svg class="star-ring" viewBox="0 0 92 92" aria-hidden="true"><circle class="track" cx="46" cy="46" r="42"/><circle class="fill" id="starFill" cx="46" cy="46" r="42" pathLength="100"/><path class="notch" d="M88 46h-6M46 88v-6M4 46h6M46 4v6"/></svg>
-      <svg viewBox="0 0 64 64" aria-hidden="true"><g id="multRing"></g></svg>
+      <svg viewBox="0 0 64 64" aria-hidden="true"><g class="mult-ring" id="multRing"></g></svg>
       <b id="multText">×1</b>
     </div>
     <div>
+      <div class="p-name" hidden></div>
       <div class="score" id="score">0</div>
       <div class="combo"><span id="combo">0</span> racha</div>
     </div>
+  </div>
+  <div class="rock" id="rock" aria-hidden="true">
+    <svg viewBox="0 0 120 72">
+      <path class="rk-bg" d="M12 64 A48 48 0 0 1 108 64"/>
+      <path class="rk-red" d="M12 64 A48 48 0 0 1 36 22.4"/>
+      <path class="rk-yel" d="M36 22.4 A48 48 0 0 1 84 22.4"/>
+      <path class="rk-grn" d="M84 22.4 A48 48 0 0 1 108 64"/>
+      <g class="rk-needle-g" id="rockNeedle"><path class="rk-needle" d="M58.5 64 L60 22 L61.5 64 Z"/></g>
+      <circle class="rk-hub" cx="60" cy="64" r="6"/>
+    </svg>
+  </div>
+  <div class="star-pop" id="starPop">¡PODER ESTRELLA!</div>
+  <div class="judge" id="judge"></div>
+  <div class="streak" id="streak"></div>
   </div>
   <div class="hud-top">
     <div class="practice-tag" id="practiceTag" hidden>Práctica</div>
@@ -34,21 +57,8 @@
   </div>
   <button class="icon-btn" id="pauseBtn" aria-label="Pausar"><svg viewBox="0 0 24 24"><path d="M7 5h3v14H7zM14 5h3v14h-3z"/></svg></button>
   <ol class="rivals" id="rivals" hidden></ol>
-  <div class="rock" id="rock" aria-hidden="true">
-    <svg viewBox="0 0 120 72">
-      <path class="rk-bg" d="M12 64 A48 48 0 0 1 108 64"/>
-      <path class="rk-red" d="M12 64 A48 48 0 0 1 36 22.4"/>
-      <path class="rk-yel" d="M36 22.4 A48 48 0 0 1 84 22.4"/>
-      <path class="rk-grn" d="M84 22.4 A48 48 0 0 1 108 64"/>
-      <g id="rockNeedle"><path class="rk-needle" d="M58.5 64 L60 22 L61.5 64 Z"/></g>
-      <circle class="rk-hub" cx="60" cy="64" r="6"/>
-    </svg>
-  </div>
-  <div class="star-pop" id="starPop">¡PODER ESTRELLA!</div>
   <div class="sp-tip" id="spTip" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg><span><b>¡Poder estrella listo!</b><span id="spTipHow"></span></span></div>
   <div class="fail-fx" id="failFx"></div>
-  <div class="judge" id="judge"></div>
-  <div class="streak" id="streak"></div>
   <div class="countdown" id="countdown"></div>
   <div class="gap" id="gap" hidden>
     <span class="label" id="gapLabel">Sin notas</span>
@@ -71,6 +81,8 @@
         <button data-go="settings">Ajustes</button>
       </nav>
       <p class="foot" id="homeFoot"></p>
+      <button class="link install-btn" id="installBtn" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Instalar como app</button>
+      <p class="hint install-ios" id="installIos" hidden>En iPhone: toca Compartir y luego «Agregar a inicio» para jugarlo en pantalla completa.</p>
     </div>
     <aside class="panel board home-board" id="homeBoard" hidden>
       <div class="board-head"><span class="label">Clasificación general</span></div>
@@ -188,6 +200,19 @@
   <section class="screen panel-screen" id="s-mp" hidden>
     <div class="panel">
       <header class="bar"><button class="back" data-back>Volver</button><h2>Multijugador</h2></header>
+      <div class="duo-card" id="duoCard" hidden>
+        <svg class="duo-art" viewBox="0 0 96 64" aria-hidden="true">
+          <path class="dn" d="M8 60 L22 6 H40 L44 60 Z"/><path class="dn" d="M52 60 L56 6 H74 L88 60 Z"/>
+          <g class="dd"><circle cx="16" cy="54" r="3.4" fill="var(--g)"/><circle cx="25" cy="54" r="3.4" fill="var(--r)"/><circle cx="34" cy="54" r="3.4" fill="var(--y)"/>
+          <circle cx="62" cy="54" r="3.4" fill="var(--g)"/><circle cx="71" cy="54" r="3.4" fill="var(--r)"/><circle cx="80" cy="54" r="3.4" fill="var(--y)"/></g>
+        </svg>
+        <div>
+          <b>Dos en este PC</b>
+          <p>Dos guitarras en la misma pantalla y el mismo teclado, cada uno con su dificultad.</p>
+        </div>
+        <button class="btn" id="duoBtn">Jugar</button>
+      </div>
+      <div class="or" id="duoOr" hidden><span>o en línea, cada uno en su dispositivo</span></div>
       <div class="field">
         <label class="label" for="mpName">Tu nombre</label>
         <input type="text" id="mpName" maxlength="16" placeholder="Ej. Gianni" autocomplete="nickname">
@@ -202,12 +227,45 @@
     </div>
   </section>
 
+  <!-- ===== TWO PLAYERS ON ONE PC ===== -->
+  <section class="screen panel-screen" id="s-duo" hidden>
+    <div class="panel wide">
+      <header class="bar"><button class="back" data-back>Volver</button><span class="duo-tag">2 jugadores</span></header>
+      <div class="song-head">
+        <img id="duoCover" alt="">
+        <div><h2 id="duoSong"></h2><p id="duoArtist"></p></div>
+      </div>
+      <div class="duo-cols">
+        <div class="duo-col p1" data-p="0">
+          <input type="text" class="duo-name" maxlength="16" autocomplete="off" spellcheck="false" aria-label="Nombre del jugador 1">
+          <span class="label">Dificultad</span>
+          <div class="diffs duo-diffs"></div>
+          <span class="label">Teclas</span>
+          <div class="duo-keys"></div>
+        </div>
+        <div class="duo-col p2" data-p="1">
+          <input type="text" class="duo-name" maxlength="16" autocomplete="off" spellcheck="false" aria-label="Nombre del jugador 2">
+          <span class="label">Dificultad</span>
+          <div class="diffs duo-diffs"></div>
+          <span class="label">Teclas</span>
+          <div class="duo-keys"></div>
+        </div>
+      </div>
+      <p class="hint" id="duoHint"></p>
+      <button class="primary" id="duoPlay">Tocar</button>
+    </div>
+  </section>
+
   <!-- ===== LOBBY ===== -->
   <section class="screen panel-screen" id="s-lobby" hidden>
     <div class="panel">
       <header class="bar"><button class="back" id="leaveRoom">Salir</button><h2>Sala</h2></header>
       <button class="code" id="roomCode" title="Copiar código"></button>
-      <p class="hint center">Comparte este código. Todos tocan la misma canción a la vez.</p>
+      <div class="invite">
+        <button class="btn" id="inviteBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16a3 3 0 0 0-2.4 1.2l-6.7-3.4a3 3 0 0 0 0-1.6l6.7-3.4A3 3 0 1 0 15 7l-6.7 3.4a3 3 0 1 0 0 3.2L15 17a3 3 0 1 0 3-1z"/></svg>Invitar</button>
+        <a class="btn" id="inviteWa" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .3-3.4-.7-2.9-1.2-4.7-4.1-4.9-4.3-.1-.2-1.2-1.6-1.2-3s.8-2.2 1-2.5c.3-.3.6-.4.8-.4h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .5l-.3.5-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.7-.1l.9-1.1c.2-.3.4-.2.6-.1l2 1c.3.1.5.2.5.3.1.2.1.7-.1 1.3z"/></svg>WhatsApp</a>
+      </div>
+      <p class="hint center">Comparte el código o el enlace: quien lo abra entra directo a la sala. Todos tocan la misma canción a la vez.</p>
       <ul class="players" id="players"></ul>
       <div class="field">
         <span class="label">Canción</span>
@@ -264,6 +322,12 @@
   <section class="screen panel-screen" id="s-results" hidden>
     <div class="panel">
       <h2 class="fail-title" id="resFail" hidden>Canción fallida</h2>
+      <div class="duo-res" id="duoRes" hidden>
+        <span class="label" id="duoResSong"></span>
+        <h2 class="duo-winner" id="duoWinner"></h2>
+        <div class="duo-res-cols" id="duoResCols"></div>
+      </div>
+      <div class="solo-res" id="soloRes">
       <span class="label" id="resSong"></span>
       <div class="res-score" id="resScore">0</div>
       <div class="stars" id="resStars"></div>
@@ -272,6 +336,7 @@
         <div><span class="label">Precisión</span><b id="resAcc"></b></div>
         <div><span class="label">Mejor racha</span><b id="resCombo"></b></div>
       </div>
+      <p class="pb-line" id="pbLine" hidden></p>
       <div class="sections" id="resSections" hidden>
         <span class="label">Por sección</span>
         <ol></ol>
@@ -289,8 +354,10 @@
         <p class="hint board-empty" hidden>Nadie ha tocado esta dificultad todavía.</p>
       </div>
       <p class="hint board-me" id="boardMe" hidden></p>
+      </div>
       <div class="row">
         <button class="primary" id="againBtn">Otra vez</button>
+        <button id="otherSongBtn" hidden>Otra canción</button>
         <button id="menuBtn">Menú</button>
       </div>
       <div class="random res-random" id="resRandomBox">

@@ -109,7 +109,7 @@ output { font: 600 14px var(--display); letter-spacing: .04em; font-variant-nume
 .stack { display: flex; flex-direction: column; gap: 8px; }
 
 /* buttons */
-.btn, .row > button, .stack > button, .join > button, #createRoom, #playBtn, #startRound {
+.btn, .row > button, .stack > button, .join > button, #createRoom, #playBtn, #startRound, #duoPlay {
   position: relative; display: inline-block; cursor: pointer; padding: 12px 20px;
   font: 600 19px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--ink); text-shadow: 0 1px 0 #000;
   background: linear-gradient(180deg, #3a3430, #1b1715 60%, #120f0e); border: 1px solid #000; border-radius: 3px;
@@ -376,7 +376,7 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .rk-red { stroke: #c4161c; stroke-width: 10; } .rk-yel { stroke: #e3b414; stroke-width: 10; } .rk-grn { stroke: #1fbf46; stroke-width: 10; }
 .rk-needle { fill: #f6efe2 !important; stroke: #000 !important; stroke-width: .8 !important; }
 .rk-hub { fill: #2c2724; stroke: #000; stroke-width: 1.5; }
-#rockNeedle { transition: transform .18s ease-out; transform-origin: 60px 64px; transform-box: view-box; }
+.rk-needle-g { transition: transform .18s ease-out; transform-origin: 60px 64px; transform-box: view-box; }
 .rock.danger { animation: rockDanger .6s ease-in-out infinite; }
 @keyframes rockDanger { 50% { filter: drop-shadow(0 3px 0 #000) drop-shadow(0 0 16px rgba(255,42,34,.95)); } }
 @media (max-width: 760px), (orientation: portrait) {
@@ -505,3 +505,87 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
   .tut-alert-box button.primary { font-size: 20px !important; }
 }
 .tut-alert-box button { white-space: nowrap; }
+
+/* ---------- two players on one PC ---------- */
+:root { --p1: #ff4a36; --p2: #ffc21a; }
+.solo-res { display: contents; }
+.duo-card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px; background: rgba(0,0,0,.35); box-shadow: inset 0 0 0 1px #000, inset 0 1px 0 rgba(255,255,255,.05); }
+.duo-card b { font: 600 19px var(--display); text-transform: uppercase; letter-spacing: .04em; }
+.duo-card p { margin: 2px 0 0; color: var(--muted); font-size: 15px; }
+.duo-art { width: 72px; height: 48px; }
+.duo-art .dn { fill: #2a1610; stroke: #d8d4cc; stroke-width: 1.5; }
+.duo-tag { margin-left: auto; font: 700 13px var(--display); letter-spacing: .16em; text-transform: uppercase; padding: 5px 10px 4px; color: #fff;
+  background: linear-gradient(90deg, var(--p1), #c4161c 48%, #8a5a00 52%, var(--p2)); box-shadow: 0 0 0 1px #000; border-radius: 2px; text-shadow: 0 1px 0 #000; }
+.duo-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.duo-col { --pc: var(--p1); display: flex; flex-direction: column; gap: 9px; padding: 12px; background: rgba(0,0,0,.3); box-shadow: inset 0 0 0 1px #000, inset 0 3px 0 var(--pc); }
+.duo-col.p2 { --pc: var(--p2); }
+.duo-name { font: 700 22px var(--display) !important; text-transform: uppercase; letter-spacing: .04em; color: var(--pc) !important; padding: 6px 10px !important; }
+.duo-diffs { grid-template-columns: repeat(2, 1fr); }
+.duo-diffs .diff { flex-direction: row; justify-content: space-between; padding: 9px 10px; font-size: 15px; }
+.duo-diffs .diff .dots { display: none; }
+.duo-keys { display: flex; flex-direction: column; gap: 8px; }
+.duo-keys .keycaps { gap: 5px; }
+.duo-keys .keycap { font-size: 17px; border-width: 2px; }
+.duo-star { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 8px 12px; cursor: pointer; text-align: left;
+  background: linear-gradient(180deg, #1c2a36, #0d141b); border: 1px solid #000; border-radius: 3px; box-shadow: inset 0 0 0 1px #2e4a60; color: #cfeeff; font: 600 14px var(--display); letter-spacing: .08em; text-transform: uppercase; }
+.duo-star svg { width: 18px; height: 18px; fill: #bfe9ff; filter: drop-shadow(0 0 5px #3fbfff); }
+.duo-star b { font: 700 16px var(--display); color: #fff; padding: 2px 8px; background: rgba(0,0,0,.45); box-shadow: inset 0 0 0 1px #3a5a74; border-radius: 2px; letter-spacing: .02em; }
+.duo-star:hover { filter: brightness(1.2); }
+.duo-star.listening { animation: blink .7s infinite; box-shadow: inset 0 0 0 1px var(--fire); }
+@media (max-width: 640px) { .duo-cols { grid-template-columns: 1fr; } }
+
+/* results */
+.duo-res { display: flex; flex-direction: column; gap: 12px; }
+.duo-winner { margin: 0; font: 400 48px/1 var(--rock); color: var(--gold); text-shadow: 0 0 22px rgba(255,140,30,.6), 0 3px 0 #000; }
+.duo-res-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.duo-res-col { --pc: var(--p1); display: flex; flex-direction: column; gap: 4px; padding: 12px; background: rgba(0,0,0,.3); box-shadow: inset 0 0 0 1px #000, inset 0 3px 0 var(--pc); }
+.duo-res-col.p2 { --pc: var(--p2); }
+.duo-res-col.win { box-shadow: inset 0 0 0 1px var(--pc), inset 0 3px 0 var(--pc), 0 0 22px color-mix(in srgb, var(--pc) 45%, transparent); }
+.duo-res-col .nm { font: 700 22px var(--display); text-transform: uppercase; letter-spacing: .04em; color: var(--pc); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.duo-res-col.win .nm::after { content: " ♛"; color: var(--gold); }
+.duo-res-col .sc { font: 700 44px/1 var(--display); font-variant-numeric: tabular-nums; filter: drop-shadow(0 2px 0 #000); margin-top: 4px; }
+.duo-res-col .stars { font-size: 24px; letter-spacing: 3px; }
+.duo-res-col dl { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; margin: 6px 0 0; font-size: 16px; }
+.duo-res-col dt { color: var(--muted); }
+.duo-res-col dd { margin: 0; font: 600 17px var(--display); font-variant-numeric: tabular-nums; text-align: right; }
+
+/* HUD: one block per player; with two players each block takes its half of the screen */
+.hud-p { position: absolute; inset: 0; pointer-events: none; }
+.p-name { font: 700 15px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--pc, var(--p1)); text-shadow: 0 1px 0 #000, 0 0 10px rgba(0,0,0,.8); max-width: 34vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#hud.duo .hud-p.p1 { right: 50%; --pc: var(--p1); }
+#hud.duo .hud-p.p2 { left: 50%; --pc: var(--p2); }
+#hud.duo .hud-p.p2 .hud-score { left: auto; right: 16px; flex-direction: row-reverse; text-align: right; }
+/* rock meters under each score, in the outer corners (the necks fill the rest) */
+#hud.duo .hud-p .rock { width: 96px; top: calc(max(14px, env(safe-area-inset-top)) + 86px); bottom: auto; }
+#hud.duo .hud-p.p1 .rock { right: auto; left: 16px; }
+#hud.duo .hud-p.p2 .rock { right: 16px; }
+#hud.duo .mult { pointer-events: none; }
+#hud.duo .icon-btn { right: auto; left: 50%; transform: translateX(-50%); top: calc(max(14px, env(safe-area-inset-top)) + 70px); }
+#hud.duo::before { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; transform: translateX(-1px);
+  background: linear-gradient(180deg, transparent, rgba(255,140,40,.55) 30%, rgba(255,140,40,.55) 70%, transparent); box-shadow: 0 0 12px rgba(255,120,30,.5); }
+#hud.duo .hud-top { width: min(220px, 24vw); }
+#hud.duo .star-pop { font-size: min(44px, 4vw); }
+#hud.duo .streak { font-size: min(38px, 3.6vw); }
+
+/* personal bests */
+.song .len { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.song .best { display: flex; flex-direction: column; align-items: flex-end; font-size: 13px; letter-spacing: 1px; color: var(--gold); text-shadow: 0 0 8px rgba(245,197,24,.35); line-height: 1; }
+.song .best .off { color: #3a3430; text-shadow: none; }
+.song .best small { font: 600 10px var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); text-shadow: none; margin-top: 2px; }
+.diff .best { font-size: 11px; letter-spacing: 1px; color: var(--gold); line-height: 1; }
+.diff .best .off { color: rgba(255,255,255,.18); }
+.duo-diffs .diff .best { display: none; }
+.pb-line { margin: 0; font: 600 16px var(--display); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.pb-line.new { color: var(--gold); text-shadow: 0 0 12px rgba(245,197,24,.5); }
+
+/* room invite */
+.invite { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.invite .btn { display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; font-size: 16px; }
+.invite svg { width: 18px; height: 18px; fill: currentColor; }
+#inviteWa { color: #d8ffe4; }
+#inviteWa svg { fill: #25d366; }
+
+/* install as an app */
+.install-btn { pointer-events: auto; display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; font: 600 14px var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--gold); }
+.install-btn svg { width: 16px; height: 16px; }
+.install-ios { pointer-events: auto; max-width: 40ch; margin: 0; }

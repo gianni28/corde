@@ -5,6 +5,7 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { Pass } from "three/examples/jsm/postprocessing/Pass.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { createCrowd, createBand } from "./stagecrew.js";
 
@@ -209,7 +210,6 @@ export function createRenderer(canvas) {
   /* --- lights: warm tungsten club rig --- */
   const hemi = new THREE.HemisphereLight(0xffd9b0, 0x120604, 0.28); scene.add(hemi);
   const key = new THREE.DirectionalLight(0xfff0dd, 1.0); key.position.set(2, 9, 7); scene.add(key);
-  const strikeLight = new THREE.PointLight(0xffa860, 1.6, 5, 1.8); strikeLight.position.set(0, 1.3, 0.8); scene.add(strikeLight);
   const wallSpots = [];
   [[-16, 0xffa040], [0, 0xff3b1a], [16, 0xffc070]].forEach(([x, c]) => {
     const s = new THREE.SpotLight(c, 260, 80, 0.42, 0.7, 1.4);
@@ -362,239 +362,8 @@ export function createRenderer(canvas) {
 
   bg.add(bake(stage));
 
-  /* --- highway --- */
-  const hwy = new THREE.Group(); scene.add(hwy);
-  let lanes = 5;
-  const boardTex = rosewoodTex(); boardTex.repeat.set(1, (HL + 5) / 6);
-  const board = new THREE.Mesh(new THREE.PlaneGeometry(1, HL + 5), new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.5, metalness: 0.05, emissiveMap: boardTex, emissive: 0xffffff, emissiveIntensity: 0.35 }));
-  board.rotation.x = -Math.PI / 2; board.position.set(0, 0, -HL / 2 + 2.5); hwy.add(board);
-  // fade the far end of the neck into darkness
-  const fadeMat = new THREE.MeshBasicMaterial({ color: 0x070403, transparent: true, depthWrite: false, alphaMap: canvasTex(4, 256, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, "#fff"); gr.addColorStop(0.35, "#000"); g.fillStyle = gr; g.fillRect(0, 0, w, h); }, { srgb: false }) });
-  const fade = new THREE.Mesh(new THREE.PlaneGeometry(1, 8), fadeMat); fade.rotation.x = -Math.PI / 2; fade.position.set(0, 0.2, -HL + 3.6); hwy.add(fade);
-
-  const chromeMat = new THREE.MeshStandardMaterial({ color: 0xd8d4cc, metalness: 1, roughness: 0.18 });
-  const edgeMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xfff2e0, emissiveIntensity: 0.55 });
-  const rails = [-1, 1].map(() => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.09, HL + 5), chromeMat); m.position.set(0, 0.04, -HL / 2 + 2.5); hwy.add(m); return m; });
-  const edges = [-1, 1].map(() => { const m = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.02, HL + 5), edgeMat); m.position.set(0, 0.1, -HL / 2 + 2.5); hwy.add(m); return m; });
-
-  // strings (silver; flash the lane colour when hit)
-  const strings = [];
-  const strGeo = new THREE.CylinderGeometry(0.016, 0.016, HL + 3, 6); strGeo.rotateX(Math.PI / 2);
-  for (let i = 0; i < 5; i++) {
-    const mat = new THREE.MeshStandardMaterial({ color: 0xbdb8b0, metalness: 1, roughness: 0.22, emissive: 0x000000, emissiveIntensity: 1 });
-    const s = new THREE.Mesh(strGeo, mat); s.position.set(0, 0.07, -HL / 2 + 1.5); hwy.add(s);
-    strings.push({ mesh: s, vib: 0, glow: 0 });
-  }
-
-  // metal fret bars on the beat
-  const frets = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.04, 0.08), new THREE.MeshStandardMaterial({ color: 0xcfcac0, metalness: 1, roughness: 0.25, emissive: 0x4a4038, emissiveIntensity: 0.5 }), 64);
-  frets.instanceMatrix.setUsage(THREE.DynamicDrawUsage); hwy.add(frets);
-
-  // strikeline bar
-  const strikeBar = new THREE.Mesh(new THREE.BoxGeometry(1, 0.05, 0.22), new THREE.MeshStandardMaterial({ color: 0x0c0b0b, metalness: 0.8, roughness: 0.35 }));
-  strikeBar.position.set(0, 0.03, 0); hwy.add(strikeBar);
-  const strikeEdge = new THREE.Mesh(new THREE.BoxGeometry(1, 0.02, 0.03), edgeMat); strikeEdge.position.set(0, 0.07, -0.12); hwy.add(strikeEdge);
-
-  // fret buttons: black housing, chrome bezel, coloured cap, chrome centre stud
-  const buttons = [];
-  const housingGeo = new THREE.CylinderGeometry(0.47, 0.52, 0.18, 48);
-  const bezelGeo = new THREE.TorusGeometry(0.41, 0.06, 16, 48); bezelGeo.rotateX(Math.PI / 2);
-  const capGeo = new THREE.CylinderGeometry(0.34, 0.36, 0.12, 48);
-  const studGeo = new THREE.CylinderGeometry(0.12, 0.14, 0.13, 24);
-  const housingMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, metalness: 0.4, roughness: 0.25 });
-  for (let i = 0; i < 5; i++) {
-    const g = new THREE.Group();
-    const housing = new THREE.Mesh(housingGeo, housingMat); housing.position.y = 0.07;
-    const bezel = new THREE.Mesh(bezelGeo, chromeMat); bezel.position.y = 0.16;
-    const cap = new THREE.Mesh(capGeo, new THREE.MeshStandardMaterial({ color: LANE_HEX[i], metalness: 0.1, roughness: 0.2, emissive: LANE_HEX[i], emissiveIntensity: 0.12 }));
-    const stud = new THREE.Mesh(studGeo, new THREE.MeshStandardMaterial({ color: 0xdedad2, metalness: 1, roughness: 0.15, emissive: 0xffffff, emissiveIntensity: 0 }));
-    cap.position.y = 0.2; stud.position.y = 0.21;
-    g.add(housing, bezel, cap, stud); g.scale.setScalar(0.92);
-    hwy.add(g);
-    buttons.push({ g, cap, stud, press: 0 });
-  }
-
-  // gems: glossy plastic, black base, white band
-  const gemBaseGeo = new THREE.CylinderGeometry(0.4, 0.42, 0.09, 32);
-  const gemBodyGeo = new THREE.CylinderGeometry(0.35, 0.38, 0.12, 32); gemBodyGeo.translate(0, 0.08, 0);
-  const gemDomeGeo = new THREE.SphereGeometry(0.33, 28, 10, 0, Math.PI * 2, 0, Math.PI / 2); gemDomeGeo.scale(1, 0.4, 1); gemDomeGeo.translate(0, 0.14, 0);
-  const gemRingGeo = new THREE.TorusGeometry(0.365, 0.04, 10, 40); gemRingGeo.rotateX(Math.PI / 2); gemRingGeo.translate(0, 0.14, 0);
-  const glowInstance = (mat, k) => {
-    mat.onBeforeCompile = (s) => {
-      s.fragmentShader = s.fragmentShader.replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>\n#ifdef USE_INSTANCING_COLOR\n totalEmissiveRadiance += vColor * ${k.toFixed(2)};\n#endif`);
-    };
-    return mat;
-  };
-  const mk = (geo, mat) => { const m = new THREE.InstancedMesh(geo, mat, MAX_GEMS); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.frustumCulled = false; hwy.add(m); return m; };
-  const gemBase = mk(gemBaseGeo, new THREE.MeshStandardMaterial({ color: 0x080808, metalness: 0.3, roughness: 0.35 }));
-  const gemBody = mk(gemBodyGeo, glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.05, roughness: 0.3 }), 0.1));
-  const gemDome = mk(gemDomeGeo, glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.05, roughness: 0.1 }), 0.16));
-  const gemRing = mk(gemRingGeo, new THREE.MeshStandardMaterial({ color: 0xf2eee6, metalness: 0.1, roughness: 0.25, emissive: 0xffffff, emissiveIntensity: 0.12 }));
-  const tails = mk(new THREE.BoxGeometry(1, 1, 1), glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 }), 0.35));
-  // star-phrase notes are white stars (like the classics), with a glow under them that doesn't need bloom (phones)
-  const starShape = new THREE.Shape();
-  for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + (i * Math.PI) / 5, r = i % 2 ? 0.2 : 0.47; i ? starShape.lineTo(Math.cos(a) * r, Math.sin(a) * r) : starShape.moveTo(Math.cos(a) * r, Math.sin(a) * r); }
-  const starGeo = new THREE.ExtrudeGeometry(starShape, { depth: 0.07, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.045, bevelSegments: 2 });
-  starGeo.rotateX(-Math.PI / 2); starGeo.translate(0, 0.07, 0);
-  const starGem = mk(starGeo, glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.1, roughness: 0.2, emissive: 0xe4f4ff, emissiveIntensity: 0.95 }), 0.45));
-  const haloGeo = new THREE.PlaneGeometry(1, 1); haloGeo.rotateX(-Math.PI / 2);
-  const halos = mk(haloGeo, new THREE.MeshBasicMaterial({ map: softDotTex(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
-  halos.renderOrder = 2;
-  [gemBody, gemDome, tails, starGem, halos].forEach((m) => m.setColorAt(0, new THREE.Color()));
-
-  // hit fire + sparks
-  const flames = [];
-  for (let i = 0; i < 5; i++) {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: fire[0], transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
-    sp.center.set(0.5, 0.04); hwy.add(sp); flames.push({ sp, t: 9, f: 0 });
-  }
-  // star power ready: blue fire burning at both ends of the strike line
-  const blueFire = fireFrames(6, BLUE_FIRE);
-  const readyFire = [];
-  for (let k = 0; k < 4; k++) {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: blueFire[k % 6], transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
-    sp.center.set(0.5, 0.04); sp.visible = false; hwy.add(sp); readyFire.push(sp);
-  }
-  let readyGlow = 0;
-  // star phrase completed: a white flash over every fret
-  const flareTex = softDotTex();
-  const flares = [];
-  for (let i = 0; i < 5; i++) {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: flareTex, color: 0xeaf6ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
-    sp.visible = false; hwy.add(sp); flares.push(sp);
-  }
-  let phraseT = 9;
-  const SPARKS = 240;
-  const sparkGeo = new THREE.BufferGeometry();
-  const spPos = new Float32Array(SPARKS * 3), spCol = new Float32Array(SPARKS * 3);
-  sparkGeo.setAttribute("position", new THREE.BufferAttribute(spPos, 3));
-  sparkGeo.setAttribute("color", new THREE.BufferAttribute(spCol, 3));
-  const sparkVel = new Float32Array(SPARKS * 3), sparkLife = new Float32Array(SPARKS);
-  const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({ map: softDotTex(), size: 0.1, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-  sparks.frustumCulled = false; hwy.add(sparks);
-  let sparkIdx = 0;
-  let sparkBlue = false;
-  function burst(x, n, white = false, blue = false, power = 1) {
-    for (let k = 0; k < n; k++) {
-      const i = sparkIdx++ % SPARKS;
-      spPos[i * 3] = x + rnd(-0.25, 0.25); spPos[i * 3 + 1] = 0.25; spPos[i * 3 + 2] = rnd(-0.1, 0.1);
-      sparkVel[i * 3] = rnd(-1.8, 1.8) * power; sparkVel[i * 3 + 1] = rnd(2, 5.5) * power; sparkVel[i * 3 + 2] = rnd(-0.6, 1.2);
-      sparkLife[i] = rnd(0.35, 0.7) * Math.sqrt(power);
-      const hot = Math.random();
-      if (white) { spCol[i * 3] = 0.85 + hot * 0.15; spCol[i * 3 + 1] = 0.92 + hot * 0.08; spCol[i * 3 + 2] = 1; }
-      else if (sparkBlue || blue) { spCol[i * 3] = 0.35 + hot * 0.3; spCol[i * 3 + 1] = 0.75 + hot * 0.2; spCol[i * 3 + 2] = 1; }
-      else { spCol[i * 3] = 1; spCol[i * 3 + 1] = 0.45 + hot * 0.5; spCol[i * 3 + 2] = hot * 0.35; }
-    }
-  }
-
-  /* --- post --- */
-  const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: isMobile ? 0 : 4 }));
-  composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(128, 128), 0.5, 0.4, 0.86);
-  composer.addPass(bloom);
-  composer.addPass(new OutputPass());
-
-  /* --- layout --- */
-  const laneX = (i) => (i - (lanes - 1) / 2) * LW;
-  function layoutLanes(n) {
-    lanes = n;
-    const w = n * LW + 0.5;
-    board.scale.x = w; fade.scale.x = w + 0.6;
-    rails[0].position.x = -w / 2 - 0.04; rails[1].position.x = w / 2 + 0.04;
-    edges[0].position.x = -w / 2 + 0.06; edges[1].position.x = w / 2 - 0.06;
-    strikeBar.scale.x = w; strikeEdge.scale.x = w;
-    for (let i = 0; i < 5; i++) {
-      const on = i < n;
-      strings[i].mesh.visible = on; buttons[i].g.visible = on;
-      strings[i].mesh.position.x = laneX(i); buttons[i].g.position.set(laneX(i), 0, 0);
-      flames[i].sp.position.set(laneX(i), 0.15, 0.05);
-      // a lane that goes away must not leave its fire behind (the frame loop only animates the active lanes)
-      if (!on) { flames[i].t = 9; flames[i].sp.visible = false; flames[i].sp.material.opacity = 0; }
-      flares[i].position.set(laneX(i), 0.3, 0.05); if (!on) flares[i].visible = false;
-    }
-    readyFire.forEach((sp, k) => sp.position.set((k % 2 ? 1 : -1) * (w / 2 + 0.2 + (k > 1 ? 0.12 : 0)), 0.08, 0.05 + (k > 1 ? -0.15 : 0)));
-    fitCamera();
-  }
-  // The crowd is laid out in screen space beside the neck: find where the neck's edge is on screen, row by row.
-  function layoutCrowd(aspect) {
-    const hw = (lanes * LW + 0.5) / 2 + 0.16, pts = [];
-    for (let z = 3; z >= -HL + 3; z -= 0.5) { tmpV.set(-hw, 0.05, z).project(camera); pts.push([tmpV.y, tmpV.x]); }
-    const top = pts[pts.length - 1][0];
-    const edgeX = (y) => {
-      if (y > top + 0.02) return null; // above the far end of the neck
-      if (y <= pts[0][0]) return pts[0][1];
-      for (let i = 1; i < pts.length; i++) if (pts[i][0] >= y) { const [y0, x0] = pts[i - 1], [y1, x1] = pts[i]; return x0 + ((x1 - x0) * (y - y0)) / Math.max(1e-6, y1 - y0); }
-      return pts[pts.length - 1][1];
-    };
-    crowd.layout(aspect, Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2), edgeX);
-  }
-
-  let W = 1, H = 1;
-  const baseCam = new THREE.Vector3();
-  // Analytic camera fit: strike line at a fixed screen height, highway filling a fixed share of the width.
-  function fitCamera() {
-    const aspect = W / H;
-    const portrait = aspect < 0.9;
-    camera.aspect = aspect;
-    camera.fov = portrait ? 66 : 52;
-    const pitch = portrait ? 0.6 : 0.42;
-    const tf = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
-    const wantY = portrait ? -0.6 : -0.7;
-    const wantX = portrait ? 0.95 : Math.min(0.48, 0.95 / aspect);
-    const half = (lanes * LW + 0.5) / 2 + 0.2;
-    const alpha = Math.atan(-wantY * tf);
-    const phi = pitch + alpha;
-    const cs = half / (wantX * tf * aspect * Math.cos(alpha));
-    camera.position.set(0, cs * Math.sin(phi), cs * Math.cos(phi) + 0.3);
-    camera.rotation.set(-pitch, 0, 0);
-    camera.updateProjectionMatrix(); camera.updateMatrixWorld();
-    baseCam.copy(camera.position);
-    layoutCrowd(aspect);
-    band.layout(portrait);
-  }
-
-  /* --- quality levels (auto mode steps down the moment frames get slow) --- */
-  const DEV_DPR = devicePixelRatio || 1;
-  const LEVELS = [
-    { dpr: Math.min(DEV_DPR, 2), bloom: 0.5, bg: 0.75, bgEvery: 1, fx: 2 },
-    { dpr: Math.min(DEV_DPR, 1.5), bloom: 0.35, bg: 0.7, bgEvery: 1, fx: 2 },
-    { dpr: 1, bloom: 0, bg: 0.5, bgEvery: 2, fx: 1 },
-    { dpr: 0.75, bloom: 0, bg: 0.33, bgEvery: 3, fx: 0 },
-  ];
-  let mode = "auto", level = isMobile ? 2 : 1;
-  const perf = { ema: 16.7, last: 0, slowFor: 0, fastFor: 0, lastDrop: -1e9 };
-  function applyLevel() {
-    const L = LEVELS[level];
-    const samples = !isMobile && level <= 1 ? 4 : 0;
-    for (const rt of [composer.renderTarget1, composer.renderTarget2, bgRT]) if (rt.samples !== samples) { rt.samples = samples; rt.dispose(); }
-    renderer.setPixelRatio(L.dpr);
-    bloom.enabled = L.bloom > 0;
-    dust.visible = L.fx >= 1;
-    haze.forEach((h, i) => (h.s.visible = L.fx >= 2 || i % 2 === 0));
-    coneMats.forEach((m) => (m.visible = L.fx >= 1));
-    resize();
-  }
-  function autoTune(now) {
-    if (mode !== "auto") return;
-    if (!perf.last) { perf.last = now; return; }
-    const ft = now - perf.last; perf.last = now;
-    if (ft > 250) return; // tab switch or a one-off hitch: ignore
-    perf.ema += (Math.min(ft, 60) - perf.ema) * 0.08;
-    if (perf.ema > 19.5) { perf.slowFor += ft; perf.fastFor = 0; } else if (perf.ema < 12.5) { perf.fastFor += ft; perf.slowFor = 0; } else { perf.slowFor = 0; perf.fastFor = 0; }
-    if (perf.slowFor > 700 && level < LEVELS.length - 1) { level++; perf.slowFor = 0; perf.lastDrop = now; perf.ema = 16.7; applyLevel(); }
-    else if (perf.fastFor > 8000 && level > (isMobile ? 1 : 0) && now - perf.lastDrop > 30000) { level--; perf.fastFor = 0; perf.ema = 16.7; applyLevel(); }
-  }
-
-  function resize() {
-    W = canvas.clientWidth || innerWidth; H = canvas.clientHeight || innerHeight;
-    const L = LEVELS[level];
-    renderer.setSize(W, H, false); composer.setSize(W, H);
-    bloom.resolution.set(Math.max(64, W * L.bloom), Math.max(64, H * L.bloom));
-    bgRT.setSize(Math.max(64, Math.round(W * L.dpr * L.bg)), Math.max(64, Math.round(H * L.dpr * L.bg)));
-    fitCamera();
-  }
-  let frameNo = 0;
-
+  /* --- highways: one per player (two side by side when two people share a PC) --- */
+  const tmpM = new THREE.Matrix4(), tmpC = new THREE.Color(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
   const WHITE = new THREE.Color(1, 1, 1);
   // star power on: HDR colours so the notes glow (instance colours also feed the emissive term)
   const STAR_ON_BODY = new THREE.Color(0.1, 1.15, 2.6), STAR_ON_DOME = new THREE.Color(0.75, 1.9, 2.8), STAR_ON_GEM = new THREE.Color(0.55, 1.5, 2.6);
@@ -602,106 +371,195 @@ export function createRenderer(canvas) {
   const Y_AXIS = new THREE.Vector3(0, 1, 0);
   const BOARD_WARM = new THREE.Color(0xffffff), BOARD_STAR = new THREE.Color(0x7cc6ff), EDGE_WARM = new THREE.Color(0xfff2e0), EDGE_STAR = new THREE.Color(0x6fd8ff);
   const LIGHT_WARM = new THREE.Color(0xffa860), LIGHT_STAR = new THREE.Color(0x5ab8ff);
-  let starGlow = 0, peopleDt = 0;
-  const beatTrack = { count: 0, bar: 0, lastT: -1e9, prevT: -1e9, len: 0.5 };
-  const tmpM = new THREE.Matrix4(), tmpC = new THREE.Color(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
-  const Z_AXIS = new THREE.Vector3(0, 0, 1);
-  // warm club palettes per song section: [front PARs, back PARs]
-  const palettes = [[0xffb060, 0xff3a1a], [0xff2a14, 0xffc070], [0xfff0d0, 0xff6a10], [0xffc040, 0xd01010], [0xff7a20, 0xfff2e0]];
-  let pal = 0;
-  const colA = new THREE.Color(palettes[0][0]), colB = new THREE.Color(palettes[0][1]);
 
-  function firePyro() { pyroT = 0; pyro.forEach((p) => (p.t = 0)); }
+  // made once, shared by every neck
+  const dotTex = softDotTex();
+  const blueFire = fireFrames(6, BLUE_FIRE);
+  const boardBase = rosewoodTex(); boardBase.repeat.set(1, (HL + 5) / 6);
+  const fadeAlpha = canvasTex(4, 256, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, "#fff"); gr.addColorStop(0.35, "#000"); g.fillStyle = gr; g.fillRect(0, 0, w, h); }, { srgb: false });
+  const chromeMat = new THREE.MeshStandardMaterial({ color: 0xd8d4cc, metalness: 1, roughness: 0.18 });
+  const railGeo = new THREE.BoxGeometry(0.12, 0.09, HL + 5), edgeGeo = new THREE.BoxGeometry(0.035, 0.02, HL + 5);
+  const strGeo = new THREE.CylinderGeometry(0.016, 0.016, HL + 3, 6); strGeo.rotateX(Math.PI / 2);
+  const fretGeo = new THREE.BoxGeometry(1, 0.04, 0.08);
+  const fretMat = new THREE.MeshStandardMaterial({ color: 0xcfcac0, metalness: 1, roughness: 0.25, emissive: 0x4a4038, emissiveIntensity: 0.5 });
+  const strikeGeo = new THREE.BoxGeometry(1, 0.05, 0.22), strikeEdgeGeo = new THREE.BoxGeometry(1, 0.02, 0.03);
+  const strikeMat = new THREE.MeshStandardMaterial({ color: 0x0c0b0b, metalness: 0.8, roughness: 0.35 });
+  // fret buttons: black housing, chrome bezel, coloured cap, chrome centre stud
+  const housingGeo = new THREE.CylinderGeometry(0.47, 0.52, 0.18, 48);
+  const bezelGeo = new THREE.TorusGeometry(0.41, 0.06, 16, 48); bezelGeo.rotateX(Math.PI / 2);
+  const capGeo = new THREE.CylinderGeometry(0.34, 0.36, 0.12, 48);
+  const studGeo = new THREE.CylinderGeometry(0.12, 0.14, 0.13, 24);
+  const housingMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, metalness: 0.4, roughness: 0.25 });
+  // gems: glossy plastic, black base, white band
+  const gemBaseGeo = new THREE.CylinderGeometry(0.4, 0.42, 0.09, 32);
+  const gemBodyGeo = new THREE.CylinderGeometry(0.35, 0.38, 0.12, 32); gemBodyGeo.translate(0, 0.08, 0);
+  const gemDomeGeo = new THREE.SphereGeometry(0.33, 28, 10, 0, Math.PI * 2, 0, Math.PI / 2); gemDomeGeo.scale(1, 0.4, 1); gemDomeGeo.translate(0, 0.14, 0);
+  const gemRingGeo = new THREE.TorusGeometry(0.365, 0.04, 10, 40); gemRingGeo.rotateX(Math.PI / 2); gemRingGeo.translate(0, 0.14, 0);
+  const tailGeo = new THREE.BoxGeometry(1, 1, 1);
+  const glowInstance = (mat, k) => {
+    mat.onBeforeCompile = (s) => {
+      s.fragmentShader = s.fragmentShader.replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>\n#ifdef USE_INSTANCING_COLOR\n totalEmissiveRadiance += vColor * ${k.toFixed(2)};\n#endif`);
+    };
+    return mat;
+  };
+  const gemBaseMat = new THREE.MeshStandardMaterial({ color: 0x080808, metalness: 0.3, roughness: 0.35 });
+  const gemBodyMat = glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.05, roughness: 0.3 }), 0.1);
+  const gemDomeMat = glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.05, roughness: 0.1 }), 0.16);
+  const gemRingMat = new THREE.MeshStandardMaterial({ color: 0xf2eee6, metalness: 0.1, roughness: 0.25, emissive: 0xffffff, emissiveIntensity: 0.12 });
+  const tailMat = glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 }), 0.35);
+  // star-phrase notes are white stars (like the classics), with a glow under them that doesn't need bloom (phones)
+  const starShape = new THREE.Shape();
+  for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + (i * Math.PI) / 5, r = i % 2 ? 0.2 : 0.47; i ? starShape.lineTo(Math.cos(a) * r, Math.sin(a) * r) : starShape.moveTo(Math.cos(a) * r, Math.sin(a) * r); }
+  const starGeo = new THREE.ExtrudeGeometry(starShape, { depth: 0.07, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.045, bevelSegments: 2 });
+  starGeo.rotateX(-Math.PI / 2); starGeo.translate(0, 0.07, 0);
+  const starMat = glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.1, roughness: 0.2, emissive: 0xe4f4ff, emissiveIntensity: 0.95 }), 0.45);
+  const haloGeo = new THREE.PlaneGeometry(1, 1); haloGeo.rotateX(-Math.PI / 2);
+  const haloMat = new THREE.MeshBasicMaterial({ map: dotTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+  const SPARKS = 240;
 
-  const api = {
-    _internals: { camera, baseCam, bg },
-    setLanes: layoutLanes,
-    // "auto" | "high" | "low"
-    setQualityLevel(q) {
-      mode = q === "high" || q === "low" ? q : "auto";
-      level = mode === "high" ? 0 : mode === "low" ? 2 : isMobile ? 2 : 1;
-      perf.ema = 16.7; perf.slowFor = perf.fastFor = 0;
-      applyLevel();
-    },
-    qualityInfo() { return { mode, level, ema: +perf.ema.toFixed(1), bg: [bgRT.width, bgRT.height], px: renderer.getPixelRatio() }; },
-    resize,
-    setSection(i) { pal = ((i % palettes.length) + palettes.length) % palettes.length; if (i > 0) firePyro(); },
-    pyro: firePyro,
-    hit(lane, sustain) {
-      if (lane >= lanes) return;
-      const f = flames[lane]; f.t = 0;
+  function createHighway() {
+    const hwy = new THREE.Group(); scene.add(hwy);
+    const h = { group: hwy, lanes: 5, starGlow: 0, readyGlow: 0, phraseT: 9, sparkBlue: false };
+    const laneX = (i) => (i - (h.lanes - 1) / 2) * LW;
+    h.laneX = laneX;
+    h.width = () => h.lanes * LW + 0.5;
+
+    // the light over the strike line (warm; blue with star power)
+    const strikeLight = new THREE.PointLight(0xffa860, 1.6, 5, 1.8); strikeLight.position.set(0, 1.3, 0.8); hwy.add(strikeLight);
+
+    const boardTex = boardBase.clone(); boardTex.needsUpdate = true;
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(1, HL + 5), new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.5, metalness: 0.05, emissiveMap: boardTex, emissive: 0xffffff, emissiveIntensity: 0.35 }));
+    board.rotation.x = -Math.PI / 2; board.position.set(0, 0, -HL / 2 + 2.5); hwy.add(board);
+    // fade the far end of the neck into darkness
+    const fade = new THREE.Mesh(new THREE.PlaneGeometry(1, 8), new THREE.MeshBasicMaterial({ color: 0x070403, transparent: true, depthWrite: false, alphaMap: fadeAlpha }));
+    fade.rotation.x = -Math.PI / 2; fade.position.set(0, 0.2, -HL + 3.6); hwy.add(fade);
+
+    const edgeMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xfff2e0, emissiveIntensity: 0.55 });
+    const rails = [-1, 1].map(() => { const m = new THREE.Mesh(railGeo, chromeMat); m.position.set(0, 0.04, -HL / 2 + 2.5); hwy.add(m); return m; });
+    const edges = [-1, 1].map(() => { const m = new THREE.Mesh(edgeGeo, edgeMat); m.position.set(0, 0.1, -HL / 2 + 2.5); hwy.add(m); return m; });
+
+    // strings (silver; flash the lane colour when hit)
+    const strings = [];
+    for (let i = 0; i < 5; i++) {
+      const mat = new THREE.MeshStandardMaterial({ color: 0xbdb8b0, metalness: 1, roughness: 0.22, emissive: 0x000000, emissiveIntensity: 1 });
+      const s = new THREE.Mesh(strGeo, mat); s.position.set(0, 0.07, -HL / 2 + 1.5); hwy.add(s);
+      strings.push({ mesh: s, vib: 0, glow: 0 });
+    }
+
+    // metal fret bars on the beat
+    const frets = new THREE.InstancedMesh(fretGeo, fretMat, 64);
+    frets.instanceMatrix.setUsage(THREE.DynamicDrawUsage); hwy.add(frets);
+
+    // strikeline bar
+    const strikeBar = new THREE.Mesh(strikeGeo, strikeMat); strikeBar.position.set(0, 0.03, 0); hwy.add(strikeBar);
+    const strikeEdge = new THREE.Mesh(strikeEdgeGeo, edgeMat); strikeEdge.position.set(0, 0.07, -0.12); hwy.add(strikeEdge);
+
+    const buttons = [];
+    for (let i = 0; i < 5; i++) {
+      const g = new THREE.Group();
+      const housing = new THREE.Mesh(housingGeo, housingMat); housing.position.y = 0.07;
+      const bezel = new THREE.Mesh(bezelGeo, chromeMat); bezel.position.y = 0.16;
+      const cap = new THREE.Mesh(capGeo, new THREE.MeshStandardMaterial({ color: LANE_HEX[i], metalness: 0.1, roughness: 0.2, emissive: LANE_HEX[i], emissiveIntensity: 0.12 }));
+      const stud = new THREE.Mesh(studGeo, new THREE.MeshStandardMaterial({ color: 0xdedad2, metalness: 1, roughness: 0.15, emissive: 0xffffff, emissiveIntensity: 0 }));
+      cap.position.y = 0.2; stud.position.y = 0.21;
+      g.add(housing, bezel, cap, stud); g.scale.setScalar(0.92);
+      hwy.add(g);
+      buttons.push({ g, cap, stud, press: 0 });
+    }
+
+    const mk = (geo, mat) => { const m = new THREE.InstancedMesh(geo, mat, MAX_GEMS); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.frustumCulled = false; hwy.add(m); return m; };
+    const gemBase = mk(gemBaseGeo, gemBaseMat), gemBody = mk(gemBodyGeo, gemBodyMat), gemDome = mk(gemDomeGeo, gemDomeMat), gemRing = mk(gemRingGeo, gemRingMat);
+    const tails = mk(tailGeo, tailMat), starGem = mk(starGeo, starMat), halos = mk(haloGeo, haloMat);
+    halos.renderOrder = 2;
+    [gemBody, gemDome, tails, starGem, halos].forEach((m) => m.setColorAt(0, new THREE.Color()));
+
+    // hit fire + sparks
+    const flames = [];
+    for (let i = 0; i < 5; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: fire[0], transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+      sp.center.set(0.5, 0.04); hwy.add(sp); flames.push({ sp, t: 9, f: 0 });
+    }
+    // star power ready: blue fire burning at both ends of the strike line
+    const readyFire = [];
+    for (let k = 0; k < 4; k++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: blueFire[k % 6], transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+      sp.center.set(0.5, 0.04); sp.visible = false; hwy.add(sp); readyFire.push(sp);
+    }
+    // star phrase completed: a white flash over every fret
+    const flares = [];
+    for (let i = 0; i < 5; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTex, color: 0xeaf6ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
+      sp.visible = false; hwy.add(sp); flares.push(sp);
+    }
+    const sparkGeo = new THREE.BufferGeometry();
+    const spPos = new Float32Array(SPARKS * 3), spCol = new Float32Array(SPARKS * 3);
+    sparkGeo.setAttribute("position", new THREE.BufferAttribute(spPos, 3));
+    sparkGeo.setAttribute("color", new THREE.BufferAttribute(spCol, 3));
+    const sparkVel = new Float32Array(SPARKS * 3), sparkLife = new Float32Array(SPARKS);
+    const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({ map: dotTex, size: 0.1, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+    sparks.frustumCulled = false; hwy.add(sparks);
+    let sparkIdx = 0;
+    function burst(x, n, white = false, blue = false, power = 1) {
+      for (let k = 0; k < n; k++) {
+        const i = sparkIdx++ % SPARKS;
+        spPos[i * 3] = x + rnd(-0.25, 0.25); spPos[i * 3 + 1] = 0.25; spPos[i * 3 + 2] = rnd(-0.1, 0.1);
+        sparkVel[i * 3] = rnd(-1.8, 1.8) * power; sparkVel[i * 3 + 1] = rnd(2, 5.5) * power; sparkVel[i * 3 + 2] = rnd(-0.6, 1.2);
+        sparkLife[i] = rnd(0.35, 0.7) * Math.sqrt(power);
+        const hot = Math.random();
+        if (white) { spCol[i * 3] = 0.85 + hot * 0.15; spCol[i * 3 + 1] = 0.92 + hot * 0.08; spCol[i * 3 + 2] = 1; }
+        else if (h.sparkBlue || blue) { spCol[i * 3] = 0.35 + hot * 0.3; spCol[i * 3 + 1] = 0.75 + hot * 0.2; spCol[i * 3 + 2] = 1; }
+        else { spCol[i * 3] = 1; spCol[i * 3 + 1] = 0.45 + hot * 0.5; spCol[i * 3 + 2] = hot * 0.35; }
+      }
+    }
+
+    h.layout = (n) => {
+      h.lanes = n;
+      const w = h.width();
+      board.scale.x = w; fade.scale.x = w + 0.6;
+      rails[0].position.x = -w / 2 - 0.04; rails[1].position.x = w / 2 + 0.04;
+      edges[0].position.x = -w / 2 + 0.06; edges[1].position.x = w / 2 - 0.06;
+      strikeBar.scale.x = w; strikeEdge.scale.x = w;
+      for (let i = 0; i < 5; i++) {
+        const on = i < n;
+        strings[i].mesh.visible = on; buttons[i].g.visible = on;
+        strings[i].mesh.position.x = laneX(i); buttons[i].g.position.set(laneX(i), 0, 0);
+        flames[i].sp.position.set(laneX(i), 0.15, 0.05);
+        // a lane that goes away must not leave its fire behind (the frame loop only animates the active lanes)
+        if (!on) { flames[i].t = 9; flames[i].sp.visible = false; flames[i].sp.material.opacity = 0; }
+        flares[i].position.set(laneX(i), 0.3, 0.05); if (!on) flares[i].visible = false;
+      }
+      readyFire.forEach((sp, k) => sp.position.set((k % 2 ? 1 : -1) * (w / 2 + 0.2 + (k > 1 ? 0.12 : 0)), 0.08, 0.05 + (k > 1 ? -0.15 : 0)));
+    };
+    h.hit = (lane, sustain) => {
+      if (lane >= h.lanes) return;
+      flames[lane].t = 0;
       strings[lane].vib = 1; strings[lane].glow = 1; buttons[lane].press = 1;
       burst(laneX(lane), sustain ? 6 : 14);
-    },
-    holdSpark(lane) {
-      if (lane >= lanes) return;
+    };
+    h.holdSpark = (lane) => {
+      if (lane >= h.lanes) return;
       if (Math.random() < 0.45) burst(laneX(lane), 1);
       const f = flames[lane]; if (f.t > 0.12) f.t = 0.12;
       strings[lane].glow = Math.max(strings[lane].glow, 0.7); strings[lane].vib = Math.max(strings[lane].vib, 0.4);
-    },
-    miss() {},
-    /** How excited the crowd is, 0–1 (follows the rock meter and star power). */
-    setHype(v) { hype = Math.max(0, Math.min(1, v)); },
-    /** A star phrase was completed: a white flash and a fountain of white sparks over every fret. */
-    starPhrase() { phraseT = 0; for (let i = 0; i < lanes; i++) burst(laneX(i), 16, true, false, 1.35); },
-    laneFromClientX(x, rect) {
-      let best = 0, bd = 1e9;
-      for (let i = 0; i < lanes; i++) {
-        tmpV.set(laneX(i), 0, 0).project(camera);
-        const sx = rect.left + ((tmpV.x + 1) / 2) * rect.width;
-        const d = Math.abs(sx - x); if (d < bd) { bd = d; best = i; }
-      }
-      return best;
-    },
-    strikeScreenY() { tmpV.set(0, 0, 0).project(camera); return ((1 - tmpV.y) / 2) * H; },
-    laneScreenX(i) { tmpV.set(laneX(i), 0, 0).project(camera); return ((tmpV.x + 1) / 2) * W; },
+    };
+    // a star phrase was completed: a white flash and a fountain of white sparks over every fret
+    h.starPhrase = () => { h.phraseT = 0; for (let i = 0; i < h.lanes; i++) burst(laneX(i), 16, true, false, 1.35); };
 
-    // state: { t, look, notes:[{t,lane,dur,state,holding}], from, pressed[], beats[[t,bar]], dt, star, starReady, energy, punch }
-    render(state) {
-      const { t, look, notes, from = 0, pressed = [], beats = [], dt = 0.016, star = false, starReady = false, energy = 0.55, punch = 0 } = state;
+    // s: { t, look, notes:[{t,lane,dur,state,holding}], from, pressed[], beats[[t,bar]], star, starReady }
+    h.update = (s, { now, dt, pulse }) => {
+      const { t, look, notes, from = 0, pressed = [], beats = [], star = false, starReady = false } = s;
+      const lanes = h.lanes;
       const speed = HL / look;
       const zOf = (time) => -(time - t) * speed;
-      const now = performance.now() / 1000;
-      const E = energy;
-
-      let pulse = 0;
-      for (let i = 0; i < beats.length; i++) { const d = t - beats[i][0]; if (d >= 0 && d < 0.3) pulse = Math.max(pulse, (1 - d / 0.3) * (beats[i][1] ? 1 : 0.55)); }
-
-      // where we are in the beat and in the bar (counted as beats go by; reset when time jumps back)
-      let li = -1;
-      for (let i = 0; i < beats.length; i++) { if (beats[i][0] <= t) li = i; else break; }
-      if (t < beatTrack.prevT - 0.05) { beatTrack.lastT = -1e9; }
-      beatTrack.prevT = t;
-      let phase = 0;
-      if (li >= 0) {
-        const b0 = beats[li][0];
-        if (b0 > beatTrack.lastT + 1e-4) { beatTrack.count++; beatTrack.bar = beats[li][1] ? 0 : (beatTrack.bar + 1) % 4; beatTrack.lastT = b0; }
-        const nb = beats[li + 1];
-        if (nb) beatTrack.len = Math.max(0.15, nb[0] - b0);
-        phase = Math.min(1, (t - b0) / beatTrack.len);
-      }
-      const bpos = beatTrack.count + phase;
-
-      // lights: brighter, punchier and changing colour faster when the song is loud; dim and warm when it's calm
-      const lerpK = 0.015 + 0.03 * E;
-      colA.lerp(tmpC.setHex(palettes[pal][0]), lerpK); colB.lerp(tmpC.setHex(palettes[pal][1]), lerpK);
-      const pk = pulse * (0.35 + 0.9 * E) + punch * 0.35 * E;
-      [colA, colB].forEach((col, row) => {
-        glows[row].material.color.copy(col).multiplyScalar(0.45 + 0.45 * E + pk * 0.6);
-        coneMats[row].uniforms.uColor.value.copy(col);
-        coneMats[row].uniforms.uI.value = (0.05 + 0.08 * E + pk * 0.14) * (0.88 + 0.12 * Math.sin(now * (3 + 6 * E) + row));
-      });
-      wallSpots.forEach((s, i) => { s.color.copy(i === 1 ? colB : colA); s.intensity = 110 + 160 * E + pk * 150; });
-      stageWash.color.copy(colA); stageWash.intensity = 85 + 60 * E + pk * 70;
-      bandKey.intensity = 260 + 160 * E + pk * 120;
       strikeLight.intensity = 1.4 + pulse * 0.8;
       edgeMat.emissiveIntensity = 0.5 + pulse * 0.35;
       // star power: the neck, its edges and the strike light turn blue
-      starGlow += ((star ? 1 : 0) - starGlow) * Math.min(1, dt * 6);
-      readyGlow += ((starReady && !star ? 1 : 0) - readyGlow) * Math.min(1, dt * 5);
-      phraseT += dt;
-      const flash = phraseT < 0.5 ? Math.pow(1 - phraseT / 0.5, 2) : 0;
-      sparkBlue = star;
+      h.starGlow += ((star ? 1 : 0) - h.starGlow) * Math.min(1, dt * 6);
+      h.readyGlow += ((starReady && !star ? 1 : 0) - h.readyGlow) * Math.min(1, dt * 5);
+      h.phraseT += dt;
+      const starGlow = h.starGlow, readyGlow = h.readyGlow;
+      const flash = h.phraseT < 0.5 ? Math.pow(1 - h.phraseT / 0.5, 2) : 0;
+      h.sparkBlue = star;
       board.material.emissive.copy(BOARD_WARM).lerp(BOARD_STAR, starGlow);
       board.material.emissiveIntensity = 0.35 + starGlow * 0.3 + flash * 0.9;
       edgeMat.emissive.copy(EDGE_WARM).lerp(EDGE_STAR, Math.max(starGlow, readyGlow * (0.55 + 0.45 * Math.sin(now * 9))));
@@ -723,47 +581,13 @@ export function createRenderer(canvas) {
         const fl = 1 + 0.12 * Math.sin(now * 23 + k * 2);
         sp.scale.set((k > 1 ? 0.7 : 0.95) * fl, (k > 1 ? 1.35 : 2.0) * fl * (0.7 + 0.3 * readyGlow), 1);
       });
-      if (readyGlow > 0.5 && Math.random() < dt * 22) { const side = Math.random() < 0.5 ? -1 : 1; burst(side * ((lanes * LW + 0.5) / 2 + 0.2), 1, false, true, 0.8); }
-
-      camera.position.set(baseCam.x + Math.sin(now * 0.3) * 0.05, baseCam.y + pulse * 0.025 * (0.4 + E), baseCam.z);
-
-      // the people: crowd and band (only worked out on frames where the venue is redrawn)
-      hypeS += (Math.max(hype, starGlow * 0.95) - hypeS) * Math.min(1, dt * 1.5);
-      peopleDt += dt;
-      if (frameNo % LEVELS[level].bgEvery === 0) {
-        rimCol.copy(colA).lerp(colB, 0.35).multiplyScalar(0.55 + 0.5 * E + pk * 0.5);
-        if (starGlow > 0.01) rimCol.lerp(tmpC.setHex(0x3fb4ff).multiplyScalar(1.1), starGlow * 0.75);
-        const fdt = Math.min(0.1, peopleDt); peopleDt = 0;
-        camera.updateMatrixWorld();
-        const f = { bpos, ph: phase, bar: beatTrack.bar, E: Math.min(1, E + starGlow * 0.12), P: punch, hype: hypeS, star: starGlow, dt: fdt, now, rim: rimCol };
-        crowd.update(f, camera);
-        band.update(f);
-      }
-
-      haze.forEach((h) => { h.s.position.x += h.v * dt; if (h.s.position.x > 34) h.s.position.x = -34; if (h.s.position.x < -34) h.s.position.x = 34; });
-      const da = dust.geometry.attributes.position;
-      for (let i = 0; i < dustN; i++) { da.array[i * 3 + 1] += dt * 0.35; da.array[i * 3] += Math.sin(now * 0.7 + i) * dt * 0.15; if (da.array[i * 3 + 1] > 20) da.array[i * 3 + 1] = 0; }
-      da.needsUpdate = true;
-
-      // pyro
-      pyroT += dt;
-      pyro.forEach((p) => {
-        p.t += dt;
-        const k = p.t / 1.1;
-        p.col.forEach((sp, j) => {
-          sp.material.map = fire[(Math.floor(now * 18) + j * 2) % fire.length];
-          sp.material.opacity = k < 1 ? Math.min(1, (1 - k) * 2.2) * 0.95 : 0;
-          sp.visible = k < 1;
-          sp.scale.set(2.6 + j * 0.4, (k < 0.25 ? k / 0.25 : 1) * (9 + j * 2), 1);
-        });
-      });
-      pyroLight.intensity = pyroT < 1.1 ? (1 - pyroT / 1.1) * 900 : 0;
+      if (readyGlow > 0.5 && Math.random() < dt * 22) { const side = Math.random() < 0.5 ? -1 : 1; burst(side * (h.width() / 2 + 0.2), 1, false, true, 0.8); }
 
       boardTex.offset.y = (t * speed) / 6;
 
       // fret bars
       let fi = 0;
-      const w = lanes * LW + 0.5;
+      const w = h.width();
       for (const [bt, bar] of beats) {
         const z = zOf(bt);
         if (z > 0.6 || z < -HL) continue;
@@ -831,10 +655,10 @@ export function createRenderer(canvas) {
         b.stud.position.y = b.cap.position.y + 0.01;
         b.cap.material.emissiveIntensity = 0.12 + (p ? 0.75 : 0) + b.press * 0.5;
         b.stud.material.emissiveIntensity = b.press * 0.6;
-        const s = strings[i];
-        s.vib *= Math.pow(0.02, dt); s.glow *= Math.pow(0.002, dt);
-        s.mesh.position.x = laneX(i) + Math.sin(now * 95 + i) * 0.035 * s.vib;
-        s.mesh.material.emissive.setHex(LANE_HEX[i]).multiplyScalar(s.glow * 0.4);
+        const st = strings[i];
+        st.vib *= Math.pow(0.02, dt); st.glow *= Math.pow(0.002, dt);
+        st.mesh.position.x = laneX(i) + Math.sin(now * 95 + i) * 0.035 * st.vib;
+        st.mesh.material.emissive.setHex(LANE_HEX[i]).multiplyScalar(st.glow * 0.4);
         const f = flames[i]; f.t += dt;
         const k = f.t / 0.32;
         f.sp.material.map = fire[(Math.floor(now * 22) + i) % fire.length];
@@ -848,6 +672,283 @@ export function createRenderer(canvas) {
         spPos[i * 3] += sparkVel[i * 3] * dt; spPos[i * 3 + 1] += sparkVel[i * 3 + 1] * dt; spPos[i * 3 + 2] += sparkVel[i * 3 + 2] * dt;
       }
       sparkGeo.attributes.position.needsUpdate = true; sparkGeo.attributes.color.needsUpdate = true;
+    };
+    h.layout(5);
+    return h;
+  }
+  const hws = [createHighway()];
+  // with two players each neck has its own camera and its own half of the screen; the venue camera stays centred
+  const hwCams = [new THREE.PerspectiveCamera(55, 1, 0.1, 220), new THREE.PerspectiveCamera(55, 1, 0.1, 220)];
+  let players = 1;
+  const camOf = (p) => (players > 1 ? hwCams[p] : camera);
+  const SPLIT_X = 80; // the second neck sits this far to the side, out of the first camera's view
+
+  /* --- post --- */
+  const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: isMobile ? 0 : 4 }));
+  const renderPass = new RenderPass(scene, camera);
+  composer.addPass(renderPass);
+  // two players: the venue across the whole frame, then each neck in its half (one frame, one bloom pass)
+  const bgOnly = new THREE.Scene(); bgOnly.background = bgRT.texture;
+  class SplitPass extends Pass {
+    constructor() { super(); this.needsSwap = false; }
+    render(r, writeBuffer, readBuffer) {
+      const rt = readBuffer, w = rt.width, ht = rt.height;
+      const auto = r.autoClear; r.autoClear = false;
+      rt.viewport.set(0, 0, w, ht); rt.scissor.set(0, 0, w, ht); rt.scissorTest = false;
+      r.setRenderTarget(rt); r.clear();
+      r.render(bgOnly, camera);
+      scene.background = null;
+      for (let k = 0; k < players; k++) {
+        hws.forEach((o, j) => (o.group.visible = j === k));
+        const x0 = Math.round((w * k) / players), x1 = Math.round((w * (k + 1)) / players);
+        rt.viewport.set(x0, 0, x1 - x0, ht); rt.scissor.set(x0, 0, x1 - x0, ht); rt.scissorTest = true;
+        r.setRenderTarget(rt); r.clearDepth();
+        r.render(scene, hwCams[k]);
+      }
+      hws.forEach((o, j) => (o.group.visible = j < players));
+      rt.viewport.set(0, 0, w, ht); rt.scissor.set(0, 0, w, ht); rt.scissorTest = false;
+      r.setRenderTarget(rt);
+      scene.background = bgRT.texture;
+      r.autoClear = auto;
+    }
+  }
+  const splitPass = new SplitPass(); splitPass.enabled = false;
+  composer.addPass(splitPass);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(128, 128), 0.5, 0.4, 0.86);
+  composer.addPass(bloom);
+  composer.addPass(new OutputPass());
+
+  /* --- layout --- */
+  // The crowd is laid out in screen space beside the neck: find where the neck's edge is on screen, row by row.
+  function layoutCrowd(aspect) {
+    // two players: the necks cover most of the screen, so the crowd fills the whole width behind them
+    const hw = players > 1 ? 0.3 : hws[0].width() / 2 + 0.16, pts = [];
+    for (let z = 3; z >= -HL + 3; z -= 0.5) { tmpV.set(-hw, 0.05, z).project(camera); pts.push([tmpV.y, tmpV.x]); }
+    const top = pts[pts.length - 1][0];
+    const edgeX = (y) => {
+      if (y > top + 0.02) return null; // above the far end of the neck
+      if (y <= pts[0][0]) return pts[0][1];
+      for (let i = 1; i < pts.length; i++) if (pts[i][0] >= y) { const [y0, x0] = pts[i - 1], [y1, x1] = pts[i]; return x0 + ((x1 - x0) * (y - y0)) / Math.max(1e-6, y1 - y0); }
+      return pts[pts.length - 1][1];
+    };
+    crowd.layout(aspect, Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2), edgeX);
+  }
+
+  let W = 1, H = 1;
+  const baseCam = new THREE.Vector3();
+  // Analytic camera fit: strike line at a fixed screen height, highway filling a fixed share of the width.
+  // split: one of two necks side by side, in a half-width view
+  function fitCam(cam, aspect, width, x0, split) {
+    const portrait = aspect < 0.9 && !split;
+    cam.aspect = aspect;
+    cam.fov = portrait ? 66 : split ? 58 : 52;
+    const pitch = portrait ? 0.6 : split ? 0.5 : 0.42;
+    const tf = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2);
+    const wantY = portrait ? -0.6 : split ? -0.66 : -0.7;
+    const wantX = portrait ? 0.95 : split ? Math.min(0.74, 0.62 / aspect) : Math.min(0.48, 0.95 / aspect);
+    const half = width / 2 + 0.2;
+    const alpha = Math.atan(-wantY * tf);
+    const phi = pitch + alpha;
+    const cs = half / (wantX * tf * aspect * Math.cos(alpha));
+    cam.position.set(x0, cs * Math.sin(phi), cs * Math.cos(phi) + 0.3);
+    cam.rotation.set(-pitch, 0, 0);
+    cam.updateProjectionMatrix(); cam.updateMatrixWorld();
+    cam.userData.base = cam.position.clone();
+  }
+  function fitCamera() {
+    const aspect = W / H;
+    fitCam(camera, aspect, hws[0].width(), 0, false);
+    baseCam.copy(camera.position);
+    if (players > 1) hws.forEach((h, k) => k < players && fitCam(hwCams[k], W / players / H, h.width(), h.group.position.x, true));
+    layoutCrowd(aspect);
+    band.layout(aspect < 0.9);
+  }
+  function layoutLanes(n) { hws.forEach((h) => h.layout(n)); fitCamera(); }
+
+  /* --- quality levels (auto mode steps down the moment frames get slow) --- */
+  const DEV_DPR = devicePixelRatio || 1;
+  const LEVELS = [
+    { dpr: Math.min(DEV_DPR, 2), bloom: 0.5, bg: 0.75, bgEvery: 1, fx: 2 },
+    { dpr: Math.min(DEV_DPR, 1.5), bloom: 0.35, bg: 0.7, bgEvery: 1, fx: 2 },
+    { dpr: 1, bloom: 0, bg: 0.5, bgEvery: 2, fx: 1 },
+    { dpr: 0.75, bloom: 0, bg: 0.33, bgEvery: 3, fx: 0 },
+  ];
+  let mode = "auto", level = isMobile ? 2 : 1;
+  const perf = { ema: 16.7, last: 0, slowFor: 0, fastFor: 0, lastDrop: -1e9 };
+  function applyLevel() {
+    const L = LEVELS[level];
+    const samples = !isMobile && level <= 1 ? 4 : 0;
+    for (const rt of [composer.renderTarget1, composer.renderTarget2, bgRT]) if (rt.samples !== samples) { rt.samples = samples; rt.dispose(); }
+    renderer.setPixelRatio(L.dpr);
+    bloom.enabled = L.bloom > 0;
+    dust.visible = L.fx >= 1;
+    haze.forEach((h, i) => (h.s.visible = L.fx >= 2 || i % 2 === 0));
+    coneMats.forEach((m) => (m.visible = L.fx >= 1));
+    resize();
+  }
+  function autoTune(now) {
+    if (mode !== "auto") return;
+    if (!perf.last) { perf.last = now; return; }
+    const ft = now - perf.last; perf.last = now;
+    if (ft > 250) return; // tab switch or a one-off hitch: ignore
+    perf.ema += (Math.min(ft, 60) - perf.ema) * 0.08;
+    if (perf.ema > 19.5) { perf.slowFor += ft; perf.fastFor = 0; } else if (perf.ema < 12.5) { perf.fastFor += ft; perf.slowFor = 0; } else { perf.slowFor = 0; perf.fastFor = 0; }
+    if (perf.slowFor > 700 && level < LEVELS.length - 1) { level++; perf.slowFor = 0; perf.lastDrop = now; perf.ema = 16.7; applyLevel(); }
+    else if (perf.fastFor > 8000 && level > (isMobile ? 1 : 0) && now - perf.lastDrop > 30000) { level--; perf.fastFor = 0; perf.ema = 16.7; applyLevel(); }
+  }
+
+  function resize() {
+    W = canvas.clientWidth || innerWidth; H = canvas.clientHeight || innerHeight;
+    const L = LEVELS[level];
+    renderer.setSize(W, H, false); composer.setSize(W, H);
+    bloom.resolution.set(Math.max(64, W * L.bloom), Math.max(64, H * L.bloom));
+    bgRT.setSize(Math.max(64, Math.round(W * L.dpr * L.bg)), Math.max(64, Math.round(H * L.dpr * L.bg)));
+    fitCamera();
+  }
+  let frameNo = 0;
+
+  let peopleDt = 0;
+  const beatTrack = { count: 0, bar: 0, lastT: -1e9, prevT: -1e9, len: 0.5 };
+  // warm club palettes per song section: [front PARs, back PARs]
+  const palettes = [[0xffb060, 0xff3a1a], [0xff2a14, 0xffc070], [0xfff0d0, 0xff6a10], [0xffc040, 0xd01010], [0xff7a20, 0xfff2e0]];
+  let pal = 0;
+  const colA = new THREE.Color(palettes[0][0]), colB = new THREE.Color(palettes[0][1]);
+
+  function firePyro() { pyroT = 0; pyro.forEach((p) => (p.t = 0)); }
+  // screen position (CSS px) of a point on player p's neck
+  function toScreen(p, x, out) {
+    const h = hws[p] || hws[0];
+    tmpV.set(h.group.position.x + x, 0, 0).project(camOf(p));
+    const vw = W / players, x0 = players > 1 ? vw * p : 0;
+    out.x = x0 + ((tmpV.x + 1) / 2) * vw; out.y = ((1 - tmpV.y) / 2) * H;
+    return out;
+  }
+  const scr = { x: 0, y: 0 };
+
+  const api = {
+    _internals: { camera, baseCam, bg },
+    setLanes: layoutLanes,
+    /** 1 player (one neck in the middle) or 2 (two necks, split screen). */
+    setPlayers(n) {
+      n = n > 1 ? 2 : 1;
+      if (n === players) return;
+      players = n;
+      while (hws.length < n) { const h = createHighway(); h.group.position.x = SPLIT_X * hws.length; h.layout(hws[0].lanes); hws.push(h); }
+      hws.forEach((h, k) => (h.group.visible = k < n));
+      renderPass.enabled = n === 1; splitPass.enabled = n > 1;
+      fitCamera();
+    },
+    get players() { return players; },
+    // "auto" | "high" | "low"
+    setQualityLevel(q) {
+      mode = q === "high" || q === "low" ? q : "auto";
+      level = mode === "high" ? 0 : mode === "low" ? 2 : isMobile ? 2 : 1;
+      perf.ema = 16.7; perf.slowFor = perf.fastFor = 0;
+      applyLevel();
+    },
+    qualityInfo() { return { mode, level, ema: +perf.ema.toFixed(1), bg: [bgRT.width, bgRT.height], px: renderer.getPixelRatio() }; },
+    resize,
+    setSection(i) { pal = ((i % palettes.length) + palettes.length) % palettes.length; if (i > 0) firePyro(); },
+    pyro: firePyro,
+    hit(lane, sustain, p = 0) { hws[p]?.hit(lane, sustain); },
+    holdSpark(lane, p = 0) { hws[p]?.holdSpark(lane); },
+    miss() {},
+    /** How excited the crowd is, 0–1 (follows the rock meter and star power). */
+    setHype(v) { hype = Math.max(0, Math.min(1, v)); },
+    /** A star phrase was completed: a white flash and a fountain of white sparks over every fret. */
+    starPhrase(p = 0) { hws[p]?.starPhrase(); },
+    laneFromClientX(x, rect) {
+      const h = hws[0];
+      let best = 0, bd = 1e9;
+      for (let i = 0; i < h.lanes; i++) {
+        tmpV.set(h.laneX(i), 0, 0).project(camera);
+        const sx = rect.left + ((tmpV.x + 1) / 2) * rect.width;
+        const d = Math.abs(sx - x); if (d < bd) { bd = d; best = i; }
+      }
+      return best;
+    },
+    strikeScreenY(p = 0) { return toScreen(p, 0, scr).y; },
+    laneScreenX(i, p = 0) { const h = hws[p] || hws[0]; return toScreen(p, h.laneX(i), scr).x; },
+
+    // state: { t, look, notes, from, pressed[], beats[[t,bar]], dt, star, starReady, energy, punch }
+    // two players: { dt, energy, punch, players: [{ t, look, notes, from, pressed, beats, star, starReady }, …] }
+    render(state) {
+      const P = state.players || [state];
+      const { dt = 0.016, energy = 0.55, punch = 0 } = state;
+      const { t, beats = [] } = P[0];
+      const now = performance.now() / 1000;
+      const E = energy;
+
+      let pulse = 0;
+      for (let i = 0; i < beats.length; i++) { const d = t - beats[i][0]; if (d >= 0 && d < 0.3) pulse = Math.max(pulse, (1 - d / 0.3) * (beats[i][1] ? 1 : 0.55)); }
+
+      // where we are in the beat and in the bar (counted as beats go by; reset when time jumps back)
+      let li = -1;
+      for (let i = 0; i < beats.length; i++) { if (beats[i][0] <= t) li = i; else break; }
+      if (t < beatTrack.prevT - 0.05) { beatTrack.lastT = -1e9; }
+      beatTrack.prevT = t;
+      let phase = 0;
+      if (li >= 0) {
+        const b0 = beats[li][0];
+        if (b0 > beatTrack.lastT + 1e-4) { beatTrack.count++; beatTrack.bar = beats[li][1] ? 0 : (beatTrack.bar + 1) % 4; beatTrack.lastT = b0; }
+        const nb = beats[li + 1];
+        if (nb) beatTrack.len = Math.max(0.15, nb[0] - b0);
+        phase = Math.min(1, (t - b0) / beatTrack.len);
+      }
+      const bpos = beatTrack.count + phase;
+
+      // the necks (each player's notes, buttons, fire and star power)
+      for (let k = 0; k < players; k++) hws[k].update(P[k] || P[0], { now, dt, pulse });
+      let starGlow = 0; for (let k = 0; k < players; k++) starGlow = Math.max(starGlow, hws[k].starGlow);
+
+      // lights: brighter, punchier and changing colour faster when the song is loud; dim and warm when it's calm
+      const lerpK = 0.015 + 0.03 * E;
+      colA.lerp(tmpC.setHex(palettes[pal][0]), lerpK); colB.lerp(tmpC.setHex(palettes[pal][1]), lerpK);
+      const pk = pulse * (0.35 + 0.9 * E) + punch * 0.35 * E;
+      [colA, colB].forEach((col, row) => {
+        glows[row].material.color.copy(col).multiplyScalar(0.45 + 0.45 * E + pk * 0.6);
+        coneMats[row].uniforms.uColor.value.copy(col);
+        coneMats[row].uniforms.uI.value = (0.05 + 0.08 * E + pk * 0.14) * (0.88 + 0.12 * Math.sin(now * (3 + 6 * E) + row));
+      });
+      wallSpots.forEach((s, i) => { s.color.copy(i === 1 ? colB : colA); s.intensity = 110 + 160 * E + pk * 150; });
+      stageWash.color.copy(colA); stageWash.intensity = 85 + 60 * E + pk * 70;
+      bandKey.intensity = 260 + 160 * E + pk * 120;
+
+      const sway = (cam, base) => cam.position.set(base.x + Math.sin(now * 0.3) * 0.05, base.y + pulse * 0.025 * (0.4 + E), base.z);
+      sway(camera, baseCam);
+      if (players > 1) for (let k = 0; k < players; k++) sway(hwCams[k], hwCams[k].userData.base);
+
+      // the people: crowd and band (only worked out on frames where the venue is redrawn)
+      hypeS += (Math.max(hype, starGlow * 0.95) - hypeS) * Math.min(1, dt * 1.5);
+      peopleDt += dt;
+      if (frameNo % LEVELS[level].bgEvery === 0) {
+        rimCol.copy(colA).lerp(colB, 0.35).multiplyScalar(0.55 + 0.5 * E + pk * 0.5);
+        if (starGlow > 0.01) rimCol.lerp(tmpC.setHex(0x3fb4ff).multiplyScalar(1.1), starGlow * 0.75);
+        const fdt = Math.min(0.1, peopleDt); peopleDt = 0;
+        camera.updateMatrixWorld();
+        const f = { bpos, ph: phase, bar: beatTrack.bar, E: Math.min(1, E + starGlow * 0.12), P: punch, hype: hypeS, star: starGlow, dt: fdt, now, rim: rimCol };
+        crowd.update(f, camera);
+        band.update(f);
+      }
+
+      haze.forEach((h) => { h.s.position.x += h.v * dt; if (h.s.position.x > 34) h.s.position.x = -34; if (h.s.position.x < -34) h.s.position.x = 34; });
+      const da = dust.geometry.attributes.position;
+      for (let i = 0; i < dustN; i++) { da.array[i * 3 + 1] += dt * 0.35; da.array[i * 3] += Math.sin(now * 0.7 + i) * dt * 0.15; if (da.array[i * 3 + 1] > 20) da.array[i * 3 + 1] = 0; }
+      da.needsUpdate = true;
+
+      // pyro
+      pyroT += dt;
+      pyro.forEach((p) => {
+        p.t += dt;
+        const k = p.t / 1.1;
+        p.col.forEach((sp, j) => {
+          sp.material.map = fire[(Math.floor(now * 18) + j * 2) % fire.length];
+          sp.material.opacity = k < 1 ? Math.min(1, (1 - k) * 2.2) * 0.95 : 0;
+          sp.visible = k < 1;
+          sp.scale.set(2.6 + j * 0.4, (k < 0.25 ? k / 0.25 : 1) * (9 + j * 2), 1);
+        });
+      });
+      pyroLight.intensity = pyroT < 1.1 ? (1 - pyroT / 1.1) * 900 : 0;
 
       autoTune(performance.now());
       if (frameNo++ % LEVELS[level].bgEvery === 0) {
@@ -858,7 +959,6 @@ export function createRenderer(canvas) {
       composer.render();
     },
   };
-  layoutLanes(5);
   resize();
   return api;
 }
