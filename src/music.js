@@ -16,7 +16,8 @@ const FADE_IN = 1.6, FADE_OUT = 2.2;
 async function range(url, a, b) {
   const r = await fetch(url, { headers: { Range: `bytes=${a}-${b}` } });
   if (!r.ok) throw new Error("audio " + r.status);
-  const total = +((r.headers.get("content-range") || "").split("/")[1]) || +r.headers.get("content-length") || 0;
+  // the file size (only readable when the server exposes Content-Range; a HEAD request gives it otherwise)
+  const total = +((r.headers.get("content-range") || "").split("/")[1]) || 0;
   return { buf: await r.arrayBuffer(), total };
 }
 
@@ -77,6 +78,7 @@ async function loadPiece(song, ctx) {
   if (song.has_guitar) urls.push(fileUrl(song.id, song.guitar_file || "guitar.mp3"));
   const probes = await Promise.all(urls.map(probe));
   const synced = !probes.some((p) => p.vbr);
+  if (!synced) await Promise.all(probes.map(async (p, n) => { if (!p.total) p.total = +(await fetch(urls[n], { method: "HEAD" })).headers.get("content-length") || 0; }));
   const fdur = probes[0].f.spf / probes[0].f.sr;
   const k0 = Math.floor((t0 + off) / fdur);
   const stems = await Promise.all(probes.map(async (p, n) => {
