@@ -61,19 +61,21 @@ function crowdGeometries() {
   return { torso, head, hair, upper, fore };
 }
 
-export function createCrowd(bg, camera, { max = 80, dotTex }) {
+// max: people in a normal club; room: how much bigger the densest venue gets (instances are allocated once)
+export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
+  const alloc = Math.ceil(max * room);
   const uni = { uRim: { value: new THREE.Color(0xff9a50) }, uFill: { value: new THREE.Color(0x050302) } };
   const mat = new THREE.ShaderMaterial({ uniforms: uni, vertexShader: CROWD_VS, fragmentShader: CROWD_FS, fog: false });
   const G = crowdGeometries();
   const layer = new THREE.Group(); layer.matrixAutoUpdate = false; bg.add(layer);
-  const mk = (geo, order) => { const m = new THREE.InstancedMesh(geo, mat, max); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.frustumCulled = false; m.renderOrder = order; layer.add(m); return m; };
+  const mk = (geo, order) => { const m = new THREE.InstancedMesh(geo, mat, alloc); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.frustumCulled = false; m.renderOrder = order; layer.add(m); return m; };
   // the crowd stands in front of everything in the venue: the first part drawn clears the depth buffer
   const torso = mk(G.torso, 60);
   torso.onBeforeRender = (r) => r.clearDepth();
   const parts = { torso, head: mk(G.head, 61), hair: mk(G.hair, 61), upL: mk(G.upper, 61), foreL: mk(G.fore, 61), upR: mk(G.upper, 61), foreR: mk(G.fore, 61) };
 
   // phone lights / lighters held up in the quiet parts
-  const lightPos = new Float32Array(max * 3), lightCol = new Float32Array(max * 3);
+  const lightPos = new Float32Array(alloc * 3), lightCol = new Float32Array(alloc * 3);
   const lgeo = new THREE.BufferGeometry();
   lgeo.setAttribute("position", new THREE.BufferAttribute(lightPos, 3));
   lgeo.setAttribute("color", new THREE.BufferAttribute(lightCol, 3));
@@ -84,11 +86,14 @@ export function createCrowd(bg, camera, { max = 80, dotTex }) {
   const M = new THREE.Matrix4(), P = new THREE.Matrix4(), A = new THREE.Matrix4(), B = new THREE.Matrix4(), T = new THREE.Matrix4();
   const e = new THREE.Euler(), q = new THREE.Quaternion(), v = new THREE.Vector3(), s = new THREE.Vector3();
 
-  /** Places the crowd for the current screen. edgeX(ndcY) = the highway's left edge in NDC at that height (or null above it). */
-  function layout(aspect, tf, edgeX) {
+  /** Places the crowd for the current screen. edgeX(ndcY) = the highway's left edge in NDC at that height (or null above it).
+   *  density: 1 = a normal club; below 1 thins the crowd out, above 1 packs more people into the same space. */
+  function layout(aspect, tf, edgeX, density = 1) {
     const portrait = aspect < 0.9;
     const L = portrait ? { y0: -0.36, y1: 0.36, w0: 0.34, w1: 0.12 } : { y0: -1.02, y1: -0.22, w0: 0.22, w1: 0.085 };
-    const cap = portrait ? Math.min(max, 46) : max;
+    // packed: same area, tighter spacing, so the cap grows with the square of the spacing
+    const pack = density > 1 ? 1 / Math.sqrt(density) : 1;
+    const cap = Math.min(alloc, Math.round((portrait ? Math.min(max, 46) : max) * Math.max(1, density)));
     people = [];
     let y = L.y0, row = 0;
     while (y <= L.y1 && people.length < cap) {
@@ -108,11 +113,20 @@ export function createCrowd(bg, camera, { max = 80, dotTex }) {
             jumpy: Math.random() < 0.6, ph: rnd(-0.06, 0.08), sway: rnd(0, 6.28), lean: rnd(-0.06, 0.06), side,
             arms: { uL: 0.15, uR: 0.15, bL: 0.3, bR: 0.3, oL: 0.08, oR: 0.08 }, j: 0, depthK: k,
           });
-          x += w * (0.62 + rnd(0, 0.32)) * (1 + row * 0.04);
+          x += w * (0.62 + rnd(0, 0.32)) * (1 + row * 0.04) * pack;
         }
       }
-      y += w * aspect * (portrait ? 0.62 : 0.5);
+      y += w * aspect * (portrait ? 0.62 : 0.5) * pack;
       row++;
+    }
+    // a small venue: a few people on each side, mostly up front (thinned after layout so the gaps look natural)
+    if (density < 1) {
+      const keep = new Set();
+      for (const side of [-1, 1]) {
+        const mine = people.filter((p) => p.side === side).map((p) => [Math.random() + p.depthK * 0.8, p]).sort((a, b) => a[0] - b[0]);
+        mine.slice(0, Math.max(1, Math.round(mine.length * density))).forEach(([, p]) => keep.add(p));
+      }
+      people = people.filter((p) => keep.has(p));
     }
     // far rows first so near ones draw over them
     people.sort((a, b) => a.z - b.z);
