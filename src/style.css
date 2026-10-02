@@ -752,3 +752,11 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 /* the in-game venue tag stays on one line */
 .ctx-tag { white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 480px) { .ctx-tag { letter-spacing: .1em; } }
+
+/* menu music waiting for the first touch: the song is ready, the widget invites a tap */
+.now-playing.locked { cursor: pointer; box-shadow: 0 0 0 1px #000, inset 0 0 0 1px var(--fire), 0 0 18px rgba(255,122,26,.35), 0 10px 26px rgba(0,0,0,.55); animation: tutIn .4s ease-out, npLocked 1.6s ease-in-out infinite; }
+.now-playing.locked .np-eq i { animation: none; height: 35%; }
+.now-playing.locked .np-text span { color: #ffcf9b; }
+.now-playing.locked #npSkip { display: none; }
+@keyframes npLocked { 50% { box-shadow: 0 0 0 1px #000, inset 0 0 0 1px #ffb36b, 0 0 26px rgba(255,140,40,.6), 0 10px 26px rgba(0,0,0,.55); } }
+@media (prefers-reduced-motion: reduce) { .now-playing.locked { animation: none; } }

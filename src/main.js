@@ -23,7 +23,7 @@ const LANE_CSS = ["--g", "--r", "--y", "--b", "--o"];
 const touch = isTouchDevice();
 
 // iPhone: every tap/keypress re-asserts "music playback" so the silent switch doesn't mute the game.
-["pointerdown", "touchend", "keydown"].forEach((t) => addEventListener(t, unlockAudio, { capture: true, passive: true }));
+["pointerdown", "pointerup", "touchend", "keydown", "click"].forEach((t) => addEventListener(t, unlockAudio, { capture: true, passive: true }));
 
 /* ================= renderer + attract mode ================= */
 const canvas = $("stage");
@@ -58,18 +58,10 @@ const app = {
 const MENU_MUSIC = ["home", "library", "setup", "settings", "mp", "lobby", "admin", "tutorial", "duo", "daily", "tour"];
 const wideMQ = matchMedia("(min-width: 1000px)");
 const music = createMenuMusic({ onChange: () => renderNowPlaying() });
-// Nothing is downloaded until the player first touches the page (browsers wouldn't play it before that anyway,
-// and visitors who leave right away cost no bandwidth).
-let musicArmed = false;
-function armMusic() {
-  if (musicArmed) return;
-  musicArmed = true;
-  ["pointerdown", "keydown"].forEach((t) => removeEventListener(t, armMusic, true));
-  syncMenuMusic();
-}
-["pointerdown", "keydown"].forEach((t) => addEventListener(t, armMusic, { capture: true, passive: true }));
+// It starts as soon as the page opens: a random song is fetched right away and plays the moment the browser
+// allows sound. Chrome allows it straight away on sites you use a lot and in the installed app; otherwise the first
+// touch, click or key starts it (already loaded, so instantly), with a "touch to listen" hint until then.
 function syncMenuMusic() {
-  if (!musicArmed) return renderNowPlaying();
   if (MENU_MUSIC.includes(app.screen) && !app.game && !document.hidden) music.play(); else music.pause();
   renderNowPlaying();
 }
@@ -81,20 +73,24 @@ function renderNowPlaying() {
   if (!wide && el.parentElement === document.body) document.querySelector("#s-home .menu").after(el);
   el.classList.toggle("fixed", wide);
   el.classList.toggle("muted", info.muted);
+  // the browser hasn't allowed sound yet: the song is ready, one touch away
+  const blocked = info.blocked && !info.muted;
+  el.classList.toggle("locked", blocked);
   const roomy = app.screen === "home" || innerWidth >= 1400; // beside a centred panel only when it can't overlap it
   const onMenu = MENU_MUSIC.includes(app.screen) && !app.game && roomy;
-  el.hidden = !online || !(info.muted || (info.playing && info.song)) || (wide && !onMenu);
+  el.hidden = !online || !(info.muted || ((info.playing || blocked) && info.song)) || (wide && !onMenu);
   if (info.song && info.song !== npSong) {
     npSong = info.song;
     $("npTitle").textContent = info.song.name;
-    $("npArtist").textContent = info.song.artist || "";
     const cov = coverOf(info.song);
     $("npCover").hidden = !cov; if (cov) $("npCover").src = cov;
   }
+  const sub = blocked ? (touch ? "Toca la pantalla para escucharla" : "Haz clic o presiona una tecla para escucharla") : info.song?.artist || "";
+  if ($("npArtist").textContent !== sub) $("npArtist").textContent = sub;
   $("npMute").setAttribute("aria-pressed", String(info.muted));
 }
-$("npMute").onclick = () => { settings.menuMusic = music.muted; save(); music.setMuted(!music.muted); syncMenuMusic(); };
-$("npSkip").onclick = () => music.skip();
+$("npMute").onclick = () => { if (music.info().blocked) return; settings.menuMusic = music.muted; save(); music.setMuted(!music.muted); syncMenuMusic(); };
+$("npSkip").onclick = () => { if (!music.info().blocked) music.skip(); };
 wideMQ.addEventListener?.("change", renderNowPlaying);
 addEventListener("resize", () => renderNowPlaying());
 document.addEventListener("visibilitychange", () => syncMenuMusic());
