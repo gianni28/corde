@@ -26,7 +26,8 @@ export class Game {
     this.pressed = new Array(lanes).fill(false);
     this.lastT = -99;
     const lastNote = this.notes.length ? this.notes[this.notes.length - 1] : { t: 0, dur: 0 };
-    this.end = Math.max(player.duration, lastNote.t + lastNote.dur + 1);
+    // a chart can't outlast its song by much: end with the audio if the notes run past it
+    this.end = Math.min(Math.max(player.duration, lastNote.t + lastNote.dur + 1), player.duration + 3);
     this.events = []; // {type:'hit'|'miss'|'ghost', lane, sustain, err}
     this.ended = false;
     this.countdownUntil = 0;        // show 3-2-1 until this song time (song start)

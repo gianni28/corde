@@ -86,7 +86,9 @@ export function parseMidi(buf) {
         else if (type === 0x58 && tr.ts == null) tr.ts = d.getUint8(p);
         p = s + l;
       } else if (st === 0xf0 || st === 0xf7) {
-        p += vlq();
+        // read the length first: `p += vlq()` would use the old p and drop the length byte
+        const l = vlq();
+        p += l;
       } else {
         const hi = st & 0xf0;
         if (hi === 0x90 || hi === 0x80) {

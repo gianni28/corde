@@ -312,3 +312,27 @@ export function autoChart(samples, rate, meta = {}, onProgress) {
     auto: { bpm: Math.round((60 * f.fps) / period * 10) / 10 },
   };
 }
+
+/**
+ * How far the chart is from the audio: finds the shift (seconds, within ±maxShift) that best lines the chart's
+ * notes up with the attacks heard in the audio. Positive = the audio runs later than the chart.
+ * Returns { offset, confidence } where confidence compares the best peak with the typical score.
+ */
+export function estimateOffset(samples, rate, noteTimes, maxShift = 0.6) {
+  const f = analyze(samples, rate);
+  const env = onsetEnvelope(f);
+  const centre = 512 / rate / 2;
+  const at = (sec) => { const x = (sec - centre) * f.fps; const i = Math.floor(x); if (i < 0 || i + 1 >= env.length) return 0; const w = x - i; return env[i] * (1 - w) + env[i + 1] * w; };
+  const times = [...new Set(noteTimes.map((t) => Math.round(t * 1000)))].map((t) => t / 1000);
+  const scores = [];
+  let best = 0, bestS = -Infinity;
+  for (let ms = -maxShift * 1000; ms <= maxShift * 1000; ms += 2) {
+    const d = ms / 1000; let s = 0;
+    for (const t of times) s += Math.max(at(t + d - 0.012), at(t + d), at(t + d + 0.012));
+    scores.push(s);
+    if (s > bestS) { bestS = s; best = d; }
+  }
+  const sorted = [...scores].sort((a, b) => a - b);
+  const median = sorted[sorted.length >> 1] || 1;
+  return { offset: Math.round(best * 1000) / 1000, confidence: bestS / median };
+}
