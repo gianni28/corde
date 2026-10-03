@@ -212,7 +212,6 @@ async function renderHomeBoard() {
 $("homeTabs").onclick = (e) => { const b = e.target.closest("button"); if (!b || b.dataset.v === homeTab) return; homeTab = b.dataset.v; renderHomeBoard(); };
 renderHomeBoard();
 // the library list is needed for the menu music right away (it's small)
-if (online) loadLibrary().then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); }).catch(() => {}).finally(() => loadDaily());
 
 /* ================= personal bests ================= */
 // Your best run of each song and difficulty, kept in this browser: stars in the song list and on the difficulty
@@ -331,6 +330,11 @@ async function findSong(id) {
   try { const r = await songById(id); if (r) app.extraSongs.push({ ...r, secret: !!r.hidden }); } catch {}
   return knownSong(id);
 }
+
+// At boot: the library (the menu music plays a random public song from it), then the song of the day. This has to
+// come after everything loadLibrary uses is defined (secretCode, SECRET_KEY): called earlier, it threw, the error was
+// swallowed and the menu stayed silent.
+if (online) loadLibrary().then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); }).catch((e) => console.warn("library:", e.message)).finally(() => loadDaily());
 
 async function openLibrary() {
   $("libTitle").textContent = app.mode === "pick" ? "Elige la canción" : app.mode === "duo" ? "2 jugadores" : "Canciones";
