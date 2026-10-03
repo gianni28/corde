@@ -3,10 +3,10 @@
 // rig for the tour venues, from a friend's garage to a stadium (see STAGES).
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
-import { Pass } from "three/examples/jsm/postprocessing/Pass.js";
+import { Pass, FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js";
+import { CopyShader } from "three/examples/jsm/shaders/CopyShader.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { createCrowd, createBand } from "./stagecrew.js";
 
@@ -273,6 +273,9 @@ export function createRenderer(canvas) {
   const SAFE_KEY = "corde.gfxsafe.v1";
   let safe = 0;
   try { safe = Math.min(SAFE.length - 1, Math.max(0, parseInt(localStorage.getItem(SAFE_KEY), 10) || 0)); } catch {}
+  // every buffer between the scene and the screen is half-float: a GPU that can't draw into those gets the plainest mode
+  const floatOK = renderer.extensions.has("EXT_color_buffer_float") || renderer.extensions.has("EXT_color_buffer_half_float");
+  if (!floatOK) safe = SAFE.length - 1;
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x070403);
@@ -375,9 +378,11 @@ export function createRenderer(canvas) {
   const coneGeo = new THREE.ConeGeometry(2.6, 24, 24, 1, true); coneGeo.translate(0, -12, 0);
   const coneMat = () => new THREE.ShaderMaterial({
     uniforms: { uColor: { value: new THREE.Color() }, uI: { value: 0.12 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
-    vertexShader: `varying vec2 vUv; varying vec3 vN; varying vec3 vV; void main(){ vUv=uv; vec4 mv=modelViewMatrix*vec4(position,1.); vN=normalize(normalMatrix*normal); vV=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
-    fragmentShader: `varying vec2 vUv; varying vec3 vN; varying vec3 vV; uniform vec3 uColor; uniform float uI;
-      void main(){ float e=pow(abs(dot(vN,vV)),2.); float l=pow(vUv.y,2.2); gl_FragColor=vec4(uColor*uI*e*l,1.); }`,
+    // centroid + clamps: with MSAA the edges used to extrapolate vUv.y below 0, and pow() of a negative number is NaN
+    // on a Mac (Metal fast math); the bloom then smeared it over the whole screen in black
+    vertexShader: `centroid varying vec2 vUv; centroid varying vec3 vN; centroid varying vec3 vV; void main(){ vUv=uv; vec4 mv=modelViewMatrix*vec4(position,1.); vN=normalize(normalMatrix*normal); vV=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
+    fragmentShader: `centroid varying vec2 vUv; centroid varying vec3 vN; centroid varying vec3 vV; uniform vec3 uColor; uniform float uI;
+      void main(){ float d=clamp(abs(dot(vN,vV)),0.,1.); float l=pow(max(clamp(vUv.y,0.,1.),1e-4),2.2); gl_FragColor=vec4(min(uColor*uI*d*d*l,vec3(8.)),1.); }`,
   });
   const coneMats = [coneMat(), coneMat()];
   const canBody = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.7, roughness: 0.4 });
@@ -776,9 +781,25 @@ export function createRenderer(canvas) {
   const SPLIT_X = 80; // the second neck sits this far to the side, out of the first camera's view
 
   /* --- post --- */
-  const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: isMobile || !SAFE[safe].msaa ? 0 : 4 }));
-  const renderPass = new RenderPass(scene, camera);
-  composer.addPass(renderPass);
+  // The composer's buffers are single-sample. MSAA gets its own target, drawn once and resolved once per frame, then
+  // copied in: drawing again into a multisampled target after resolving it (the bloom does that to the composer's
+  // buffer) is a path ANGLE's Metal backend, behind every Mac browser, has broken before.
+  const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
+  const msRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+  const copyQuad = new FullScreenQuad(new THREE.ShaderMaterial({ ...CopyShader, uniforms: THREE.UniformsUtils.clone(CopyShader.uniforms), blending: THREE.NoBlending, depthTest: false, depthWrite: false }));
+  let msaa = false; // applyLevel decides
+  class ScenePass extends Pass {
+    constructor() { super(); this.needsSwap = false; }
+    render(r, writeBuffer, readBuffer) {
+      const auto = r.autoClear; r.autoClear = false;
+      r.setRenderTarget(msaa ? msRT : readBuffer); r.clear();
+      r.render(scene, camera);
+      if (msaa) { copyQuad.material.uniforms.tDiffuse.value = msRT.texture; r.setRenderTarget(readBuffer); copyQuad.render(r); }
+      r.autoClear = auto;
+    }
+  }
+  const scenePass = new ScenePass();
+  composer.addPass(scenePass);
   // two players: the venue across the whole frame, then each neck in its half (one frame, one bloom pass)
   const bgOnly = new THREE.Scene(); bgOnly.background = bgRT.texture;
   class SplitPass extends Pass {
@@ -807,8 +828,18 @@ export function createRenderer(canvas) {
   const splitPass = new SplitPass(); splitPass.enabled = false;
   composer.addPass(splitPass);
   const bloom = new UnrealBloomPass(new THREE.Vector2(128, 128), 0.5, 0.4, 0.86);
+  // A Mac's GPU (Metal) compiles shaders with fast math and stores overflowing half floats as infinity, so one bad
+  // pixel could reach the bloom, be smeared over the whole screen and come out black. Scrub NaN/Inf where the bloom
+  // reads the scene (isnan also makes ANGLE compile this shader exactly); a stray one left in the frame is one dark
+  // pixel. (Not in OutputPass: it's a GLSL 1 raw shader, without isnan.)
+  const HIGH_PASS_READ = "vec4 texel = texture2D( tDiffuse, vUv );";
+  if (bloom.materialHighPassFilter.fragmentShader.includes(HIGH_PASS_READ)) {
+    bloom.materialHighPassFilter.fragmentShader = bloom.materialHighPassFilter.fragmentShader.replace(HIGH_PASS_READ, `${HIGH_PASS_READ}\ntexel = clamp(mix(texel, vec4(0.0), isnan(texel)), 0.0, 64.0);`);
+  } else console.warn("Corde: the bloom's shader changed, NaN scrub not applied");
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
+  // nothing ever reads its depth: resolving only the colour is less work (one blit less per frame on Metal)
+  msRT.resolveDepthBuffer = false;
 
   let stageName = "bar", S = STAGES.bar; // current venue look (setStage below)
 
@@ -871,8 +902,11 @@ export function createRenderer(canvas) {
   const perf = { ema: 16.7, last: 0, slowFor: 0, fastFor: 0, lastDrop: -1e9 };
   function applyLevel() {
     const L = LEVELS[level];
-    const samples = !isMobile && level <= 1 && SAFE[safe].msaa ? 4 : 0;
-    for (const rt of [composer.renderTarget1, composer.renderTarget2, bgRT]) if (rt.samples !== samples) { rt.samples = samples; rt.dispose(); }
+    // MSAA for one neck only, in msRT. The venue behind (bgRT) is never multisampled: it's small and blurred anyway,
+    // and MSAA plus the crowd's depth clear in the middle of that pass left corrupt samples.
+    const was = msaa;
+    msaa = !isMobile && level <= 1 && SAFE[safe].msaa && players === 1;
+    if (was && !msaa) msRT.dispose();
     renderer.setPixelRatio(L.dpr);
     bloom.enabled = L.bloom > 0 && SAFE[safe].bloom;
     dust.visible = L.fx >= 1;
@@ -896,6 +930,7 @@ export function createRenderer(canvas) {
     W = canvas.clientWidth || innerWidth; H = canvas.clientHeight || innerHeight;
     const L = LEVELS[level];
     renderer.setSize(W, H, false); composer.setSize(W, H);
+    msRT.setSize(composer.renderTarget1.width, composer.renderTarget1.height);
     bloom.resolution.set(Math.max(64, W * L.bloom), Math.max(64, H * L.bloom));
     bgRT.setSize(Math.max(64, Math.round(W * L.dpr * L.bg)), Math.max(64, Math.round(H * L.dpr * L.bg)));
     fitCamera();
@@ -904,64 +939,83 @@ export function createRenderer(canvas) {
 
   /* --- black-frame probe (see safe above) ---
      "Auto" quality only watches speed, and a GPU that draws black is fast, so the first seconds of the page (and after any
-     change of quality, venue or players) a few rows of what reached the screen are read back. The scene is never pure
-     black (the venue, the fog and the neck always show), so pure black means a broken effect: switch effects off one at a
-     time until the picture comes back, and remember what worked. */
+     change of quality, venue or players) the fret buttons on screen are read back. They're lit in every healthy frame
+     (any venue, any quality) and pure black when an effect broke the picture: then switch effects off one at a time
+     until they come back, and remember what worked. */
   const probe = { next: 30, ok: 0, bad: 0, left: 40, buf: null, stepped: false };
   let onTrouble = null;
+  const gpu = (() => { try { const g = renderer.getContext(), x = g.getExtension("WEBGL_debug_renderer_info"); return String(g.getParameter(x ? x.UNMASKED_RENDERER_WEBGL : g.RENDERER)); } catch { return "?"; } })();
+  // A lost GPU context (a MacBook switching graphics cards, a GPU reset) draws nothing: that's not a broken effect.
+  // three.js restores it; look at the screen again then. Still lost after a few seconds: tell the player.
+  let lostT = 0;
+  canvas.addEventListener("webglcontextlost", () => {
+    probe.next = Infinity;
+    clearTimeout(lostT); lostT = setTimeout(() => onTrouble?.("lost"), 4000);
+  });
+  canvas.addEventListener("webglcontextrestored", () => { clearTimeout(lostT); armProbe(30); });
   function armProbe(inFrames = 20) { probe.next = frameNo + inFrames; probe.ok = probe.bad = 0; probe.left = 40; }
   function probeFrame() {
     const gl = renderer.getContext();
-    const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
-    if (!probe.buf || probe.buf.length < w * 4) probe.buf = new Uint8Array(w * 4);
-    const buf = probe.buf;
-    let max = 0;
+    if (gl.isContextLost()) { probe.next = Infinity; return; }
+    const sx = gl.drawingBufferWidth / W, sy = gl.drawingBufferHeight / H;
+    const px = probe.buf || (probe.buf = new Uint8Array(4 * 9));
+    let caps = 0, dark = 0, lit = 0, max = 0;
     try {
       // the frame that was just drawn is still in the drawing buffer until this task ends
       const prev = gl.getParameter(gl.READ_FRAMEBUFFER_BINDING);
       gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
-      for (const f of [0.2, 0.45, 0.7]) {
-        gl.readPixels(0, Math.floor(h * f), w, 1, gl.RGBA, gl.UNSIGNED_BYTE, buf);
-        for (let i = 0; i < w * 4; i += 4) { const m = Math.max(buf[i], buf[i + 1], buf[i + 2]); if (m > max) max = m; }
+      for (let p = 0; p < players; p++) {
+        for (let i = 0; i < hws[p].lanes; i++) {
+          toScreen(p, hws[p].laneX(i), scr); // the middle of the fret button (a hair below the strike line)
+          const x = Math.min(gl.drawingBufferWidth - 3, Math.max(0, Math.round(scr.x * sx) - 1));
+          const y = Math.min(gl.drawingBufferHeight - 3, Math.max(0, Math.round((H - scr.y - 2) * sy) - 1));
+          gl.readPixels(x, y, 3, 3, gl.RGBA, gl.UNSIGNED_BYTE, px);
+          let m = 0;
+          for (let k = 0; k < 36; k += 4) m = Math.max(m, px[k], px[k + 1], px[k + 2]);
+          caps++; if (m < 10) dark++; else if (m > 60) lit++;
+          if (m > max) max = m;
+        }
       }
       gl.bindFramebuffer(gl.READ_FRAMEBUFFER, prev);
     } catch { probe.next = Infinity; return; }
     probe.last = max;
     probe.next = frameNo + 12;
     if (--probe.left <= 0) probe.next = Infinity; // never conclusive: stop looking
-    if (max > 6) {
+    if (lit >= Math.ceil(caps * 0.6)) {
       probe.bad = 0;
       if (++probe.ok >= 3) {
         probe.next = Infinity;
         if (probe.stepped) { probe.stepped = false; try { localStorage.setItem(SAFE_KEY, String(safe)); } catch {} }
       }
-    } else if (max <= 1) {
+    } else if (dark === caps) {
       probe.ok = 0;
       if (++probe.bad < 2) return;
       if (safe < SAFE.length - 1) {
         safe++; probe.stepped = true;
-        console.warn(`Corde: the screen came out black, graphics safe mode ${safe} (${SAFE[safe].name})`);
+        console.warn(`Corde: the screen came out black, graphics safe mode ${safe} (${SAFE[safe].name}) on ${gpu}`);
         applyLevel(); // re-arms the probe
       } else {
         probe.next = Infinity;
-        onTrouble?.();
+        onTrouble?.("black");
       }
     }
   }
-  // straight to the screen, no post-processing (the last safe mode); two players get the venue across the frame, then a neck per half
+  // The last safe mode: no intermediate buffer at all. The venue goes straight to the screen, then each neck on top
+  // (two players: each in its half).
   function drawDirect() {
     renderer.setRenderTarget(null);
-    if (players === 1) { renderer.render(scene, camera); return; }
     const auto = renderer.autoClear; renderer.autoClear = false;
     renderer.setScissorTest(false); renderer.setViewport(0, 0, W, H); renderer.clear();
-    renderer.render(bgOnly, camera);
+    renderer.render(bg, camera);
     scene.background = null;
     for (let k = 0; k < players; k++) {
-      hws.forEach((o, j) => (o.group.visible = j === k));
-      const x0 = Math.round((W * k) / players), x1 = Math.round((W * (k + 1)) / players);
-      renderer.setViewport(x0, 0, x1 - x0, H); renderer.setScissor(x0, 0, x1 - x0, H); renderer.setScissorTest(true);
+      if (players > 1) {
+        hws.forEach((o, j) => (o.group.visible = j === k));
+        const x0 = Math.round((W * k) / players), x1 = Math.round((W * (k + 1)) / players);
+        renderer.setViewport(x0, 0, x1 - x0, H); renderer.setScissor(x0, 0, x1 - x0, H); renderer.setScissorTest(true);
+      }
       renderer.clearDepth();
-      renderer.render(scene, hwCams[k]);
+      renderer.render(scene, camOf(k));
     }
     hws.forEach((o, j) => (o.group.visible = j < players));
     renderer.setScissorTest(false); renderer.setViewport(0, 0, W, H); renderer.setScissor(0, 0, W, H);
@@ -1020,9 +1074,8 @@ export function createRenderer(canvas) {
       players = n;
       while (hws.length < n) { const h = createHighway(); h.group.position.x = SPLIT_X * hws.length; h.layout(hws[0].lanes); hws.push(h); }
       hws.forEach((h, k) => (h.group.visible = k < n));
-      renderPass.enabled = n === 1; splitPass.enabled = n > 1;
-      fitCamera();
-      armProbe();
+      scenePass.enabled = n === 1; splitPass.enabled = n > 1;
+      applyLevel(); // MSAA is for one player only; fits the cameras and looks at the screen again
     },
     get players() { return players; },
     // "auto" | "high" | "low"
@@ -1032,7 +1085,7 @@ export function createRenderer(canvas) {
       perf.ema = 16.7; perf.slowFor = perf.fastFor = 0;
       applyLevel();
     },
-    qualityInfo() { return { mode, level, safe, probe: { last: probe.last, left: probe.left, next: probe.next, frame: frameNo }, ema: +perf.ema.toFixed(1), bg: [bgRT.width, bgRT.height], px: renderer.getPixelRatio() }; },
+    qualityInfo() { return { mode, level, safe, msaa, floatOK, gpu, probe: { last: probe.last, left: probe.left, next: probe.next, frame: frameNo }, ema: +perf.ema.toFixed(1), bg: [bgRT.width, bgRT.height], px: renderer.getPixelRatio() }; },
     /** The player picked a quality by hand: forget the safe mode found before and test this machine again. */
     retestGraphics() {
       if (!safe) return;
@@ -1040,7 +1093,7 @@ export function createRenderer(canvas) {
       try { localStorage.removeItem(SAFE_KEY); } catch {}
       applyLevel();
     },
-    /** fn() is called when even the plainest drawing comes out black (nothing left to switch off). */
+    /** fn(why) when the stage can't be shown: "black" (even the plainest drawing comes out black) or "lost" (GPU context gone). */
     set onGraphicsTrouble(fn) { onTrouble = fn; },
     resize,
     setSection(i) { section = i; pal = ((i % palettes.length) + palettes.length) % palettes.length; if (i > 0) firePyro(); },
@@ -1150,7 +1203,7 @@ export function createRenderer(canvas) {
       pyroLight.intensity = (pyroT < 1.1 ? (1 - pyroT / 1.1) * 900 : 0) * pyL;
 
       autoTune(performance.now());
-      if (frameNo++ % LEVELS[level].bgEvery === 0) {
+      if (frameNo++ % LEVELS[level].bgEvery === 0 && SAFE[safe].post) {
         renderer.setRenderTarget(bgRT);
         renderer.render(bg, camera);
         renderer.setRenderTarget(null);
