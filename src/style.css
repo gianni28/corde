@@ -760,3 +760,46 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .now-playing.locked #npSkip { display: none; }
 @keyframes npLocked { 50% { box-shadow: 0 0 0 1px #000, inset 0 0 0 1px #ffb36b, 0 0 26px rgba(255,140,40,.6), 0 10px 26px rgba(0,0,0,.55); } }
 @media (prefers-reduced-motion: reduce) { .now-playing.locked { animation: none; } }
+
+/* ---------- secret songs: the hidden pick, the code box, their own tab ---------- */
+:root { --pop: #ff4fa8; --pop-hi: #ffb3dc; }
+/* down by the bottom rivets, it passes for one more screw on the panel */
+.secret-pick { position: absolute; left: 24px; bottom: 1px; width: 24px; height: 24px; padding: 4px; display: grid; place-items: center; background: none; border: 0; opacity: .14; transition: opacity .2s; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.secret-pick svg { width: 100%; height: 100%; fill: #b8b0a6; }
+.secret-pick:hover, .secret-pick:focus-visible { opacity: .3; }
+.secret-pick.wiggle { opacity: .6; animation: pickWiggle .45s ease-out; }
+.secret-pick.wiggle svg { fill: var(--pop); }
+@keyframes pickWiggle { 20% { transform: rotate(-18deg) scale(1.2); } 45% { transform: rotate(14deg); } 70% { transform: rotate(-7deg); } 100% { transform: none; } }
+
+.lib-tabs button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.lib-tabs svg { width: 15px; height: 15px; fill: currentColor; flex: none; }
+.lib-tabs button[data-t="secret"][aria-pressed="true"] { background: linear-gradient(180deg, #d42a86, #6a0b45); }
+.song.secret .t { color: #ffe3f2; }
+.song.secret:hover, .song.secret:focus-visible { background: linear-gradient(90deg, rgba(212,42,134,.38), rgba(212,42,134,0)); border-left-color: var(--pop); }
+.song.secret .ph { background: linear-gradient(135deg, #4a0f33, #14070f); }
+#s-library.secret-tab .panel::after { background: linear-gradient(90deg, transparent, #a3125f, var(--pop), #a3125f, transparent); }
+.secret-lock { align-self: center; color: var(--pop-hi); }
+
+.secret-modal { position: fixed; inset: 0; z-index: 31; pointer-events: auto; display: grid; place-items: center; padding: 16px; background: rgba(5,2,4,.78); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); animation: tutIn .25s ease-out; }
+.secret-box { align-items: center; text-align: center; gap: 14px; }
+.secret-box::after { background: linear-gradient(90deg, transparent, #a3125f, var(--pop), #a3125f, transparent); }
+.secret-box h2 { margin: 0; font: 700 28px var(--display); text-transform: uppercase; letter-spacing: .04em; }
+.secret-box input { text-align: center; font: 700 24px var(--display); letter-spacing: .18em; text-transform: uppercase; }
+.secret-box input:focus { outline-color: var(--pop); }
+.secret-box .hint { margin: 0; min-height: 1.3em; }
+.secret-box .row { width: 100%; justify-content: center; flex-wrap: nowrap; }
+.secret-box .row button { flex: 1; }
+.secret-icon { width: 46px; height: 46px; fill: var(--pop); filter: drop-shadow(0 0 14px rgba(255,79,168,.6)); }
+.secret-box.shake { animation: secretShake .42s ease-in-out; }
+@keyframes secretShake { 15%, 55% { transform: translateX(-10px); } 35%, 75% { transform: translateX(10px); } }
+
+.celebrate.cel-secret .cel-rays { background: repeating-conic-gradient(from 0deg, rgba(255,79,168,.6) 0 6deg, transparent 6deg 18deg); }
+.celebrate.cel-secret .cel-title { background: linear-gradient(180deg, #fff 0%, #ffc4e4 35%, #ff4fa8 70%, #8a0f55 100%); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 5px 0 #000) drop-shadow(0 0 30px rgba(255,79,168,.7)); }
+.celebrate.cel-secret .cel-kicker { color: var(--pop-hi); }
+
+.check-row { display: flex; align-items: center; gap: 10px; font: 500 16px var(--body); color: var(--ink); cursor: pointer; }
+.check-row input { accent-color: var(--pop); width: 18px; height: 18px; flex: none; }
+.secret-admin .row input { flex: 1 1 180px; width: auto; }
+.secret-admin .hint:empty { display: none; }
+.secret-list button[aria-pressed="true"] { background: linear-gradient(180deg, #d42a86, #6a0b45); }
+@media (prefers-reduced-motion: reduce) { .secret-pick.wiggle, .secret-box.shake, .secret-modal { animation: none; } }
