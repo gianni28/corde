@@ -40,7 +40,9 @@ void main() {
   vec3 n = normalize(vN), v = normalize(-vP);
   float fr = 1.0 - clamp(abs(dot(n, v)), 0.0, 1.0);
   float up = clamp(n.y, 0.0, 1.0);
-  vec3 c = uFill + uRim * vB * (pow(fr, 3.2) * (0.2 + 1.0 * up) + pow(up, 4.0) * 0.16);
+  // no pow() of 0: a Mac's GPU computes pow as exp2(y * log2(x)), undefined at 0
+  float u2 = up * up;
+  vec3 c = uFill + uRim * vB * (pow(max(fr, 1e-4), 3.2) * (0.2 + up) + u2 * u2 * 0.16);
   gl_FragColor = vec4(c, 1.0);
   #include <colorspace_fragment>
 }`;
@@ -226,7 +228,7 @@ function rimMaterial(params, rim) {
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uRim = rim;
     sh.fragmentShader = "uniform vec3 uRim;\n" + sh.fragmentShader.replace("#include <emissivemap_fragment>",
-      "#include <emissivemap_fragment>\n{ float fr = 1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0); totalEmissiveRadiance += uRim * pow(fr, 3.4); }");
+      "#include <emissivemap_fragment>\n{ float fr = 1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0); totalEmissiveRadiance += uRim * pow(max(fr, 1e-4), 3.4); }");
   };
   return m;
 }

@@ -380,7 +380,7 @@
       </div>
       <div class="field secret-admin">
         <span class="label">Canciones secretas</span>
-        <p class="hint">Solo las ve quien toque 5 veces la púa escondida al final de la lista de canciones y escriba el código (al principio es «pop»). No salen en la canción del día, la gira, la música del menú ni las tablas generales.</p>
+        <p class="hint">Solo las ve quien toque 5 veces la púa escondida al final de la lista de canciones y escriba el código. No salen en la canción del día, la gira, la música del menú ni las tablas generales.</p>
         <div class="row">
           <input type="text" id="secretNew" autocomplete="off" spellcheck="false" maxlength="40" placeholder="Nuevo código secreto" aria-label="Nuevo código secreto">
           <button id="secretSave">Cambiar código</button>
@@ -526,6 +526,24 @@
   <button class="np-btn" id="npMute" aria-label="Silenciar música" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="spk" d="M4 9h4l5-4v14l-5-4H4z"/><path class="on" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/><path class="off" d="M16.5 9.5l5 5M21.5 9.5l-5 5"/></svg></button>
 </div>
 <div class="toast" id="toast" hidden></div>
+<div class="gfx-fail" id="gfxFail" role="alert" hidden><p id="gfxFailMsg"></p><button type="button" class="link" id="gfxFailClose">Entendido</button></div>
+<script>
+  // If the game can't start in this browser (too old, or a file that didn't arrive), say so instead of a dead menu.
+  (function () {
+    function say(msg) {
+      if (window.__cordeBooted) return;
+      document.getElementById("gfxFailMsg").textContent = msg;
+      document.getElementById("gfxFail").hidden = false;
+    }
+    var failed = false;
+    addEventListener("error", function (e) {
+      if (failed || window.__cordeBooted || !(e instanceof ErrorEvent || (e.target && e.target.tagName === "SCRIPT"))) return;
+      failed = true;
+      setTimeout(function () { say("El juego no pudo arrancar en este navegador. Actualízalo (o prueba con Chrome) y recarga la página."); }, 1500);
+    }, true);
+    setTimeout(function () { say("El juego está tardando mucho en cargar. Revisa tu conexión y recarga la página."); }, 30000);
+  })();
+</script>
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>

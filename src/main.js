@@ -27,7 +27,24 @@ const touch = isTouchDevice();
 
 /* ================= renderer + attract mode ================= */
 const canvas = $("stage");
-const R = createRenderer(canvas);
+// The stage can't be shown (no WebGL 2 here, a lost GPU, or every effect drew black): say why and what to do,
+// instead of leaving a black stage behind the menus.
+function gfxFail(why) {
+  const fix = "Actualiza el navegador o, en Chrome, activa «Usar aceleración de gráficos cuando esté disponible» (Configuración → Sistema) y reinícialo.";
+  $("gfxFailMsg").textContent = why === "lost" ? "Se perdió la conexión con la tarjeta de video. Recarga la página para volver a ver el escenario."
+    : why === "no3d" ? `Este navegador no puede mostrar gráficos 3D, así que no se ve el escenario ni se puede tocar. ${fix}`
+    : `Tu navegador no está mostrando los gráficos del juego. ${fix}`;
+  $("gfxFail").hidden = false;
+}
+$("gfxFailClose").onclick = () => ($("gfxFail").hidden = true);
+let R;
+try { R = createRenderer(canvas); }
+catch (e) {
+  // no WebGL 2 (an old Mac, a blocked GPU, hardware acceleration off): the menus still work, and the player learns why
+  console.error("Corde: no 3D:", e);
+  R = new Proxy({}, { get: (t, k) => (k in t ? t[k] : () => 0) });
+  gfxFail("no3d");
+}
 addEventListener("resize", () => R.resize());
 
 const demo = (() => {
@@ -1812,7 +1829,7 @@ $("speed").oninput = (e) => { settings.speed = +e.target.value; save(); renderSe
 $("offset").oninput = (e) => { settings.offsetMs = +e.target.value; save(); renderSettings(); };
 R.setQualityLevel(settings.gfx);
 // even the plainest drawing comes out black: say so instead of leaving a black stage
-R.onGraphicsTrouble = () => toast("Tu navegador no está mostrando los gráficos del juego. Actualízalo o, en Chrome, activa «Usar aceleración de gráficos» en Configuración → Sistema.", 15000);
+R.onGraphicsTrouble = gfxFail;
 
 /* ================= multiplayer ================= */
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
@@ -2151,3 +2168,6 @@ $("secretSave").onclick = async () => {
   } catch (e) { $("secretStatus").textContent = e.message; }
   $("secretSave").disabled = false;
 };
+
+// everything above ran: the boot watchdog in index.html can stand down
+window.__cordeBooted = true;

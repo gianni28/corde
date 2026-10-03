@@ -803,3 +803,10 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .secret-admin .hint:empty { display: none; }
 .secret-list button[aria-pressed="true"] { background: linear-gradient(180deg, #d42a86, #6a0b45); }
 @media (prefers-reduced-motion: reduce) { .secret-pick.wiggle, .secret-box.shake, .secret-modal { animation: none; } }
+
+/* ---------- the stage can't be shown: say why (no 3D, lost GPU, everything black) ---------- */
+.gfx-fail { position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 40; width: min(560px, calc(100% - 32px));
+  display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; background: linear-gradient(180deg, #2b211c, #160f0c); border: 1px solid #000; border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--fire), 0 12px 34px rgba(0,0,0,.7); animation: tutIn .3s ease-out; }
+.gfx-fail p { margin: 0; font: 500 16px/1.35 var(--body); color: var(--ink); }
+.gfx-fail .link { align-self: flex-end; }

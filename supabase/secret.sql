@@ -16,8 +16,8 @@ create table if not exists public.secret_config (
 );
 alter table public.secret_config enable row level security;
 revoke all on public.secret_config from anon, authenticated;
--- first code: "pop" (change it from the upload screen)
-insert into public.secret_config (id, code_hash) values (1, encode(sha256(convert_to('pop', 'UTF8')), 'hex')) on conflict (id) do nothing;
+-- a placeholder first code: set the real one from the upload screen (it never goes into the repo or the page)
+insert into public.secret_config (id, code_hash) values (1, encode(sha256(convert_to('cambia-este-codigo', 'UTF8')), 'hex')) on conflict (id) do nothing;
 
 -- true when p_code is the secret code; a wrong guess waits a little, so guessing is slow
 create or replace function public.secret_ok(p_code text) returns boolean
