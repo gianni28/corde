@@ -120,7 +120,7 @@ export function createMenuMusic({ onChange }) {
   let muted = false, want = false; // want = the menus are showing
   let srcs = [], gain = null, startAt = 0, seek = 0, playing = false, stopT = null, lastId = null;
   const ctx = () => sfxCtx();
-  const emit = () => onChange && onChange({ song: cur?.song || null, playing: playing && audible(), muted });
+  const emit = () => onChange && onChange({ song: cur?.song || null, playing: playing && audible(), muted, blocked: playing && !audible() });
   const audible = () => { try { return ctx().state === "running"; } catch { return false; } };
   try { ctx().addEventListener("statechange", () => emit()); } catch {}
 
@@ -229,6 +229,7 @@ export function createMenuMusic({ onChange }) {
       energyAt(cur.energy, tau, ev);
       return { key: cur, t: cur.base + tau, notes: cur.notes, beats: cur.beats, energy: ev.e, punch: ev.p };
     },
-    info() { return { song: cur?.song || null, playing: playing && audible(), muted }; },
+    // blocked: a song is on, but the browser hasn't allowed sound yet (it starts on the first touch, click or key)
+    info() { return { song: cur?.song || null, playing: playing && audible(), muted, blocked: playing && !audible() }; },
   };
 }

@@ -94,6 +94,31 @@ export function joinRoom(code, me, h) {
   };
 }
 
+/* ---------------- secret songs ---------------- */
+// Songs the admin hid: the public library never includes them; the database hands them out only with the secret code.
+const rpcError = (error) => { const e = new Error(error.message); e.wrongCode = error.code === "28000"; return e; };
+/** The hidden songs (all columns, like listSongs). Throws an error with wrongCode = true when the code is wrong. */
+export async function secretSongs(code) {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc("secret_songs", { p_code: code.trim() });
+  if (error) throw rpcError(error);
+  return data || [];
+}
+/** A hidden song's leaderboard (the public board views can't see hidden songs). Same rows as topScores. */
+export async function secretBoard(code, songId, diff, lanes, limit = 10) {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc("secret_board", { p_code: code.trim(), p_song_id: songId, p_diff: diff, p_lanes: lanes, p_limit: limit });
+  if (error) throw rpcError(error);
+  return data || [];
+}
+/** One song by its exact id, hidden or not (a secret song picked in a multiplayer room). */
+export async function songById(id) {
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc("song_by_id", { p_id: id });
+  if (error) throw new Error(error.message);
+  return (data && data[0]) || null;
+}
+
 /* ---------------- leaderboard ---------------- */
 export async function topScores(songId, diff, lanes, limit = 10) {
   if (!supabase) return [];

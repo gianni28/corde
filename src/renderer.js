@@ -260,6 +260,19 @@ export function createRenderer(canvas) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
+  // Safe modes for GPUs that draw some effect pitch black (an Apple M2 MacBook Air did, in Safari and Chrome alike, until
+  // "Rápidos"), tried in order, losing as little as possible: found by the black-frame probe below and remembered per
+  // browser (bump the key when the pipeline changes, so every machine gets tested again).
+  const SAFE = [
+    { msaa: true, bloom: true, post: true, name: "everything" },
+    { msaa: false, bloom: true, post: true, name: "no MSAA" },
+    { msaa: true, bloom: false, post: true, name: "no bloom" },
+    { msaa: false, bloom: false, post: true, name: "no MSAA, no bloom" },
+    { msaa: false, bloom: false, post: false, name: "no post-processing" },
+  ];
+  const SAFE_KEY = "corde.gfxsafe.v1";
+  let safe = 0;
+  try { safe = Math.min(SAFE.length - 1, Math.max(0, parseInt(localStorage.getItem(SAFE_KEY), 10) || 0)); } catch {}
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x070403);
@@ -763,7 +776,7 @@ export function createRenderer(canvas) {
   const SPLIT_X = 80; // the second neck sits this far to the side, out of the first camera's view
 
   /* --- post --- */
-  const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: isMobile ? 0 : 4 }));
+  const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: isMobile || !SAFE[safe].msaa ? 0 : 4 }));
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
   // two players: the venue across the whole frame, then each neck in its half (one frame, one bloom pass)
@@ -858,14 +871,15 @@ export function createRenderer(canvas) {
   const perf = { ema: 16.7, last: 0, slowFor: 0, fastFor: 0, lastDrop: -1e9 };
   function applyLevel() {
     const L = LEVELS[level];
-    const samples = !isMobile && level <= 1 ? 4 : 0;
+    const samples = !isMobile && level <= 1 && SAFE[safe].msaa ? 4 : 0;
     for (const rt of [composer.renderTarget1, composer.renderTarget2, bgRT]) if (rt.samples !== samples) { rt.samples = samples; rt.dispose(); }
     renderer.setPixelRatio(L.dpr);
-    bloom.enabled = L.bloom > 0;
+    bloom.enabled = L.bloom > 0 && SAFE[safe].bloom;
     dust.visible = L.fx >= 1;
     haze.forEach((h, i) => (h.s.visible = L.fx >= 2 || i % 2 === 0));
     coneMats.forEach((m) => (m.visible = L.fx >= 1));
     resize();
+    armProbe(); // a different pipeline: look at the screen again
   }
   function autoTune(now) {
     if (mode !== "auto") return;
@@ -887,6 +901,73 @@ export function createRenderer(canvas) {
     fitCamera();
   }
   let frameNo = 0;
+
+  /* --- black-frame probe (see safe above) ---
+     "Auto" quality only watches speed, and a GPU that draws black is fast, so the first seconds of the page (and after any
+     change of quality, venue or players) a few rows of what reached the screen are read back. The scene is never pure
+     black (the venue, the fog and the neck always show), so pure black means a broken effect: switch effects off one at a
+     time until the picture comes back, and remember what worked. */
+  const probe = { next: 30, ok: 0, bad: 0, left: 40, buf: null, stepped: false };
+  let onTrouble = null;
+  function armProbe(inFrames = 20) { probe.next = frameNo + inFrames; probe.ok = probe.bad = 0; probe.left = 40; }
+  function probeFrame() {
+    const gl = renderer.getContext();
+    const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+    if (!probe.buf || probe.buf.length < w * 4) probe.buf = new Uint8Array(w * 4);
+    const buf = probe.buf;
+    let max = 0;
+    try {
+      // the frame that was just drawn is still in the drawing buffer until this task ends
+      const prev = gl.getParameter(gl.READ_FRAMEBUFFER_BINDING);
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+      for (const f of [0.2, 0.45, 0.7]) {
+        gl.readPixels(0, Math.floor(h * f), w, 1, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+        for (let i = 0; i < w * 4; i += 4) { const m = Math.max(buf[i], buf[i + 1], buf[i + 2]); if (m > max) max = m; }
+      }
+      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, prev);
+    } catch { probe.next = Infinity; return; }
+    probe.last = max;
+    probe.next = frameNo + 12;
+    if (--probe.left <= 0) probe.next = Infinity; // never conclusive: stop looking
+    if (max > 6) {
+      probe.bad = 0;
+      if (++probe.ok >= 3) {
+        probe.next = Infinity;
+        if (probe.stepped) { probe.stepped = false; try { localStorage.setItem(SAFE_KEY, String(safe)); } catch {} }
+      }
+    } else if (max <= 1) {
+      probe.ok = 0;
+      if (++probe.bad < 2) return;
+      if (safe < SAFE.length - 1) {
+        safe++; probe.stepped = true;
+        console.warn(`Corde: the screen came out black, graphics safe mode ${safe} (${SAFE[safe].name})`);
+        applyLevel(); // re-arms the probe
+      } else {
+        probe.next = Infinity;
+        onTrouble?.();
+      }
+    }
+  }
+  // straight to the screen, no post-processing (the last safe mode); two players get the venue across the frame, then a neck per half
+  function drawDirect() {
+    renderer.setRenderTarget(null);
+    if (players === 1) { renderer.render(scene, camera); return; }
+    const auto = renderer.autoClear; renderer.autoClear = false;
+    renderer.setScissorTest(false); renderer.setViewport(0, 0, W, H); renderer.clear();
+    renderer.render(bgOnly, camera);
+    scene.background = null;
+    for (let k = 0; k < players; k++) {
+      hws.forEach((o, j) => (o.group.visible = j === k));
+      const x0 = Math.round((W * k) / players), x1 = Math.round((W * (k + 1)) / players);
+      renderer.setViewport(x0, 0, x1 - x0, H); renderer.setScissor(x0, 0, x1 - x0, H); renderer.setScissorTest(true);
+      renderer.clearDepth();
+      renderer.render(scene, hwCams[k]);
+    }
+    hws.forEach((o, j) => (o.group.visible = j < players));
+    renderer.setScissorTest(false); renderer.setViewport(0, 0, W, H); renderer.setScissor(0, 0, W, H);
+    scene.background = bgRT.texture;
+    renderer.autoClear = auto;
+  }
 
   let peopleDt = 0;
   const beatTrack = { count: 0, bar: 0, lastT: -1e9, prevT: -1e9, len: 0.5 };
@@ -917,6 +998,7 @@ export function createRenderer(canvas) {
     pyro.forEach((p) => { if (!S.pyro || (p.wide && !S.wide)) p.t = 9; });
     if (!S.pyro) pyroT = 9;
     layoutCrowd(W / H);
+    armProbe();
   }
   // screen position (CSS px) of a point on player p's neck
   function toScreen(p, x, out) {
@@ -940,6 +1022,7 @@ export function createRenderer(canvas) {
       hws.forEach((h, k) => (h.group.visible = k < n));
       renderPass.enabled = n === 1; splitPass.enabled = n > 1;
       fitCamera();
+      armProbe();
     },
     get players() { return players; },
     // "auto" | "high" | "low"
@@ -949,7 +1032,16 @@ export function createRenderer(canvas) {
       perf.ema = 16.7; perf.slowFor = perf.fastFor = 0;
       applyLevel();
     },
-    qualityInfo() { return { mode, level, ema: +perf.ema.toFixed(1), bg: [bgRT.width, bgRT.height], px: renderer.getPixelRatio() }; },
+    qualityInfo() { return { mode, level, safe, probe: { last: probe.last, left: probe.left, next: probe.next, frame: frameNo }, ema: +perf.ema.toFixed(1), bg: [bgRT.width, bgRT.height], px: renderer.getPixelRatio() }; },
+    /** The player picked a quality by hand: forget the safe mode found before and test this machine again. */
+    retestGraphics() {
+      if (!safe) return;
+      safe = 0; probe.stepped = false;
+      try { localStorage.removeItem(SAFE_KEY); } catch {}
+      applyLevel();
+    },
+    /** fn() is called when even the plainest drawing comes out black (nothing left to switch off). */
+    set onGraphicsTrouble(fn) { onTrouble = fn; },
     resize,
     setSection(i) { section = i; pal = ((i % palettes.length) + palettes.length) % palettes.length; if (i > 0) firePyro(); },
     /** Tour venue look: "garage" | "bar" (the club, default) | "university" | "theater" | "festival" | "stadium". */
@@ -1063,7 +1155,8 @@ export function createRenderer(canvas) {
         renderer.render(bg, camera);
         renderer.setRenderTarget(null);
       }
-      composer.render();
+      if (SAFE[safe].post) composer.render(); else drawDirect();
+      if (frameNo >= probe.next) probeFrame();
     },
   };
   resize();

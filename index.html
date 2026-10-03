@@ -17,7 +17,7 @@
 </head>
 <body>
 <canvas id="stage" aria-label="Escenario"></canvas>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="flame" viewBox="0 0 24 24"><path d="M12 2c.6 3.2 2.4 4.9 4 6.6 1.7 1.8 3 3.6 3 6.4A7 7 0 0 1 5 15c0-2.3 1-4.1 2.4-5.4-.1 1.6.4 2.9 1.6 3.6C8.7 9.3 10.2 5.3 12 2zm.3 11.2c-1.6 1.4-2.6 2.7-2.6 4.2a2.3 2.3 0 0 0 4.6.2c.1-1.6-.8-2.9-2-4.4z"/></symbol><symbol id="lock" viewBox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3h1.5A1.5 1.5 0 0 1 20 11.5v9A1.5 1.5 0 0 1 18.5 22h-13A1.5 1.5 0 0 1 4 20.5v-9A1.5 1.5 0 0 1 5.5 10H7zm2 0h6V7a3 3 0 0 0-6 0v3z"/></symbol><symbol id="dice" viewBox="0 0 24 24"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm2.5 3a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM7.5 15a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></symbol></svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="flame" viewBox="0 0 24 24"><path d="M12 2c.6 3.2 2.4 4.9 4 6.6 1.7 1.8 3 3.6 3 6.4A7 7 0 0 1 5 15c0-2.3 1-4.1 2.4-5.4-.1 1.6.4 2.9 1.6 3.6C8.7 9.3 10.2 5.3 12 2zm.3 11.2c-1.6 1.4-2.6 2.7-2.6 4.2a2.3 2.3 0 0 0 4.6.2c.1-1.6-.8-2.9-2-4.4z"/></symbol><symbol id="lock" viewBox="0 0 24 24"><path d="M7 10V7a5 5 0 0 1 10 0v3h1.5A1.5 1.5 0 0 1 20 11.5v9A1.5 1.5 0 0 1 18.5 22h-13A1.5 1.5 0 0 1 4 20.5v-9A1.5 1.5 0 0 1 5.5 10H7zm2 0h6V7a3 3 0 0 0-6 0v3z"/></symbol><symbol id="pick" viewBox="0 0 24 24"><path d="M12 22.2c-.9 0-1.6-.5-2.3-1.4C6.6 16.9 2.6 11.6 2.6 7.5 2.6 3.6 6.7 1.8 12 1.8s9.4 1.8 9.4 5.7c0 4.1-4 9.4-7.1 13.3-.7.9-1.4 1.4-2.3 1.4z"/><path d="M7.4 6.1c1.2-.9 2.8-1.4 4.6-1.4" fill="none" stroke="rgba(255,255,255,.45)" stroke-width="1.3" stroke-linecap="round"/></symbol><symbol id="dice" viewBox="0 0 24 24"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm2.5 3a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM7.5 15a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm9 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></symbol></svg>
 
 <!-- ===== HUD ===== -->
 <div id="hud" hidden>
@@ -69,6 +69,15 @@
 </div>
 
 <div id="ui">
+  <div class="secret-modal" id="secretModal" hidden>
+    <form class="panel narrow secret-box" id="secretForm" autocomplete="off">
+      <svg class="secret-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#pick"/></svg>
+      <h2>¿Cuál es el código?</h2>
+      <input type="text" id="secretInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="40" aria-label="Código secreto" enterkeyhint="go">
+      <p class="hint" id="secretMsg" aria-live="polite"></p>
+      <div class="row"><button type="button" id="secretCancel">Cancelar</button><button type="submit" class="primary" id="secretGo">Entrar</button></div>
+    </form>
+  </div>
   <div class="celebrate" id="celebrate" hidden>
     <div class="cel-rays" aria-hidden="true"></div>
     <div class="cel-box">
@@ -112,11 +121,13 @@
     <div class="panel wide">
       <header class="bar"><button class="back" data-back>Volver</button><h2 id="libTitle">Canciones</h2></header>
       <input type="search" id="libSearch" placeholder="Buscar canción o artista" autocomplete="off">
+      <div class="seg lib-tabs" id="libTabs" hidden><button data-t="all">Biblioteca</button><button data-t="secret"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#pick"/></svg>Secretas</button></div>
       <div class="random" id="randomBox">
         <button class="btn random-btn" id="randomBtn" aria-expanded="false" aria-controls="randomDiffs"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#dice"/></svg>Canción al azar</button>
         <div class="seg" id="randomDiffs" hidden><button data-d="easy">Fácil</button><button data-d="medium">Media</button><button data-d="hard">Difícil</button><button data-d="expert">Experto</button></div>
       </div>
       <div class="songs" id="songList"></div>
+      <button type="button" class="link secret-lock" id="secretLock" hidden>Esconder las canciones secretas</button>
       <div class="local" id="localBox" hidden>
         <div>
           <b>Canción desde tu dispositivo</b>
@@ -127,6 +138,8 @@
           <label class="btn" id="localFolderBtn">Carpeta<input type="file" id="localFolder" webkitdirectory multiple></label>
         </div>
       </div>
+      <!-- psst: five taps -->
+      <button type="button" class="secret-pick" id="secretPick" aria-label="Púa"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#pick"/></svg></button>
     </div>
   </section>
 
@@ -192,7 +205,7 @@
       <div class="field">
         <span class="label">Gráficos</span>
         <div class="seg" id="qualitySeg"><button data-v="auto">Automático</button><button data-v="high">Altos</button><button data-v="low">Rápidos</button></div>
-        <p class="hint">Automático baja la calidad apenas detecta que el juego va lento.</p>
+        <p class="hint">Automático baja la calidad apenas detecta que el juego va lento, y apaga los efectos que tu equipo no logre mostrar.</p>
       </div>
       <div class="field">
         <span class="label">Sonido al fallar</span>
@@ -356,6 +369,7 @@
         <label class="btn">Elegir MP3<input type="file" id="adminMp3" multiple accept=".mp3,.m4a,.ogg,.opus,.wav,.flac,audio/*,image/*"></label>
         <button id="adminUpload" disabled>Subir</button>
       </div>
+      <label class="check-row"><input type="checkbox" id="adminSecret"> Subirlas como canciones secretas (solo aparecen con el código)</label>
       <p class="hint">Si el archivo se llama «Artista - Canción.mp3», uso ese nombre. La portada la saco del mismo MP3 o de una imagen con el mismo nombre.</p>
       <ul class="uploads" id="adminList"></ul>
       <p class="hint" id="adminStatus"></p>
@@ -363,6 +377,18 @@
         <span class="label">Hechas desde MP3</span>
         <p class="hint">Si subes la carpeta de Clone Hero de una de estas (aunque solo traiga Experto), reemplaza a la del MP3 sola y el juego arma los otros niveles a partir de Experto. También puedes borrarlas aquí.</p>
         <ul class="uploads auto-list" id="autoList"></ul>
+      </div>
+      <div class="field secret-admin">
+        <span class="label">Canciones secretas</span>
+        <p class="hint">Solo las ve quien toque 5 veces la púa escondida al final de la lista de canciones y escriba el código (al principio es «pop»). No salen en la canción del día, la gira, la música del menú ni las tablas generales.</p>
+        <div class="row">
+          <input type="text" id="secretNew" autocomplete="off" spellcheck="false" maxlength="40" placeholder="Nuevo código secreto" aria-label="Nuevo código secreto">
+          <button id="secretSave">Cambiar código</button>
+        </div>
+        <input type="search" id="secretFind" placeholder="Busca una canción para volverla secreta o pública" autocomplete="off">
+        <p class="hint" id="secretEmpty"></p>
+        <ul class="uploads auto-list secret-list" id="secretList"></ul>
+        <p class="hint" id="secretStatus" aria-live="polite"></p>
       </div>
     </div>
   </section>

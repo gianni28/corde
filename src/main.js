@@ -10,7 +10,7 @@ import { decodeStems, Player, audioCtx, unlockAudio } from "./audio.js";
 import { Game, STAR_READY } from "./game.js";
 import { motionAvailable, motionNeedsPermission, motionReady, requestMotion, onLift, watchMotion, seen as motionSeen } from "./motion.js";
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
-import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily } from "./net.js";
+import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretSongs, secretBoard, songById } from "./net.js";
 import { VENUES, TO_ENCORE, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song } from "./admin.js";
 import { fillDifficulties } from "./reduce.js";
@@ -23,7 +23,7 @@ const LANE_CSS = ["--g", "--r", "--y", "--b", "--o"];
 const touch = isTouchDevice();
 
 // iPhone: every tap/keypress re-asserts "music playback" so the silent switch doesn't mute the game.
-["pointerdown", "touchend", "keydown"].forEach((t) => addEventListener(t, unlockAudio, { capture: true, passive: true }));
+["pointerdown", "pointerup", "touchend", "keydown", "click"].forEach((t) => addEventListener(t, unlockAudio, { capture: true, passive: true }));
 
 /* ================= renderer + attract mode ================= */
 const canvas = $("stage");
@@ -58,18 +58,10 @@ const app = {
 const MENU_MUSIC = ["home", "library", "setup", "settings", "mp", "lobby", "admin", "tutorial", "duo", "daily", "tour"];
 const wideMQ = matchMedia("(min-width: 1000px)");
 const music = createMenuMusic({ onChange: () => renderNowPlaying() });
-// Nothing is downloaded until the player first touches the page (browsers wouldn't play it before that anyway,
-// and visitors who leave right away cost no bandwidth).
-let musicArmed = false;
-function armMusic() {
-  if (musicArmed) return;
-  musicArmed = true;
-  ["pointerdown", "keydown"].forEach((t) => removeEventListener(t, armMusic, true));
-  syncMenuMusic();
-}
-["pointerdown", "keydown"].forEach((t) => addEventListener(t, armMusic, { capture: true, passive: true }));
+// It starts as soon as the page opens: a random song is fetched right away and plays the moment the browser
+// allows sound. Chrome allows it straight away on sites you use a lot and in the installed app; otherwise the first
+// touch, click or key starts it (already loaded, so instantly), with a "touch to listen" hint until then.
 function syncMenuMusic() {
-  if (!musicArmed) return renderNowPlaying();
   if (MENU_MUSIC.includes(app.screen) && !app.game && !document.hidden) music.play(); else music.pause();
   renderNowPlaying();
 }
@@ -81,20 +73,24 @@ function renderNowPlaying() {
   if (!wide && el.parentElement === document.body) document.querySelector("#s-home .menu").after(el);
   el.classList.toggle("fixed", wide);
   el.classList.toggle("muted", info.muted);
+  // the browser hasn't allowed sound yet: the song is ready, one touch away
+  const blocked = info.blocked && !info.muted;
+  el.classList.toggle("locked", blocked);
   const roomy = app.screen === "home" || innerWidth >= 1400; // beside a centred panel only when it can't overlap it
   const onMenu = MENU_MUSIC.includes(app.screen) && !app.game && roomy;
-  el.hidden = !online || !(info.muted || (info.playing && info.song)) || (wide && !onMenu);
+  el.hidden = !online || !(info.muted || ((info.playing || blocked) && info.song)) || (wide && !onMenu);
   if (info.song && info.song !== npSong) {
     npSong = info.song;
     $("npTitle").textContent = info.song.name;
-    $("npArtist").textContent = info.song.artist || "";
     const cov = coverOf(info.song);
     $("npCover").hidden = !cov; if (cov) $("npCover").src = cov;
   }
+  const sub = blocked ? (touch ? "Toca la pantalla para escucharla" : "Haz clic o presiona una tecla para escucharla") : info.song?.artist || "";
+  if ($("npArtist").textContent !== sub) $("npArtist").textContent = sub;
   $("npMute").setAttribute("aria-pressed", String(info.muted));
 }
-$("npMute").onclick = () => { settings.menuMusic = music.muted; save(); music.setMuted(!music.muted); syncMenuMusic(); };
-$("npSkip").onclick = () => music.skip();
+$("npMute").onclick = () => { if (music.info().blocked) return; settings.menuMusic = music.muted; save(); music.setMuted(!music.muted); syncMenuMusic(); };
+$("npSkip").onclick = () => { if (!music.info().blocked) music.skip(); };
 wideMQ.addEventListener?.("change", renderNowPlaying);
 addEventListener("resize", () => renderNowPlaying());
 document.addEventListener("visibilitychange", () => syncMenuMusic());
@@ -148,7 +144,7 @@ document.addEventListener("click", (e) => {
 });
 
 let toastT;
-function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 3200); }
+function toast(msg, ms = 3200) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), ms); }
 function loading(label, p) { $("loadLabel").textContent = label; $("loadBar").style.width = Math.round((p || 0) * 100) + "%"; }
 
 // ?debug exposes the app to automated tests (never needed by players)
@@ -199,7 +195,7 @@ async function renderHomeBoard() {
 $("homeTabs").onclick = (e) => { const b = e.target.closest("button"); if (!b || b.dataset.v === homeTab) return; homeTab = b.dataset.v; renderHomeBoard(); };
 renderHomeBoard();
 // the library list is needed for the menu music right away (it's small)
-if (online) listSongs().then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list); syncMenuMusic(); }).catch(() => {}).finally(() => loadDaily());
+if (online) loadLibrary().then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); }).catch(() => {}).finally(() => loadDaily());
 
 /* ================= personal bests ================= */
 // Your best run of each song and difficulty, kept in this browser: stars in the song list and on the difficulty
@@ -232,6 +228,93 @@ const starsHtml = (n) => "★".repeat(n) + `<span class="off">${"★".repeat(5 -
 const fmtLen = (ms) => { if (!ms) return ""; const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 const coverOf = (s) => (s.has_cover ? fileUrl(s.id, "cover.jpg") : "");
 
+/* ---------------- secret songs ---------------- */
+// Songs the admin hid: five taps on the little pick at the bottom of the song list ask for the code, and with it the
+// database hands them out (it never sends them otherwise). The code stays in this browser until "Esconderlas".
+// They live in their own tab and never join the tour, the song of the day, the menu music or the home boards.
+const SECRET_KEY = "corde.secret.v1";
+const secretCode = () => { try { return localStorage.getItem(SECRET_KEY) || ""; } catch { return ""; } };
+const publicSongs = () => app.songs.filter((s) => !s.secret);
+app.libTab = "all"; // "all" | "secret"
+// The library: the public songs, plus the secret ones (marked secret: true) when this browser knows the code
+async function loadLibrary() {
+  const code = secretCode();
+  const [pub, sec] = await Promise.all([
+    listSongs(),
+    code ? secretSongs(code).catch((e) => { if (e.wrongCode) lockSecret(); return null; }) : [],
+  ]);
+  // the code is fine but the secret songs didn't come (connection): keep the ones we had
+  const secret = sec ? sec.map((x) => ({ ...x, secret: true })) : app.songs.filter((x) => x.secret);
+  return [...pub, ...secret];
+}
+// the admin changed the code, or the player hid them again
+function lockSecret() {
+  try { localStorage.removeItem(SECRET_KEY); } catch {}
+  app.songs = app.songs.filter((x) => !x.secret);
+  app.libTab = "all";
+}
+function openSecret() {
+  if (secretCode()) { app.libTab = "secret"; renderSongs(); $("songList").scrollTop = 0; return; }
+  $("secretInput").value = ""; $("secretMsg").textContent = "";
+  $("secretModal").hidden = false;
+  setTimeout(() => $("secretInput").focus(), 60);
+}
+const closeSecret = () => { $("secretModal").hidden = true; };
+let pickTaps = 0, pickAt = 0;
+$("secretPick").onclick = () => {
+  const now = performance.now();
+  pickTaps = now - pickAt < 1200 ? pickTaps + 1 : 1; pickAt = now;
+  const el = $("secretPick");
+  el.classList.remove("wiggle"); void el.offsetWidth;
+  if (pickTaps >= 3 && pickTaps < 5) el.classList.add("wiggle"); // something's there…
+  if (pickTaps >= 5) { pickTaps = 0; openSecret(); }
+};
+$("secretPick").addEventListener("animationend", (e) => e.currentTarget.classList.remove("wiggle")); // back to hiding
+$("secretCancel").onclick = closeSecret;
+$("secretModal").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closeSecret(); } });
+$("secretModal").addEventListener("click", (e) => { if (e.target === $("secretModal")) closeSecret(); });
+$("secretForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const code = $("secretInput").value.trim();
+  if (!code || !online) return;
+  const go = $("secretGo"), form = $("secretForm");
+  go.disabled = true; $("secretMsg").textContent = "Revisando…";
+  try {
+    const list = await secretSongs(code);
+    try { localStorage.setItem(SECRET_KEY, code); } catch {}
+    app.songs = [...publicSongs(), ...list.map((x) => ({ ...x, secret: true }))];
+    closeSecret();
+    app.libTab = "secret"; renderSongs(); $("songList").scrollTop = 0;
+    sfx.unlock();
+    const n = list.length;
+    celebrate({ kicker: "Código correcto", title: "Canciones secretas", kind: "secret", ms: 2800,
+      sub: n ? `${n} ${n === 1 ? "canción desbloqueada" : "canciones desbloqueadas"}. Las encuentras en «Secretas».` : "Ya quedaron desbloqueadas, aunque todavía no hay ninguna." });
+  } catch (err) {
+    $("secretMsg").textContent = err.wrongCode ? "Ese no es. Intenta otra vez." : "No pude revisar el código. ¿Hay conexión?";
+    form.classList.remove("shake"); void form.offsetWidth; form.classList.add("shake");
+    $("secretInput").select();
+  } finally { go.disabled = false; }
+};
+$("libTabs").onclick = (e) => {
+  const b = e.target.closest("button[data-t]");
+  if (!b || b.dataset.t === app.libTab) return;
+  app.libTab = b.dataset.t; renderSongs(); $("songList").scrollTop = 0;
+};
+$("secretLock").onclick = () => {
+  if (!confirm("¿Esconder otra vez las canciones secretas? Para verlas de nuevo hay que escribir el código.")) return;
+  lockSecret(); renderSongs();
+};
+// a song by id: the library, or (a secret song a friend picked in a room) straight from the database
+app.extraSongs = [];
+const knownSong = (id) => app.songs.find((x) => x.id === id) || app.extraSongs.find((x) => x.id === id) || null;
+async function findSong(id) {
+  if (knownSong(id)) return knownSong(id);
+  try { app.songs = await loadLibrary(); } catch {}
+  if (knownSong(id)) return knownSong(id);
+  try { const r = await songById(id); if (r) app.extraSongs.push({ ...r, secret: !!r.hidden }); } catch {}
+  return knownSong(id);
+}
+
 async function openLibrary() {
   $("libTitle").textContent = app.mode === "pick" ? "Elige la canción" : app.mode === "duo" ? "2 jugadores" : "Canciones";
   $("localFolderBtn").hidden = touch;
@@ -242,13 +325,13 @@ async function openLibrary() {
   if (!online) return;
   if (!app.songs.length) {
     $("songList").innerHTML = `<p class="empty">Cargando biblioteca…</p>`;
-    try { app.songs = await listSongs(); renderSongs(); }
+    try { app.songs = await loadLibrary(); renderSongs(); }
     catch (e) { $("songList").innerHTML = `<p class="empty">${e.message}</p>`; }
     return;
   }
   // refresh quietly so new songs and re-uploads (offsets, charts) show up without reloading the page
   try {
-    const fresh = await listSongs();
+    const fresh = await loadLibrary();
     if (JSON.stringify(fresh) === JSON.stringify(app.songs)) return;
     const was = app.songs.find((x) => x.id === app.loadedSongId);
     const now = fresh.find((x) => x.id === app.loadedSongId);
@@ -260,13 +343,25 @@ async function openLibrary() {
 function renderSongs() {
   const box = $("songList");
   if (!online) { box.innerHTML = `<p class="empty">La biblioteca en línea aparece cuando el juego está conectado a Supabase.<br>Mientras tanto puedes tocar canciones desde tu dispositivo.</p>`; return; }
+  // the secret songs get their own tab once this browser knows the code
+  const unlocked = !!secretCode();
+  if (!unlocked) app.libTab = "all";
+  const secretTab = app.libTab === "secret";
+  $("libTabs").hidden = !unlocked;
+  $("libTabs").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.t === app.libTab)));
+  $("secretLock").hidden = !secretTab;
+  $("s-library").classList.toggle("secret-tab", secretTab);
   const q = $("libSearch").value.trim().toLowerCase();
-  const list = app.songs.filter((s) => !q || `${s.name} ${s.artist}`.toLowerCase().includes(q));
-  if (!list.length) { box.innerHTML = `<p class="empty">${app.songs.length ? "Nada coincide con tu búsqueda." : "Todavía no hay canciones en la biblioteca."}</p>`; return; }
+  const tab = app.songs.filter((s) => !!s.secret === secretTab);
+  const list = tab.filter((s) => !q || `${s.name} ${s.artist}`.toLowerCase().includes(q));
+  if (!list.length) {
+    box.innerHTML = `<p class="empty">${tab.length ? "Nada coincide con tu búsqueda." : secretTab ? "Todavía no hay canciones secretas." : "Todavía no hay canciones en la biblioteca."}</p>`;
+    return;
+  }
   box.innerHTML = "";
   for (const s of list) {
     const b = document.createElement("button");
-    b.className = "song";
+    b.className = "song" + (s.secret ? " secret" : "");
     const cov = coverOf(s);
     const best = songBest(s.id);
     b.innerHTML = `${cov ? `<img loading="lazy" alt="" src="${cov}">` : `<div class="ph"></div>`}<span><span class="t"></span><span class="a"></span></span>`
@@ -291,8 +386,9 @@ function randomBox(btn, diffs, fromResults) {
     const b = e.target.closest("button[data-d]");
     if (!b || app.loadingRandom) return;
     const diff = b.dataset.d;
-    if (!app.songs.length) { try { app.songs = await listSongs(); } catch {} }
-    const has = app.songs.filter((s) => (s.diffs?.[diff]?.n || 0) > 0);
+    if (!app.songs.length) { try { app.songs = await loadLibrary(); } catch {} }
+    // from the tab you're in: the secret songs only from «Secretas»
+    const has = app.songs.filter((s) => (s.diffs?.[diff]?.n || 0) > 0 && !!s.secret === (app.libTab === "secret"));
     const pool = has.length > 1 ? has.filter((s) => s.id !== app.lastRandomId && s.id !== app.song?.id) : has;
     if (!pool.length) return;
     const s = pool[Math.floor(Math.random() * pool.length)];
@@ -646,7 +742,7 @@ function loadDaily(force = false) {
       if (r.day !== daily.day || r.song_id !== daily.songId) daily.boards = {};
       daily.day = r.day; daily.songId = r.song_id;
       // a song uploaded today may not be in the list we have yet
-      if (!app.songs.some((s) => s.id === r.song_id)) { try { app.songs = await listSongs(); } catch {} }
+      if (!app.songs.some((s) => s.id === r.song_id)) { try { app.songs = await loadLibrary(); } catch {} }
       renderDailyCard();
       return daily;
     } catch (e) { console.warn("daily:", e.message); return null; }
@@ -816,13 +912,13 @@ async function sendDaily(sum, ctx, diff, lanes) {
 let tourDiff = settings.tourDiff || "medium";
 let tourOpen = null;   // the venue unfolded in the list
 let tourLook = "bar";  // the stage shown behind the tour screen: the venue you're looking at
-const tourNow = () => { const t = tourFor(tourDiff, app.songs); return t && { tour: t, prog: tourProgress(t, bestOf) }; };
+const tourNow = () => { const t = tourFor(tourDiff, publicSongs()); return t && { tour: t, prog: tourProgress(t, bestOf) }; };
 async function openTour(push = true) {
   tourOpen = null; tourLook = "bar"; // renderTour picks the venue as soon as the list is there
   show("tour", push);
   if (online && !app.songs.length) {
     $("tourList").innerHTML = `<p class="empty">Cargando la biblioteca…</p>`;
-    try { app.songs = await listSongs(); } catch (e) { $("tourList").innerHTML = `<p class="empty">${e.message}</p>`; return; }
+    try { app.songs = await loadLibrary(); } catch (e) { $("tourList").innerHTML = `<p class="empty">${e.message}</p>`; return; }
   }
   if (app.screen === "tour") renderTour();
 }
@@ -916,7 +1012,7 @@ async function playTourSong(vi, si, diff = tourDiff) {
 function againCtx() {
   const c = app.ctx;
   if (c?.kind !== "tour") return c;
-  const tp = tourFor(c.diff, app.songs);
+  const tp = tourFor(c.diff, publicSongs());
   return tp ? { ...c, before: tourProgress(tp, bestOf) } : c;
 }
 // What a finished run means for the song of the day and the tour; returns a celebration to show after the results.
@@ -938,7 +1034,7 @@ function finishCtx(sum) {
     return fresh && st > 1 ? () => { sfx.unlock(); celebrate({ kicker: "Canción del día", title: `¡${st} días seguidos!`, sub: "Vuelve mañana por una canción nueva.", ms: 2600, kind: "streak" }); } : null;
   }
   if (ctx?.kind !== "tour") return null;
-  const t = tourFor(ctx.diff, app.songs);
+  const t = tourFor(ctx.diff, publicSongs());
   const after = t && tourProgress(t, bestOf);
   if (!after) return null;
   const v = after.venues[ctx.venue];
@@ -1344,7 +1440,11 @@ async function showBoard(el, limit, myRank) {
   const lanes = (app.boardLanes || deviceLanes()) === 5 && fifth ? 5 : 4;
   const req = ++boardReq;
   let rows = [];
-  try { rows = await topScores(app.song.id, app.diff, lanes, limit); } catch (e) { console.warn("leaderboard:", e.message); }
+  try {
+    // a secret song's board needs the code (a friend who joined a room without it sees none)
+    if (app.song.secret) rows = secretCode() ? await secretBoard(secretCode(), app.song.id, app.diff, lanes, limit) : [];
+    else rows = await topScores(app.song.id, app.diff, lanes, limit);
+  } catch (e) { console.warn("leaderboard:", e.message); }
   if (req !== boardReq) return;
   const ol = el.querySelector(".board-list"); ol.innerHTML = "";
   rows.forEach((r, i) => {
@@ -1704,12 +1804,15 @@ function finishRebind(k) {
 }
 $("resetKeys").onclick = () => { resetKeys(); renderSettings(); };
 document.querySelectorAll("#laneSeg button").forEach((b) => (b.onclick = () => { settings.laneMode = b.dataset.v; save(); renderSettings(); }));
-document.querySelectorAll("#qualitySeg button").forEach((b) => (b.onclick = () => { settings.gfx = b.dataset.v; save(); R.setQualityLevel(settings.gfx); renderSettings(); }));
+// picking a quality by hand also tests this machine again (in case a safe mode was found before)
+document.querySelectorAll("#qualitySeg button").forEach((b) => (b.onclick = () => { settings.gfx = b.dataset.v; save(); R.retestGraphics(); R.setQualityLevel(settings.gfx); renderSettings(); }));
 document.querySelectorAll("#missSeg button").forEach((b) => (b.onclick = () => { settings.missSfx = b.dataset.v === "on"; save(); renderSettings(); }));
 document.querySelectorAll("#syncSeg button").forEach((b) => (b.onclick = () => { settings.autoSync = b.dataset.v === "on"; save(); if (app.game) app.game.autoSync = settings.autoSync; renderSettings(); }));
 $("speed").oninput = (e) => { settings.speed = +e.target.value; save(); renderSettings(); };
 $("offset").oninput = (e) => { settings.offsetMs = +e.target.value; save(); renderSettings(); };
 R.setQualityLevel(settings.gfx);
+// even the plainest drawing comes out black: say so instead of leaving a black stage
+R.onGraphicsTrouble = () => toast("Tu navegador no está mostrando los gráficos del juego. Actualízalo o, en Chrome, activa «Usar aceleración de gráficos» en Configuración → Sistema.", 15000);
 
 /* ================= multiplayer ================= */
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
@@ -1728,7 +1831,7 @@ function enterRoom(code) {
   });
   $("roomCode").textContent = code;
   renderInvite();
-  if (!app.songs.length) listSongs().then((s) => { app.songs = s; renderLobby(); }).catch(() => {});
+  if (!app.songs.length) loadLibrary().then((s) => { app.songs = s; renderLobby(); }).catch(() => {});
   renderLobby();
   show("lobby");
 }
@@ -1778,7 +1881,7 @@ async function syncConfig() {
   app.roomConfig = cfg;
   if (!cfg) return;
   if (app.loadedRoomSong === cfg.songId || app.loadingRoomSong === cfg.songId) return;
-  const song = app.songs.find((s) => s.id === cfg.songId) || (await listSongs().then((s) => (app.songs = s)).then((s) => s.find((x) => x.id === cfg.songId)));
+  const song = await findSong(cfg.songId);
   if (!song) return;
   app.loadingRoomSong = cfg.songId;
   app.room.update({ ready: false, songId: null });
@@ -1809,7 +1912,7 @@ function renderLobby() {
     ul.appendChild(li);
   });
   const isHost = amHost();
-  const song = cfg && app.songs.find((s) => s.id === cfg.songId);
+  const song = cfg && knownSong(cfg.songId);
   const pick = $("lobbySong");
   if (song) {
     const cov = coverOf(song);
@@ -1903,10 +2006,18 @@ function sameSong(a, b) {
   const x = songKey(a.artist), y = songKey(b.artist);
   return !x || !y || x.includes(y) || y.includes(x);
 }
+// the admin sees the whole library, secret songs included (the public list can't see them)
+async function adminLibrary() {
+  const code = $("adminCode").value.trim();
+  if (code) { try { adm.lib = (await adminCall({ code, action: "list" })).songs || []; return adm.lib; } catch {} }
+  adm.lib = null; // without the code only the public library: not enough to manage the secret songs
+  return listSongs();
+}
 async function loadAutoList() {
   if (!online) return;
   let lib = [];
-  try { lib = await listSongs(); } catch { return; }
+  try { lib = await adminLibrary(); } catch { return; }
+  renderSecretAdmin();
   const auto = lib.filter((x) => x.charter === AUTO_CHARTER);
   const ul = $("autoList"); ul.innerHTML = "";
   $("autoBox").hidden = !auto.length;
@@ -1914,7 +2025,7 @@ async function loadAutoList() {
     const li = document.createElement("li");
     li.innerHTML = `<span class="n"></span><button type="button">Borrar</button>`;
     li.querySelector(".n").innerHTML = `<span class="t"></span> <span class="a"></span>`;
-    li.querySelector(".t").textContent = x.name; li.querySelector(".a").textContent = x.artist ? `· ${x.artist}` : "";
+    li.querySelector(".t").textContent = x.name; li.querySelector(".a").textContent = (x.artist ? `· ${x.artist}` : "") + (x.hidden ? " · secreta" : "");
     li.querySelector("button").onclick = async (e) => {
       const code = $("adminCode").value.trim();
       if (!code) { $("adminStatus").textContent = "Escribe el código de administrador."; return; }
@@ -1965,7 +2076,8 @@ $("adminUpload").onclick = async () => {
   try { localStorage.setItem(ADMIN_KEY, code); } catch {}
   adm.busy = true; renderAdmin();
   let lib = [];
-  try { lib = await listSongs(); } catch {}
+  try { lib = await adminLibrary(); } catch {}
+  const secret = $("adminSecret").checked;
   let ok = 0, bad = 0;
   for (const s of adm.songs) {
     if (!s.on || s.cls === "ok" || s.cls === "warn") continue;
@@ -1977,6 +2089,8 @@ $("adminUpload").onclick = async () => {
       if (s.kind === "mp3" && charted) { set("Ya está con chart: no la subí", 0, "warn"); continue; }
       // a chart replaces the version made from the MP3
       const autos = s.kind === "mp3" ? [] : lib.filter((x) => x.charter === AUTO_CHARTER && (x.id === conv.id || sameSong(x, conv.row)));
+      // secret only when asked: a re-upload without the box keeps whatever the song was
+      if (secret) conv.row.hidden = true;
       await uploadSong(code, conv, (p) => set("Subiendo", 0.85 + p * 0.15));
       for (const x of autos) if (x.id !== conv.id) await adminCall({ code, action: "delete", id: x.id });
       const replaced = autos.length ? " · reemplazó la del MP3" : "";
@@ -1988,5 +2102,52 @@ $("adminUpload").onclick = async () => {
   adm.busy = false; renderAdmin();
   app.songs = []; app.loadedSongId = null; // reload the library (and any re-uploaded song) next time
   loadAutoList();
-  $("adminStatus").textContent = `Listo: ${ok} subida${ok === 1 ? "" : "s"}${bad ? `, ${bad} con error` : ""}. Ya aparecen en Jugar.`;
+  $("adminStatus").textContent = `Listo: ${ok} subida${ok === 1 ? "" : "s"}${bad ? `, ${bad} con error` : ""}. ${secret ? "Ya aparecen en «Secretas» (con el código)." : "Ya aparecen en Jugar."}`;
+};
+
+/* --- secret songs, from the admin's side: hide/show songs and change the code --- */
+function renderSecretAdmin() {
+  const ul = $("secretList"); ul.innerHTML = "";
+  const lib = adm.lib || [];
+  const q = $("secretFind").value.trim().toLowerCase();
+  // the secret ones; searching finds any song, to hide it or bring it back
+  const list = q ? lib.filter((x) => `${x.name} ${x.artist || ""}`.toLowerCase().includes(q)).slice(0, 60) : lib.filter((x) => x.hidden);
+  $("secretEmpty").textContent = !adm.lib ? "Escribe el código de administrador para ver la biblioteca." : list.length ? "" : q ? "Ninguna canción coincide." : "Todavía no hay canciones secretas. Búscalas aquí para esconderlas, o súbelas marcando «Subirlas como secretas».";
+  for (const x of list) {
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="n"><span class="t"></span> <span class="a"></span></span><button type="button" aria-pressed="${!!x.hidden}"></button>`;
+    li.querySelector(".t").textContent = x.name; li.querySelector(".a").textContent = x.artist ? `· ${x.artist}` : "";
+    const b = li.querySelector("button");
+    b.textContent = x.hidden ? "Secreta" : "Pública";
+    b.title = x.hidden ? "Tócala para que vuelva a la biblioteca" : "Tócala para esconderla";
+    b.onclick = async () => {
+      const code = $("adminCode").value.trim();
+      if (!code) { $("secretStatus").textContent = "Escribe el código de administrador."; return; }
+      b.disabled = true;
+      try {
+        await adminCall({ code, action: "hide", id: x.id, hidden: !x.hidden });
+        x.hidden = !x.hidden;
+        $("secretStatus").textContent = x.hidden ? `«${x.name}» ahora es secreta.` : `«${x.name}» volvió a la biblioteca.`;
+        app.songs = []; // the library reloads with it in its new place
+      } catch (e) { $("secretStatus").textContent = e.message; }
+      renderSecretAdmin(); loadAutoList();
+    };
+    ul.appendChild(li);
+  }
+}
+$("secretFind").oninput = renderSecretAdmin;
+$("adminCode").addEventListener("change", () => loadAutoList());
+$("secretSave").onclick = async () => {
+  const code = $("adminCode").value.trim(), next = $("secretNew").value.trim();
+  if (!code) { $("secretStatus").textContent = "Escribe el código de administrador."; return; }
+  if (next.length < 3) { $("secretStatus").textContent = "El código secreto necesita al menos 3 letras."; return; }
+  $("secretSave").disabled = true;
+  try {
+    await adminCall({ code, action: "secret", secret: next });
+    // this browser keeps its secret songs with the new code (everyone else has to type it)
+    if (secretCode()) { try { localStorage.setItem(SECRET_KEY, next); } catch {} }
+    $("secretNew").value = "";
+    $("secretStatus").textContent = `Listo: el código secreto ahora es «${next.toLowerCase()}». Quien tenía el anterior tendrá que escribir este.`;
+  } catch (e) { $("secretStatus").textContent = e.message; }
+  $("secretSave").disabled = false;
 };
