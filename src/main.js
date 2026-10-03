@@ -144,7 +144,7 @@ document.addEventListener("click", (e) => {
 });
 
 let toastT;
-function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 3200); }
+function toast(msg, ms = 3200) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), ms); }
 function loading(label, p) { $("loadLabel").textContent = label; $("loadBar").style.width = Math.round((p || 0) * 100) + "%"; }
 
 // ?debug exposes the app to automated tests (never needed by players)
@@ -1700,12 +1700,15 @@ function finishRebind(k) {
 }
 $("resetKeys").onclick = () => { resetKeys(); renderSettings(); };
 document.querySelectorAll("#laneSeg button").forEach((b) => (b.onclick = () => { settings.laneMode = b.dataset.v; save(); renderSettings(); }));
-document.querySelectorAll("#qualitySeg button").forEach((b) => (b.onclick = () => { settings.gfx = b.dataset.v; save(); R.setQualityLevel(settings.gfx); renderSettings(); }));
+// picking a quality by hand also tests this machine again (in case a safe mode was found before)
+document.querySelectorAll("#qualitySeg button").forEach((b) => (b.onclick = () => { settings.gfx = b.dataset.v; save(); R.retestGraphics(); R.setQualityLevel(settings.gfx); renderSettings(); }));
 document.querySelectorAll("#missSeg button").forEach((b) => (b.onclick = () => { settings.missSfx = b.dataset.v === "on"; save(); renderSettings(); }));
 document.querySelectorAll("#syncSeg button").forEach((b) => (b.onclick = () => { settings.autoSync = b.dataset.v === "on"; save(); if (app.game) app.game.autoSync = settings.autoSync; renderSettings(); }));
 $("speed").oninput = (e) => { settings.speed = +e.target.value; save(); renderSettings(); };
 $("offset").oninput = (e) => { settings.offsetMs = +e.target.value; save(); renderSettings(); };
 R.setQualityLevel(settings.gfx);
+// even the plainest drawing comes out black: say so instead of leaving a black stage
+R.onGraphicsTrouble = () => toast("Tu navegador no está mostrando los gráficos del juego. Actualízalo o, en Chrome, activa «Usar aceleración de gráficos» en Configuración → Sistema.", 15000);
 
 /* ================= multiplayer ================= */
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
