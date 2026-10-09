@@ -171,3 +171,20 @@ export function unlock() {
   roar(c, t + 0.6, 3.4, 0.16); claps(c, t + 0.7, 3.2, 60, 0.8);
   for (let i = 0; i < 4; i++) whistle(c, t + 0.9 + Math.random() * 2.2);
 }
+
+/** Metronome tick for the sync calibration: a short wooden click, higher on the first beat of the bar. */
+export function metronome(at, accent = false) {
+  const c = sfxCtx();
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = "sine";
+  o.frequency.setValueAtTime(accent ? 1760 : 1180, at);
+  o.frequency.exponentialRampToValueAtTime(accent ? 1200 : 800, at + 0.05);
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(accent ? 0.6 : 0.4, at + 0.003);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + 0.07);
+  o.connect(g).connect(c.destination);
+  o.start(at); o.stop(at + 0.1);
+}
+
+/** The context the calibration measures against (the same one its ticks play on). */
+export const calibCtx = () => sfxCtx();

@@ -1494,6 +1494,7 @@ const evTime = (e, g = app.game) => g.time() - Math.max(0, (performance.now() - 
 let rebinding = -1;
 addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
+  if (calib.on) { e.preventDefault(); if (!e.repeat) calibTap(); return; }
   if (rebinding >= 0) { e.preventDefault(); finishRebind(k === "escape" ? null : k); return; }
   if (duoRebind && app.screen === "duo") { e.preventDefault(); finishDuoRebind(e); return; }
   if (!app.game) return;
@@ -1827,6 +1828,79 @@ document.querySelectorAll("#missSeg button").forEach((b) => (b.onclick = () => {
 document.querySelectorAll("#syncSeg button").forEach((b) => (b.onclick = () => { settings.autoSync = b.dataset.v === "on"; save(); if (app.game) app.game.autoSync = settings.autoSync; renderSettings(); }));
 $("speed").oninput = (e) => { settings.speed = +e.target.value; save(); renderSettings(); };
 $("offset").oninput = (e) => { settings.offsetMs = +e.target.value; save(); renderSettings(); };
+
+/* ---------- sync calibration: one bar to catch the beat, then tap along while it keeps sounding ---------- */
+const CAL_BEAT = 0.6, CAL_LISTEN = 4, CAL_TAPS = 8; // 100 bpm: one bar only to listen, then two bars to tap on
+const calib = { on: false, clicks: [], taps: [], tapFrom: 0, raf: 0, timer: 0 };
+const calibIntro = "Primero suena un compás para que agarres el pulso. Después sigue sonando: pulsa cualquier tecla (o toca la pantalla) con cada golpe.";
+const heardNow = (c) => c.currentTime - (c.outputLatency || c.baseLatency || 0);
+$("calibBtn").onclick = () => {
+  music.pause();
+  $("calibText").textContent = calibIntro;
+  $("calibDots").innerHTML = "";
+  $("calibStart").textContent = "Empezar";
+  $("calib").hidden = false;
+  $("calibStart").focus();
+};
+$("calibStart").onclick = () => {
+  const c = sfx.calibCtx();
+  const t0 = c.currentTime + 0.8;
+  const all = Array.from({ length: CAL_LISTEN + CAL_TAPS }, (_, i) => t0 + i * CAL_BEAT);
+  all.forEach((t, i) => sfx.metronome(t, i % 4 === 0));
+  calib.clicks = all.slice(CAL_LISTEN); // only the beats after the first bar count
+  calib.tapFrom = calib.clicks[0] - CAL_BEAT / 2;
+  calib.taps = [];
+  calib.on = true;
+  $("calibStart").hidden = true;
+  $("calibText").textContent = "Escucha el compás…";
+  const dots = $("calibDots");
+  dots.classList.remove("go");
+  dots.innerHTML = `<div class="row listen">${"<i></i>".repeat(CAL_LISTEN)}</div><div class="row taps">${"<i></i>".repeat(CAL_TAPS)}</div>`;
+  const listen = dots.querySelectorAll(".listen i");
+  const tick = () => {
+    if (!calib.on) return;
+    const now = heardNow(c);
+    all.slice(0, CAL_LISTEN).forEach((t, i) => listen[i].classList.toggle("on", now >= t));
+    if (now >= calib.tapFrom && !dots.classList.contains("go")) { dots.classList.add("go"); $("calibText").textContent = "¡Ahora! Toca con cada golpe."; }
+    calib.raf = requestAnimationFrame(tick);
+  };
+  tick();
+  clearTimeout(calib.timer);
+  calib.timer = setTimeout(endCalib, (all[all.length - 1] - c.currentTime + 0.6) * 1000);
+};
+function calibTap() {
+  const t = heardNow(sfx.calibCtx());
+  if (t < calib.tapFrom) return; // the first bar is only for listening
+  calib.taps.push(t);
+  const d = $("calibDots").querySelectorAll(".taps i")[calib.taps.length - 1];
+  if (d) d.classList.add("on");
+}
+$("calib").addEventListener("pointerdown", (e) => { if (calib.on && e.target.tagName !== "BUTTON") calibTap(); });
+function endCalib() {
+  calib.on = false;
+  cancelAnimationFrame(calib.raf);
+  const errs = calib.taps
+    .map((t) => t - calib.clicks.reduce((a, b) => (Math.abs(b - t) < Math.abs(a - t) ? b : a)))
+    .filter((d) => Math.abs(d) < 0.25)
+    .sort((a, b) => a - b);
+  $("calibStart").textContent = "Otra vez";
+  $("calibStart").hidden = false;
+  if (errs.length < 5) { $("calibText").textContent = "No alcancé a medir bien. Intenta otra vez: escucha el compás y después toca con cada golpe."; return; }
+  const late = Math.round((errs[errs.length >> 1] * 1000) / 5) * 5; // + = the player taps after the beat
+  // same direction the automatic sync uses: tapping late pulls the clock back
+  settings.offsetMs = Math.max(-250, Math.min(250, -late));
+  save();
+  renderSettings();
+  $("calibText").textContent = late === 0 ? "Vas perfectamente a tiempo: no hace falta corregir nada." : `Listo: corregí ${Math.abs(late)} ms (tocabas ${late > 0 ? "un poco tarde" : "un poco antes"}).`;
+}
+$("calibClose").onclick = () => {
+  calib.on = false;
+  cancelAnimationFrame(calib.raf);
+  clearTimeout(calib.timer);
+  $("calib").hidden = true;
+  syncMenuMusic();
+  $("calibBtn").focus();
+};
 R.setQualityLevel(settings.gfx);
 // even the plainest drawing comes out black: say so instead of leaving a black stage
 R.onGraphicsTrouble = gfxFail;
