@@ -20,7 +20,8 @@ Juego de ritmo multijugador en el navegador, inspirado en Guitar Hero. Se toca c
 - **Se instala como app:** manifest con íconos; en Android/PC aparece «Instalar como app» y abre en pantalla completa.
 - **Niveles automáticos desde un MP3:** para canciones que no tienen chart, el panel de subida acepta un MP3 y genera las 4 dificultades: detección de golpes (spectral flux), tempo por autocorrelación, seguimiento del pulso con programación dinámica (Ellis 2007), selección de notas por densidad y carriles que siguen el contorno melódico (`src/autochart.js`). Contra el chart hecho a mano de *Kryptonite*, el 82–86 % de las notas generadas en Fácil, Media y Difícil caen donde el humano puso una.
 - **Canciones locales:** también puedes cargar una carpeta de Clone Hero (`notes.mid` o `notes.chart`) sin subir nada.
-- Sincronía calibrable, la guitarra se silencia cuando fallas, multiplicador ×4, secciones de la canción, resultados con estrellas.
+- **Puntaje:** cada nota vale según la dificultad (Fácil 25, Media 30, Difícil 40, Experto 50), por el multiplicador. El multiplicador sube un paso (×1 → ×4) cada 10 aciertos seguidos, y un fallo lo baja **un** paso, no a ×1. El poder estrella lo duplica. Así, tocar en una dificultad más alta paga aunque aciertes un poco menos: en simulaciones con las canciones de la biblioteca, Difícil al 85 % le gana a Media al 95 %, y Experto al 70 % también.
+- Sincronía calibrable (con metrónomo), la guitarra se silencia cuando fallas, secciones de la canción, resultados con estrellas.
 
 ## Estructura
 

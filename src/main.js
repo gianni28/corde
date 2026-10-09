@@ -1607,7 +1607,7 @@ function updatePlayerHud(g) {
   const m = g.baseMultiplier, shown = g.multiplier;
   const starState = g.starOn ? " star-on" : g.starMeter >= STAR_READY && g.ui.starShown ? " star-ready" : "";
   set("mult", shown + starState, () => { h.multText.textContent = "×" + shown; const gain = h.mult.classList.contains("gain"); h.mult.className = "mult x" + m + starState + (gain ? " gain" : ""); });
-  const fill = m >= 4 ? 10 : g.combo % 10;
+  const fill = g.levelFill;
   set("ring", m * 100 + fill + (g.starOn ? 1000 : 0), () => {
     const col = g.starOn ? "#3fbfff" : ["#f2e8d8", "#f5c518", "#1fd14a", "#ff7a1a"][m - 1];
     h.ringSegs.forEach((sg, i) => sg.setAttribute("stroke", i < fill ? col : "rgba(255,255,255,.1)"));

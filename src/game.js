@@ -4,6 +4,10 @@ import { notesFor, starPhrasesFor } from "./chart.js";
 export const WINDOW = 0.1; // ±100 ms to hit a note
 export const PERFECT = 0.045;
 export const STAR_READY = 0.5; // star meter needed to activate (half)
+// Points per note by difficulty: harder charts have more notes AND each one is worth more, so playing the
+// harder difficulty pays off even with a lower accuracy. Expert keeps the original 50, so the most a note can
+// give is still 50 × 4 × 2 (star power): the server's impossible-score check doesn't change.
+export const NOTE_POINTS = { easy: 25, medium: 30, hard: 40, expert: 50 };
 
 export class Game {
   // offsetMs: the player's latency compensation (learned/adjustable). songOffsetMs: how much later the song's audio
@@ -50,6 +54,10 @@ export class Game {
     this.secStats = this.sections.map(() => ({ total: 0, hit: 0 }));
     if (this.secStats.length) for (const n of this.notes) if (n.state !== 3) { n.sec = Math.max(0, this.section(n.t)); this.secStats[n.sec].total++; }
     this.score = 0; this.combo = 0; this.maxCombo = 0; this.hits = 0; this.perfects = 0; this.missed = 0;
+    // multiplier ×1…×4: goes up one step every 10 hits in a row; a miss takes it down ONE step (not back to ×1),
+    // so one slip in a hard song doesn't wipe out everything the player had built (combo still resets, it's the streak)
+    this.level = 1; this.toNext = 0;
+    this.notePoints = NOTE_POINTS[diff] || 50;
     this.next = 0;
     this.pressed = new Array(lanes).fill(false);
     this.lastT = -99;
@@ -70,7 +78,9 @@ export class Game {
     }
   }
 
-  get baseMultiplier() { return Math.min(4, 1 + Math.floor(this.combo / 10)); }
+  get baseMultiplier() { return this.level; }
+  /** Hits toward the next multiplier step (0-10), for the ring around the multiplier. */
+  get levelFill() { return this.level >= 4 ? 10 : this.toNext; }
   get multiplier() { return this.baseMultiplier * (this.starOn ? 2 : 1); } // star power doubles it (up to ×8)
   get accuracy() { const judged = this.hits + this.missed; return judged ? this.hits / judged : 1; }
 
@@ -102,7 +112,7 @@ export class Game {
     for (const n of this.notes) if (n.state !== 3) { n.state = 0; n.holding = false; n.hide = false; }
     for (const ph of this.phrases) { ph.hit = 0; ph.lost = false; ph.done = false; ph.notes.forEach((n) => (n.star = this.phrases.indexOf(ph))); }
     this.next = 0;
-    this.combo = 0;
+    this.combo = 0; this.level = 1; this.toNext = 0;
     this.resumeAt = p.from;
   }
 
@@ -128,8 +138,9 @@ export class Game {
       this.learn(err);
       this.combo++; this.hits++;
       this.maxCombo = Math.max(this.maxCombo, this.combo);
+      if (this.level < 4 && ++this.toNext >= 10) { this.level++; this.toNext = 0; }
       if (Math.abs(err) <= PERFECT) this.perfects++;
-      this.score += 50 * this.multiplier;
+      this.score += this.notePoints * this.multiplier;
       this.player.guitar(true);
       this.rockBy(this.starOn ? 0.03 : 0.02);
       if (best.sec != null) this.secStats[best.sec].hit++;
@@ -179,6 +190,7 @@ export class Game {
 
   breakCombo(sound) {
     this.combo = 0;
+    this.level = Math.max(1, this.level - 1); this.toNext = 0;
     this.player.guitar(false);
     if (sound) this.player.missSound();
   }
@@ -200,7 +212,7 @@ export class Game {
       }
       if (n.holding) {
         if (t >= n.t + n.dur) n.holding = false;
-        else if (this.pressed[n.lane]) { this.score += dt * 60 * this.multiplier; this.events.push({ type: "hold", lane: n.lane }); }
+        else if (this.pressed[n.lane]) { this.score += dt * 60 * (this.notePoints / 50) * this.multiplier; this.events.push({ type: "hold", lane: n.lane }); }
         else n.holding = false;
       }
     }
