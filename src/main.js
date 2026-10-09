@@ -20,7 +20,9 @@ import { createMenuMusic } from "./music.js";
 
 const $ = (id) => document.getElementById(id);
 const LANE_CSS = ["--g", "--r", "--y", "--b", "--o"];
-const touch = isTouchDevice();
+let touch = isTouchDevice();
+// a PC with a touchscreen can look like a phone until the first key press: from then on it's a PC (keys, 5 lanes)
+addEventListener("keydown", () => { if (touch && !isTouchDevice()) touch = false; }, { capture: true, passive: true });
 
 // iPhone: every tap/keypress re-asserts "music playback" so the silent switch doesn't mute the game.
 ["pointerdown", "pointerup", "touchend", "keydown", "click"].forEach((t) => addEventListener(t, unlockAudio, { capture: true, passive: true }));

@@ -16,7 +16,17 @@ export const DEFAULTS = {
   duoDiffs: ["medium", "medium"],
 };
 
-export const isTouchDevice = () => matchMedia("(pointer:coarse)").matches && !matchMedia("(any-pointer:fine)").matches;
+// Touch-only device = phone or tablet (4 lanes). Some Windows PCs with a touchscreen report a coarse pointer and no
+// fine one (the Claude app's browser pane does too), so the moment a real keyboard is used this browser counts as a
+// PC for good: whoever plays with keys gets the 5 lanes.
+const KBD_KEY = "corde.keyboard";
+let keyboardSeen = (() => { try { return localStorage.getItem(KBD_KEY) === "1"; } catch { return false; } })();
+addEventListener("keydown", (e) => {
+  if (keyboardSeen || e.isComposing || !e.code || /^(Shift|Control|Alt|Meta|Unidentified)/.test(e.code)) return;
+  keyboardSeen = true;
+  try { localStorage.setItem(KBD_KEY, "1"); } catch {}
+}, { capture: true, passive: true });
+export const isTouchDevice = () => !keyboardSeen && matchMedia("(pointer:coarse)").matches && !matchMedia("(any-pointer:fine)").matches;
 
 function load() {
   const fresh = () => JSON.parse(JSON.stringify(DEFAULTS)); // its own copy of the default lists
