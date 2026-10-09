@@ -211,8 +211,16 @@ async function renderHomeBoard() {
 }
 $("homeTabs").onclick = (e) => { const b = e.target.closest("button"); if (!b || b.dataset.v === homeTab) return; homeTab = b.dataset.v; renderHomeBoard(); };
 renderHomeBoard();
-// the library list is needed for the menu music right away (it's small)
-if (online) loadLibrary().then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); }).catch(() => {}).finally(() => loadDaily());
+// the library list is needed for the menu music right away (it's small).
+// It starts on the next microtask, once this whole file has run: loadLibrary() reads secretCode() and other
+// constants declared further down, and calling it right here threw silently (no songs, no menu music).
+Promise.resolve().then(() => {
+  if (!online) return;
+  loadLibrary()
+    .then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); })
+    .catch((e) => console.warn("library:", e.message))
+    .finally(() => loadDaily());
+});
 
 /* ================= personal bests ================= */
 // Your best run of each song and difficulty, kept in this browser: stars in the song list and on the difficulty
