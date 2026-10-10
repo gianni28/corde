@@ -10,6 +10,7 @@ export const DEFAULTS = {
   missSfx: true,
   autoSync: true,
   name: "",
+  starMode: "motion", // phone: star power by "motion" (lift/shake) or "tap" (the multiplier) — tap never asks for permission
   // two players on one PC: each guitar's keys by physical position (KeyboardEvent.code), star power last
   duoKeys: [["KeyA", "KeyS", "KeyD", "KeyF", "KeyG", "Space"], ["KeyH", "KeyJ", "KeyK", "KeyL", "Semicolon", "Enter"]],
   duoNames: ["Jugador 1", "Jugador 2"],

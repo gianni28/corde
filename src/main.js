@@ -10,6 +10,7 @@ import { decodeStems, Player, audioCtx, unlockAudio } from "./audio.js";
 import { Game, STAR_READY } from "./game.js";
 import { motionAvailable, motionNeedsPermission, motionReady, requestMotion, onLift, watchMotion, seen as motionSeen } from "./motion.js";
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
+import { accountMe, accountClaim, accountLink, accountSync } from "./net.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretSongs, secretBoard, songById } from "./net.js";
 import { VENUES, TO_ENCORE, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song } from "./admin.js";
@@ -1116,11 +1117,13 @@ function dropCelebration() {
 $("celebrate").onclick = endCelebrate;
 
 /* ---------- tutorial (first song) + lifting the phone ---------- */
-const liftOn = () => touch && motionAvailable() && (!motionNeedsPermission() || settings.motion === "granted");
+const liftOn = () => touch && motionAvailable() && settings.starMode !== "tap" && (!motionNeedsPermission() || settings.motion === "granted");
 function activateStar(g = app.game) {
   if (!g || app.paused || app.rewinding || app.failing) return;
   g.activateStar(); // the frame loop reacts to the "starOn" event
 }
+// lifting/shaking the phone: only when the player chose that way in Ajustes
+const liftStar = () => { if (settings.starMode !== "tap") activateStar(); };
 /* ---------- star power feedback ---------- */
 // a white-blue spark flies from the frets into the meter, which flashes when it lands
 function starComet(g, lane) {
@@ -1160,11 +1163,17 @@ function starTipHow() {
   return touch ? (liftOn() ? "Levanta o sacude el celular" : "Toca el multiplicador") : "Pulsa Enter";
 }
 function hideStarTip() { tip.at = 0; tip.hideAt = 0; $("spTip").hidden = true; }
-if (liftOn()) onLift(activateStar);
-// iPhone forgets the motion permission when the page reloads: the next tap anywhere asks again
-// (no prompt shows once it was given), so the phone's movement works in every song, not just after "Tocar"
+if (liftOn()) onLift(liftStar);
+// iPhone forgets the motion permission every time the page opens. It's asked again only on a button tap in the
+// screens a song starts from (not while just looking around), and not at all when the sensors already reach the page
+// or the player chose to activate star power by tapping the multiplier.
+const SONG_SCREENS = new Set(["setup", "daily", "tour", "results", "duo", "lobby"]);
 if (touch && motionNeedsPermission()) {
-  const rearm = () => { if (settings.motion === "granted" && !motionReady()) requestMotion().then((ok) => ok && onLift(activateStar)); };
+  const rearm = (e) => {
+    if (settings.starMode === "tap" || settings.motion !== "granted" || motionReady()) return;
+    if (!SONG_SCREENS.has(app.screen) || !e.target.closest?.("button, [role=button], li")) return;
+    requestMotion().then((ok) => ok && onLift(liftStar));
+  };
   for (const ev of ["touchend", "click"]) document.addEventListener(ev, rearm, { capture: true, passive: true });
 }
 let tut = { i: 0, done: null, fromSettings: false };
@@ -1177,7 +1186,7 @@ function openTutorial({ done = null, fromSettings = false } = {}) {
   $("tutNotes").textContent = touch
     ? "Toca la columna de cada color cuando la nota llegue a los botones. Mantén el dedo en las notas largas."
     : "Presiona la tecla de cada color cuando la nota llegue a los botones. Mantén en las notas largas.";
-  $("tutStarHow").textContent = touch && motionAvailable() ? "Actívalo levantando o sacudiendo el celular, como una guitarra." : "Actívalo con Enter.";
+  $("tutStarHow").textContent = touch && motionAvailable() && settings.starMode !== "tap" ? "Actívalo levantando o sacudiendo el celular, como una guitarra." : touch ? "Toca el multiplicador." : "Actívalo con Enter.";
   $("motionBtn").hidden = !(touch && motionNeedsPermission() && settings.motion !== "granted");
   $("motionNote").hidden = !(touch && settings.motion === "denied");
   $("tutAlert").hidden = true;
@@ -1199,7 +1208,7 @@ function finishTutorial() {
 }
 // iPhone: going on without ever answering the motion permission gets a short explanation first
 let tutPending = null;
-const motionUnasked = () => touch && motionNeedsPermission() && !settings.motion;
+const motionUnasked = () => touch && motionNeedsPermission() && settings.starMode !== "tap" && !settings.motion;
 function tutGuard(next) {
   if (!motionUnasked()) return next();
   tutPending = next;
@@ -1216,7 +1225,7 @@ async function askMotion() {
   settings.motion = ok ? "granted" : "denied"; save();
   $("motionBtn").hidden = true; // asked once: iPhone won't show the prompt again anyway
   $("motionNote").hidden = ok;
-  if (ok) onLift(activateStar);
+  if (ok) onLift(liftStar);
   return ok;
 }
 $("motionBtn").onclick = askMotion;
@@ -1385,6 +1394,7 @@ function finishGame() {
     else if (settings.name || !(sum.score > 0)) sendScore(sum); else { $("nameAsk").hidden = false; $("boardName").value = ""; app.pendingScore = sum; }
   }
   const celebration = finishCtx(sum);
+  syncSoon(); // bests, the day's streak and the tour, to the other devices
   show("results");
   // after the final chord and the crowd, and only if the player is still looking at the results
   clearTimeout(app.celTimer);
@@ -1437,6 +1447,110 @@ function playerSecret() {
     return s;
   } catch { return "anon-" + Math.random().toString(36).slice(2) + Date.now(); }
 }
+/* ================= account ================= */
+// One name = one account (supabase/accounts.sql). The name is asked the first time the game opens, before anything
+// else; a browser that already had a name claims it on its own (nothing to type). Another device joins the same
+// account with the 4-letter code shown in Ajustes. The streak, the personal bests and the tour setlists live in the
+// account too, so every linked device shows the same progress.
+const TOUR_KEY = "corde.tour.v1";
+let account = null; // { name, code, progress }
+const readJson = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || "null") ?? d; } catch { return d; } };
+const localProgress = () => ({ days: [...new Set([...readDailyLog(), ...dailyLog.days])].sort(), bests, tour: readJson(TOUR_KEY, {}) });
+function applyProgress(p) {
+  if (!p || typeof p !== "object") return;
+  if (p.bests && typeof p.bests === "object") { bests = p.bests; try { localStorage.setItem(BEST_KEY, JSON.stringify(bests)); } catch {} }
+  if (Array.isArray(p.days)) { dailyLog.days = [...new Set([...p.days, ...dailyLog.days])].sort().slice(-400); try { localStorage.setItem(DAILY_KEY, JSON.stringify({ days: dailyLog.days })); } catch {} }
+  if (p.tour && typeof p.tour === "object") { try { localStorage.setItem(TOUR_KEY, JSON.stringify(p.tour)); } catch {} }
+  try { renderDailyCard(); } catch {}
+  if (app.screen === "library") try { renderSongs(); } catch {}
+}
+let syncT = 0, syncing = null;
+async function syncNow() {
+  if (!online || !account) return;
+  clearTimeout(syncT);
+  try { syncing = accountSync(playerSecret(), localProgress()); applyProgress(await syncing); }
+  catch (e) { console.warn("account sync:", e.message); }
+  syncing = null;
+}
+const syncSoon = () => { if (!account) return; clearTimeout(syncT); syncT = setTimeout(syncNow, 1500); };
+addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && syncT) syncNow(); });
+function adoptAccount(acc) {
+  account = acc;
+  if (settings.name !== acc.name) { settings.name = acc.name; save(); }
+  closeWelcome();
+  renderAccountField();
+  syncNow(); // uploads what this browser had and brings what the other devices have
+}
+function renderAccountField() {
+  const f = $("accountField"); if (!f) return;
+  f.hidden = !account;
+  if (account) $("accountCode").textContent = account.code;
+  $("mpName").readOnly = !!account;
+}
+// the welcome card: blocks the game until there's a name
+const welcome = { open: false, taken: false };
+function openWelcome(name = "", taken = false) {
+  welcome.open = true;
+  $("welcomeName").value = name;
+  setWelcomeTaken(taken);
+  $("welcomeModal").hidden = false;
+  setTimeout(() => (taken ? $("welcomeCode") : $("welcomeName")).focus(), 60);
+}
+function setWelcomeTaken(taken, msg) {
+  welcome.taken = taken;
+  $("welcomeMsg").textContent = msg || (taken ? "Ese nombre ya tiene dueño. Si es tuyo, escribe el código que aparece en Ajustes de tu otro dispositivo." : "");
+  $("welcomeCode").hidden = $("welcomeLink").hidden = !taken;
+  $("welcomeLink").classList.toggle("primary", taken); $("welcomeGo").classList.toggle("primary", !taken); // the code is the next step
+  if (taken) $("welcomeCode").value = "";
+}
+function closeWelcome() { welcome.open = false; $("welcomeModal").hidden = true; }
+const cleanName = (v) => v.trim().replace(/\s+/g, " ").slice(0, 16);
+$("welcomeForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const name = cleanName($("welcomeName").value);
+  if (!name) { $("welcomeName").focus(); return; }
+  const go = $("welcomeGo"); go.disabled = true;
+  try {
+    const r = await accountClaim(name, playerSecret());
+    if (r?.error === "name_taken") { setWelcomeTaken(true); $("welcomeCode").focus(); }
+    else if (r) adoptAccount(r);
+  } catch (err) {
+    // no connection: keep the name here, it's claimed the next time the game opens online
+    console.warn("account:", err.message);
+    settings.name = name; save(); closeWelcome();
+  }
+  go.disabled = false;
+};
+$("welcomeLink").onclick = async () => {
+  const name = cleanName($("welcomeName").value), code = $("welcomeCode").value.trim();
+  if (!name) { $("welcomeName").focus(); return; }
+  if (!code) { $("welcomeCode").focus(); return; }
+  const b = $("welcomeLink"); b.disabled = true;
+  try {
+    const r = await accountLink(name, code, playerSecret());
+    if (r?.error) { setWelcomeTaken(true, "Ese código no es. Revísalo en tu otro dispositivo o elige otro nombre."); $("welcomeCode").focus(); }
+    else adoptAccount(r);
+  } catch (err) { console.warn("account:", err.message); }
+  b.disabled = false;
+};
+// a new name typed after "taken": back to plain Empezar
+$("welcomeName").addEventListener("input", () => { if (welcome.taken) setWelcomeTaken(false); });
+// nothing behind the card reacts to the keyboard while it's open
+addEventListener("keydown", (e) => { if (welcome.open && !e.target.closest?.("#welcomeModal")) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+async function ensureAccount() {
+  if (!settings.name) openWelcome(); // right away: no waiting for the network to ask the name
+  if (!online) return;
+  const secret = playerSecret();
+  try {
+    const me = await accountMe(secret);
+    if (me) return adoptAccount(me);
+    if (!settings.name) return;
+    const r = await accountClaim(settings.name, secret); // a browser that already played: its name, silently
+    if (r?.error === "name_taken") openWelcome(settings.name, true);
+    else if (r) adoptAccount(r);
+  } catch (e) { console.warn("account:", e.message); }
+}
+
 async function sendScore(sum) {
   if (!(sum.score > 0)) { showBoard($("resultsBoard"), 10); return; } // empty runs stay off the board
   try {
@@ -1764,6 +1878,10 @@ function renderSettings() {
   });
   $("keysField").hidden = touch;
   $("motionField").hidden = !(touch && motionAvailable());
+  document.querySelectorAll("#starSeg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === settings.starMode)));
+  $("motionTestBox").hidden = settings.starMode === "tap";
+  $("starHint").hidden = !motionNeedsPermission();
+  renderAccountField();
   $("openAdmin").hidden = !isAdminBrowser() || !online || touch || !!app.game;
   document.querySelectorAll("#laneSeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === settings.laneMode));
   document.querySelectorAll("#qualitySeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === settings.gfx));
@@ -1797,7 +1915,7 @@ $("motionTest").onclick = async () => {
     msg.textContent = "El celular no dio permiso de movimiento. En iPhone: Ajustes › Safari › Movimiento y orientación, y vuelve a tocar Probar. Mientras tanto, toca el multiplicador para activar el poder estrella.";
     return;
   }
-  onLift(activateStar);
+  onLift(liftStar);
   let got = 0, hits = 0;
   msg.textContent = "Levanta o sacude el celular…";
   $("motionTest").textContent = "Parar";
@@ -1834,6 +1952,11 @@ $("resetKeys").onclick = () => { resetKeys(); renderSettings(); };
 document.querySelectorAll("#laneSeg button").forEach((b) => (b.onclick = () => { settings.laneMode = b.dataset.v; save(); renderSettings(); }));
 // picking a quality by hand also tests this machine again (in case a safe mode was found before)
 document.querySelectorAll("#qualitySeg button").forEach((b) => (b.onclick = () => { settings.gfx = b.dataset.v; save(); R.retestGraphics(); R.setQualityLevel(settings.gfx); renderSettings(); }));
+document.querySelectorAll("#starSeg button").forEach((b) => (b.onclick = () => {
+  settings.starMode = b.dataset.v; save();
+  if (settings.starMode === "tap") stopMotionTest(); else if (liftOn()) onLift(liftStar);
+  renderSettings();
+}));
 document.querySelectorAll("#missSeg button").forEach((b) => (b.onclick = () => { settings.missSfx = b.dataset.v === "on"; save(); renderSettings(); }));
 document.querySelectorAll("#syncSeg button").forEach((b) => (b.onclick = () => { settings.autoSync = b.dataset.v === "on"; save(); if (app.game) app.game.autoSync = settings.autoSync; renderSettings(); }));
 $("speed").oninput = (e) => { settings.speed = +e.target.value; save(); renderSettings(); };
@@ -2253,5 +2376,6 @@ $("secretSave").onclick = async () => {
   $("secretSave").disabled = false;
 };
 
+ensureAccount();
 // everything above ran: the boot watchdog in index.html can stand down
 window.__cordeBooted = true;

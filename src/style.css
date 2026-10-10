@@ -822,3 +822,10 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .calib-dots.go .taps { opacity: 1; }
 .calib-dots .taps i.on { background: var(--fire); }
 #calibBtn { margin-top: 10px; }
+
+/* welcome: the name, before anything else (above every other card) */
+.welcome-modal { z-index: 40; }
+.welcome-box input#welcomeName { text-transform: none; letter-spacing: .02em; }
+.welcome-box .welcome-msg { color: var(--pop); }
+.welcome-box .welcome-msg:empty { display: none; }
+.account-code b { font: 700 1.25em var(--display); letter-spacing: .18em; color: var(--pop); }

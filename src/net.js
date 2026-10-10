@@ -214,3 +214,19 @@ export async function uploadSong(code, { id, row, files }, onProgress) {
   }
   await adminCall({ code, action: "save", row });
 }
+
+/* ---------------- accounts ---------------- */
+// One name = one account (accounts.sql). The browser's secret ("corde.player") is its key to the account.
+async function rpcJson(fn, args) {
+  const { data, error } = await supabase.rpc(fn, args);
+  if (error) throw new Error(error.message);
+  return data;
+}
+/** This browser's account → { name, code, progress } | null */
+export const accountMe = (secret) => rpcJson("account_me", { p_secret: secret });
+/** Takes a name → { name, code, progress } | { error: "name_taken" } */
+export const accountClaim = (name, secret) => rpcJson("account_claim", { p_name: name, p_secret: secret });
+/** Joins the account with that name using its code → { name, code, progress } | { error: "bad_code" } */
+export const accountLink = (name, code, secret) => rpcJson("account_link", { p_name: name, p_code: code, p_secret: secret });
+/** Merges this browser's progress into the account → merged progress | null */
+export const accountSync = (secret, progress) => rpcJson("account_sync", { p_secret: secret, p_progress: progress });

@@ -2,7 +2,7 @@
 // One entry per NAME (case-insensitive) on each song + difficulty + string count, keeping the best score,
 // so the same person on another browser or phone joins their existing entry. Rejects impossible scores
 // and answers with the best and position. player_key (hash of a secret kept in the browser) only lets a
-// browser that changes its name move its entry.
+// browser that changes its name move its entry. Only a browser linked to the name's account can send (accounts.sql).
 // The string count is the one really played: a 5-string run of a difficulty whose chart never uses the
 // 5th string is a 4-string run (same notes), so it goes to the 4-string board.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -52,6 +52,11 @@ Deno.serve(async (req) => {
 
   if (score === 0) return json({ best: 0, rank: null, newRecord: false }); // empty runs stay off the board
 
+  // the name has to be this browser's account (one name = one account); the account's spelling is the one shown
+  const { data: owned, error: guardErr } = await db.rpc("account_guard", { p_name: name, p_secret: b.secret });
+  if (guardErr || !owned) return json({ error: guardErr?.message || "Primero escribe tu nombre" }, 403);
+  const accountName = owned as string;
+
   const key = await sha256(b.secret);
   const usesFifth = (song.diffs?.[b.diff]?.lanes ?? [4]).includes(4);
   const lanes = b.lanes === 5 && usesFifth ? 5 : 4;
@@ -64,10 +69,10 @@ Deno.serve(async (req) => {
   };
   // this name's entry (older data may hold several: take the best)...
   // ...or this browser's entry under a previous name, which then takes the new name
-  const prev = (await find("name_key", name.toLowerCase())) || (await find("player_key", key));
+  const prev = (await find("name_key", accountName.trim().toLowerCase())) || (await find("player_key", key));
   const newRecord = !prev || score > prev.score;
   const row = {
-    name, updated_at: new Date().toISOString(),
+    name: accountName, updated_at: new Date().toISOString(),
     ...(newRecord ? { score, acc: Number(b.acc) || 0, max_combo: Math.round(Number(b.max_combo) || 0), stars: Math.round(Number(b.stars) || 0) } : {}),
   };
   const { error } = prev

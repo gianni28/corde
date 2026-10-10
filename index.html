@@ -69,6 +69,16 @@
 </div>
 
 <div id="ui">
+  <div class="secret-modal welcome-modal" id="welcomeModal" hidden>
+    <form class="panel narrow secret-box welcome-box" id="welcomeForm" autocomplete="off">
+      <h2>¿Cómo te llamas?</h2>
+      <p class="hint">Así aparecerás en las clasificaciones.</p>
+      <input type="text" id="welcomeName" maxlength="16" placeholder="Ej. Gianni" autocomplete="nickname" autocapitalize="words" aria-label="Tu nombre" enterkeyhint="go">
+      <p class="hint welcome-msg" id="welcomeMsg" aria-live="polite"></p>
+      <input type="text" class="welcome-code" id="welcomeCode" maxlength="4" placeholder="ABCD" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" aria-label="Código" hidden>
+      <div class="row"><button type="button" id="welcomeLink" hidden>Vincular</button><button type="submit" class="primary" id="welcomeGo">Empezar</button></div>
+    </form>
+  </div>
   <div class="secret-modal" id="secretModal" hidden>
     <form class="panel narrow secret-box" id="secretForm" autocomplete="off">
       <svg class="secret-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#pick"/></svg>
@@ -220,13 +230,20 @@
         <span class="label">Sonido al fallar</span>
         <div class="seg" id="missSeg"><button data-v="on">Activado</button><button data-v="off">Apagado</button></div>
       </div>
+      <div class="field" id="accountField" hidden>
+        <p class="hint account-code">Tu código para jugar en otro dispositivo: <b id="accountCode"></b></p>
+      </div>
       <div class="field" id="motionField" hidden>
-        <span class="label">Poder estrella con movimiento</span>
-        <div class="motion-test">
-          <button class="btn" id="motionTest">Probar</button>
-          <span class="mt-bar" aria-hidden="true"><i id="motionLevel"></i></span>
+        <span class="label">Activar poder estrella</span>
+        <div class="seg" id="starSeg"><button data-v="motion">Moviendo el celular</button><button data-v="tap">Tocando el multiplicador</button></div>
+        <p class="hint" id="starHint" hidden>En iPhone, moviendo el celular te pide permiso cada vez que abres el juego.</p>
+        <div id="motionTestBox">
+          <div class="motion-test">
+            <button class="btn" id="motionTest">Probar</button>
+            <span class="mt-bar" aria-hidden="true"><i id="motionLevel"></i></span>
+          </div>
+          <p class="hint" id="motionTestMsg">Toca Probar y levanta o sacude el celular.</p>
         </div>
-        <p class="hint" id="motionTestMsg">Toca Probar y levanta o sacude el celular.</p>
       </div>
       <button class="link" id="openTutorial">Ver tutorial</button>
       <button class="link" id="openAdmin">Subir canciones a la biblioteca</button>
