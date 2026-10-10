@@ -184,6 +184,10 @@ $("installBtn").onclick = async () => {
 };
 // iPhone has no install button: a one-line how-to, only in Safari on a phone
 $("installIos").hidden = !(touch && /iPhone|iPad|iPod/.test(navigator.userAgent) && !standalone());
+// iPhone: the button opens the two steps to add the game to the home screen
+$("installIos").onclick = () => { $("iosModal").hidden = false; $("iosDone").focus(); };
+$("iosDone").onclick = () => { $("iosModal").hidden = true; };
+$("iosModal").onclick = (e) => { if (e.target === e.currentTarget) $("iosModal").hidden = true; };
 $("homeFoot").textContent = online ? "Biblioteca en línea" : "Modo local · conecta Supabase para la biblioteca y el multijugador";
 
 // General board, every string count together: "total" = sum of each player's best per song,

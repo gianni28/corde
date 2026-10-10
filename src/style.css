@@ -832,3 +832,8 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 
 /* the credit at the bottom of the menu */
 .credit { font-size: 11px; opacity: .7; margin-top: -24px; }
+
+/* iPhone: how to add the game to the home screen */
+.ios-box { text-align: left; align-items: stretch; }
+.ios-steps { margin: 0; padding-left: 1.4em; display: grid; gap: 10px; font: 500 18px/1.35 var(--display); color: var(--ink); }
+.ios-steps li::marker { color: var(--gold); font-weight: 700; }
