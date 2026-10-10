@@ -183,8 +183,13 @@ $("installBtn").onclick = async () => {
   installEvt = null; $("installBtn").hidden = true;
 };
 // iPhone has no install button: a one-line how-to, only in Safari on a phone
-$("installIos").hidden = !(touch && /iPhone|iPad|iPod/.test(navigator.userAgent) && !standalone());
-// iPhone: the button opens the two steps to add the game to the home screen
+// iPhone (and Android when Chrome doesn't offer its own install): "Descargar app" opens the steps to add it to the home screen
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent), isAndroid = /Android/i.test(navigator.userAgent);
+$("installIos").hidden = !(touch && isIOS && !standalone());
+$("iosSteps").hidden = !isIOS; $("androidSteps").hidden = isIOS;
+// Android: Chrome's one-tap install shows up within a moment; if it doesn't, the guide does
+if (touch && isAndroid && !standalone()) setTimeout(() => { if (!installEvt && !standalone()) $("installIos").hidden = false; }, 2500);
+addEventListener("beforeinstallprompt", () => { if (isAndroid) $("installIos").hidden = true; });
 $("installIos").onclick = () => { $("iosModal").hidden = false; $("iosDone").focus(); };
 $("iosDone").onclick = () => { $("iosModal").hidden = true; };
 $("iosModal").onclick = (e) => { if (e.target === e.currentTarget) $("iosModal").hidden = true; };
