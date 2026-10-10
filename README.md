@@ -10,7 +10,7 @@ Juego de ritmo multijugador en el navegador, inspirado en Guitar Hero. Se toca c
 - **Sonido de fallo** sintetizado (rasgueo desafinado y distorsionado con Karplus-Strong) y la pista de guitarra se silencia mientras fallas.
 - **Rachas:** aviso cada 50 notas seguidas y pirotecnia cada 100.
 - **Se adapta al dispositivo:** 5 cuerdas en PC, 4 en celular. Las notas naranjas se pliegan a la cuerda de al lado (`notesFor` en `src/chart.js`).
-- **Teclas configurables** en Ajustes (por defecto `D F J K L`, también `1`–`5`).
+- **Teclas configurables** en Ajustes (por defecto `A S D F G`, también `1`–`5`).
 - **Biblioteca en línea:** canciones guardadas en Supabase Storage, catálogo en Postgres.
 - **Multijugador en tiempo real:** salas con código de 4 letras sobre Supabase Realtime (presence + broadcast). El anfitrión elige canción y dificultad, todos descargan, y el marcador de los rivales se ve en vivo. Si alguien juega desde el celular, la sala entera toca con 4 cuerdas para que sea justo. Botón **Invitar** (compartir o WhatsApp) con un enlace `#sala-ABCD` que abre el juego directo en la sala.
 - **Dos jugadores en un mismo PC:** pantalla dividida con dos mástiles (cada uno con su cámara, sobre el mismo escenario), cada jugador con su dificultad, su poder estrella y su marcador, y al final quién ganó. Teclas por defecto `A S D F G` + Espacio y `H J K L Ñ` + Enter (poder estrella), configurables (se guardan por posición física, así sirven en teclados en español o en inglés).

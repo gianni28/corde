@@ -2,7 +2,7 @@
 const KEY = "corde.settings.v1";
 
 export const DEFAULTS = {
-  keys: ["d", "f", "j", "k", "l"], // green, red, yellow, blue, orange
+  keys: ["a", "s", "d", "f", "g"], // green, red, yellow, blue, orange
   laneMode: "auto", // "auto" | "5" | "4"
   speed: 1.5, // seconds of highway visible
   offsetMs: 0, // + = notes later
@@ -20,10 +20,13 @@ export const DEFAULTS = {
 // Touch-only device = phone or tablet (4 lanes). Some Windows PCs with a touchscreen report a coarse pointer and no
 // fine one (the Claude app's browser pane does too), so the moment a real keyboard is used this browser counts as a
 // PC for good: whoever plays with keys gets the 5 lanes.
-const KBD_KEY = "corde.keyboard";
+// v2: typing in a text field (the name, a room code) on a phone's on-screen keyboard used to count as a keyboard and
+// turned phones into PCs (5 strings, key settings); v1 flags set that way are dropped.
+const KBD_KEY = "corde.keyboard.v2";
 let keyboardSeen = (() => { try { return localStorage.getItem(KBD_KEY) === "1"; } catch { return false; } })();
 addEventListener("keydown", (e) => {
   if (keyboardSeen || e.isComposing || !e.code || /^(Shift|Control|Alt|Meta|Unidentified)/.test(e.code)) return;
+  if (e.target?.closest?.("input, textarea, [contenteditable]")) return; // typing a name isn't playing with keys
   keyboardSeen = true;
   try { localStorage.setItem(KBD_KEY, "1"); } catch {}
 }, { capture: true, passive: true });
@@ -36,6 +39,8 @@ function load() {
 
 export const settings = load();
 // v2: the first auto-sync could drift after a sloppy game; start everyone's latency from zero once.
+// the default keys went from D F J K L to A S D F G: whoever still had the old default gets the new one
+if (settings.keys?.join() === "d,f,j,k,l") { settings.keys = [...DEFAULTS.keys]; try { localStorage.setItem(KEY, JSON.stringify(settings)); } catch {} }
 if ((settings.syncV || 1) < 2) { settings.offsetMs = 0; settings.syncV = 2; try { localStorage.setItem(KEY, JSON.stringify(settings)); } catch {} }
 
 export function save() {

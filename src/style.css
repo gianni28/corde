@@ -829,3 +829,6 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .welcome-box .welcome-msg { color: var(--pop); }
 .welcome-box .welcome-msg:empty { display: none; }
 .account-code b { font: 700 1.25em var(--display); letter-spacing: .18em; color: var(--pop); }
+
+/* the credit at the bottom of the menu */
+.credit { font-size: 11px; opacity: .7; margin-top: -24px; }
