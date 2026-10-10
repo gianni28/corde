@@ -90,3 +90,25 @@ begin
   -- now: the server clock (ms), so a phone with its clock off still counts down to the real midnight
   return json_build_object('day', d, 'song_id', s, 'now', floor(extract(epoch from clock_timestamp()) * 1000));
 end $$;
+
+-- The secret songs count on the home boards (Total and Mejor canción): these two views read the scores directly as
+-- their owner, so the RLS that hides secret songs from the library doesn't take their runs out of the totals.
+create or replace view public.board_total_all with (security_invoker = false) as
+with e as (
+  select s.name_key, s.name, s.song_id, s.score, s.updated_at from public.scores s join public.songs g on g.id = s.song_id where s.score > 0
+), best as (
+  select name_key, song_id, max(score) as score from e group by name_key, song_id
+)
+select (select e.name from e where e.name_key = b.name_key order by e.updated_at desc limit 1) as name,
+  sum(b.score)::bigint as total,
+  count(*)::int as songs
+from best b
+group by b.name_key;
+
+create or replace view public.board_best_all with (security_invoker = false) as
+select distinct on (s.name_key) s.name, s.score, s.diff, s.song_id, g.name as song, g.artist
+from public.scores s join public.songs g on g.id = s.song_id
+where s.score > 0
+order by s.name_key, s.score desc, s.updated_at;
+
+grant select on public.board_total_all, public.board_best_all to anon, authenticated;
