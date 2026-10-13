@@ -5,6 +5,8 @@ import { createClient } from "@supabase/supabase-js";
 const URL = import.meta.env.VITE_SUPABASE_URL || "https://chnghmzybfnaktqsaveo.supabase.co";
 const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNobmdobXp5YmZuYWt0cXNhdmVvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4ODExNjgsImV4cCI6MjEwNjQ1NzE2OH0.Q5r388ra-TBC5dZ4_tKBF8LZuqpx4P_eSsLJoT3wzIE";
 export const BUCKET = "songs";
+// The song files (audio, charts, covers) are served from Cloudflare R2: free downloads, 10 GB free.
+const FILES_URL = import.meta.env.VITE_FILES_URL || "https://pub-daa029222392489f9b136b1d23fac19a.r2.dev";
 
 export const supabase = URL && KEY ? createClient(URL, KEY, { realtime: { params: { eventsPerSecond: 20 } } }) : null;
 export const online = !!supabase;
@@ -18,7 +20,7 @@ export async function listSongs() {
 }
 
 export function fileUrl(songId, file) {
-  return supabase.storage.from(BUCKET).getPublicUrl(`${songId}/${file}`).data.publicUrl;
+  return `${FILES_URL}/${songId}/${file}`;
 }
 
 async function fetchBuf(url, onProgress, init) {
@@ -208,8 +210,9 @@ export async function uploadSong(code, { id, row, files }, onProgress) {
   let done = 0;
   for (const u of uploads) {
     const blob = files[u.name];
-    const { error } = await supabase.storage.from(BUCKET).uploadToSignedUrl(u.path, u.token, blob, { contentType: blob.type, upsert: true });
-    if (error) throw new Error(`subiendo ${u.name}: ${error.message}`);
+    // straight to R2 with the signed URL; the chart is always read fresh, the rest is cached for a year (versioned URLs)
+    const res = await fetch(u.url, { method: "PUT", body: blob, headers: { "Content-Type": blob.type || "application/octet-stream", "Cache-Control": u.name === "chart.json" ? "no-cache" : "public, max-age=31536000" } });
+    if (!res.ok) throw new Error(`subiendo ${u.name}: ${res.status}`);
     onProgress && onProgress(++done / uploads.length);
   }
   await adminCall({ code, action: "save", row });
