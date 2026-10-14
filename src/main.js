@@ -1403,7 +1403,6 @@ function startGame({ lanes, diff, practice = null, duo = null, ctx = null }) {
   stopGame();
   picksRun++; // a late answer about the last run no longer touches the results
   const player = new Player(app.decoded);
-  player.missSfx = settings.missSfx;
   const common = { chart: app.chart, lanes, offsetMs: settings.offsetMs, songOffsetMs: app.songOffsetMs || 0, look: +settings.speed, autoSync: settings.autoSync };
   if (duo) {
     // same song, each with their own difficulty; nobody gets booed off the stage
@@ -1484,7 +1483,6 @@ function pauseGame() {
 function resumeGame() {
   if (!app.game || !app.paused) return;
   for (const g of games()) { g.pressed.fill(false); g.look = +settings.speed; g.offset = settings.offsetMs / 1000; }
-  app.game.player.missSfx = settings.missSfx;
   const g = app.game, pausedAt = g.lastT;
   if (pausedAt <= 0) { g.player.resume().then(() => { app.paused = false; }); show("play", false); return; }
   // rewind animation: the highway runs backwards ~10 s, then the music restarts there
@@ -2396,7 +2394,6 @@ function renderSettings() {
   $("openAdmin").hidden = !isAdminBrowser() || !online || touch || !!app.game;
   document.querySelectorAll("#laneSeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === settings.laneMode));
   document.querySelectorAll("#qualitySeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === settings.gfx));
-  document.querySelectorAll("#missSeg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === "on") === String(settings.missSfx)));
   document.querySelectorAll("#syncSeg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === "on") === String(settings.autoSync)));
   const n = deviceLanes();
   $("laneHint").textContent = settings.laneMode === "auto"
@@ -2468,7 +2465,6 @@ document.querySelectorAll("#starSeg button").forEach((b) => (b.onclick = () => {
   if (settings.starMode === "tap") stopMotionTest(); else if (liftOn()) onLift(liftStar);
   renderSettings();
 }));
-document.querySelectorAll("#missSeg button").forEach((b) => (b.onclick = () => { settings.missSfx = b.dataset.v === "on"; save(); renderSettings(); }));
 document.querySelectorAll("#syncSeg button").forEach((b) => (b.onclick = () => { settings.autoSync = b.dataset.v === "on"; save(); if (app.game) app.game.autoSync = settings.autoSync; renderSettings(); }));
 $("speed").oninput = (e) => { settings.speed = +e.target.value; save(); renderSettings(); };
 $("offset").oninput = (e) => { settings.offsetMs = +e.target.value; save(); renderSettings(); };
