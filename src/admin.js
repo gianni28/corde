@@ -1,5 +1,7 @@
 // Admin uploader: turns Clone Hero song folders into Corde library entries, entirely in the browser.
 // chart → chart.json, every non-guitar stem mixed → backing.mp3, guitar stem → guitar.mp3, album art → cover.jpg.
+// A song that comes as one audio (an MP3, or a Clone Hero folder without its guitar apart) gets its guitar separated here
+// (separate.js), so a miss silences it like in any other song; an MP3's notes are then made from that guitar.
 import { Mp3Encoder } from "@breezystack/lamejs";
 import { midiToChart, chartTextToChart, parseIni, iniMeta, diffSummary } from "./chart.js";
 import { autoChart, syncError } from "./autochart.js";
@@ -12,6 +14,26 @@ const SKIP_AUDIO = /^(preview|crowd)\./i;
 export const slug = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
 const stripTags = (s = "") => String(s).replace(/<[^>]+>/g, "").trim();
 const tick = () => new Promise((r) => setTimeout(r, 0));
+// the MP3 encoder adds ~25 ms of silence at the start (no gapless header): every encode moves the audio that much later
+const ENC_DELAY_MS = 25;
+
+/** The guitar apart from the rest ({ guitar, rest }, each { L, R }), or null when this browser can't (it says why). */
+async function guitarApart(L, R, onStatus, from, span) {
+  try {
+    const { splitGuitar } = await import("./separate.js"); // only the admin page loads the model
+    onStatus("Separando la guitarra (la primera vez descarga 13 MB)", from);
+    return await splitGuitar(L, R, (p) => onStatus("Separando la guitarra", from + span * p));
+  } catch (e) {
+    console.warn("separación:", e);
+    return null;
+  }
+}
+// mono at 22.05 kHz, what the chart analysis listens to
+function mono22({ L, R }) {
+  const m = new Float32Array(L.length >> 1);
+  for (let i = 0; i < m.length; i++) m[i] = (L[2 * i] + R[2 * i] + L[2 * i + 1] + R[2 * i + 1]) * 0.25;
+  return m;
+}
 
 /** Groups the picked files by folder and keeps folders that look like Clone Hero songs. */
 export function findSongs(fileList) {
@@ -110,15 +132,20 @@ export async function convertSong(song, onStatus) {
 
   const out = {};
   const delay = (Math.round(+ini.delay) || 0) / 1000; // song.ini "delay": notes sound this much later in the audio
-  const mixB = await mixStems(backingStems, (i, n) => onStatus(`Mezclando pistas ${i + 1}/${n}`, 0.05 + 0.15 * (i / n)));
+  let mixB = await mixStems(backingStems, (i, n) => onStatus(`Mezclando pistas ${i + 1}/${n}`, 0.05 + 0.1 * (i / n)));
   const seconds = mixB.seconds;
   // check 1: a note after the end of the audio means the chart is broken (or doesn't match this audio)
   let lastNote = 0;
   for (const d of Object.values(chart.diffs)) if (d.notes.length) lastNote = Math.max(lastNote, d.notes[d.notes.length - 1][0]);
   if (lastNote + delay > seconds + 0.5) throw new Error("No se subió: hay notas después de que termina el audio");
-  out["backing.mp3"] = await encodeMp3(mixB, (p) => onStatus("Convirtiendo a MP3", 0.2 + 0.35 * p));
+  // one audio for everything (or only a guitar one): the guitar is separated, the notes stay the charter's
+  let split = null;
+  if (!hasGuitar) split = await guitarApart(mixB.L, mixB.R, onStatus, 0.15, 0.3);
   let mixG = null;
-  if (hasGuitar) {
+  if (split) { mixB = { ...split.rest, seconds }; mixG = { ...split.guitar, seconds }; }
+  out["backing.mp3"] = await encodeMp3(mixB, (p) => onStatus("Convirtiendo a MP3", 0.45 + 0.2 * p));
+  if (split) out["guitar.mp3"] = await encodeMp3(mixG, (p) => onStatus("Convirtiendo guitarra", 0.66 + 0.2 * p));
+  else if (hasGuitar) {
     mixG = await mixStems(guitar, () => onStatus("Preparando guitarra", 0.56));
     out["guitar.mp3"] = await encodeMp3(mixG, (p) => onStatus("Convirtiendo guitarra", 0.58 + 0.3 * p));
   }
@@ -144,11 +171,11 @@ export async function convertSong(song, onStatus) {
     id, name, artist, album: chart.meta.album || null, year: chart.meta.year ? parseInt(chart.meta.year) || null : null,
     charter: stripTags(chart.meta.charter || "") || null, genre: ini.genre || null,
     duration_ms: +ini.song_length || Math.round(seconds * 1000), diffs: summary,
-    has_guitar: hasGuitar, has_cover: !!out["cover.jpg"],
+    has_guitar: hasGuitar || !!split, has_cover: !!out["cover.jpg"],
     // the MP3 encoder pads ~25 ms at the start; song.ini "delay" (ms, positive = notes later) shifts the chart
-    audio_offset_ms: 25 + (Math.round(+ini.delay) || 0),
+    audio_offset_ms: ENC_DELAY_MS + (Math.round(+ini.delay) || 0),
   };
-  return { id, row, files: out, warnMs };
+  return { id, row, files: out, warnMs, split: hasGuitar ? "" : split ? "ok" : "no" };
 }
 
 /* ================= MP3 → auto-generated chart ================= */
@@ -207,31 +234,27 @@ async function readId3(file) {
 }
 
 export async function convertMp3Song(song, onStatus) {
-  onStatus("Analizando ritmo", 0.03);
+  onStatus("Leyendo audio", 0.02);
   const tags = await readId3(song.audio).catch(() => ({}));
   const m = song.label.match(/^(.+?)\s+-\s+(.+)$/);
   const name = stripTags(tags.title || (m ? m[2] : song.label));
   const artist = stripTags(tags.artist || (m ? m[1] : ""));
 
-  // decode at 22.05 kHz for analysis
-  const ctx = new OfflineAudioContext(1, 1, 22050);
-  let buf;
-  try { buf = await ctx.decodeAudioData(await song.audio.arrayBuffer()); }
-  catch { throw new Error(`no se pudo leer el audio ${song.audio.name}`); }
-  const mono = new Float32Array(buf.length);
-  for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++) mono[i] += d[i] / buf.numberOfChannels; }
+  const full = await decode(song.audio);
+  const L = full.getChannelData(0), R = full.numberOfChannels > 1 ? full.getChannelData(1) : L;
   await tick();
-  const chart = autoChart(mono, 22050, { name, artist, album: tags.album, year: tags.year }, (stage, p) => onStatus(stage === "analyze" ? "Analizando ritmo" : "Generando notas", 0.05 + 0.5 * p));
+  // the guitar apart: the notes follow it (measured against hand-made charts: they land on the riffs far more often
+  // than notes made from the whole song), and a miss silences it
+  const split = await guitarApart(L, R, onStatus, 0.04, 0.4);
+  const listen = split ? mono22(split.guitar) : mono22({ L, R });
+  await tick();
+  const chart = autoChart(listen, 22050, { name, artist, album: tags.album, year: tags.year }, (stage, p) => onStatus(stage === "analyze" ? "Analizando ritmo" : "Generando notas", 0.45 + 0.15 * p));
   onStatus("Generando notas", 0.6);
   await tick();
 
   const out = {};
-  if (/\.mp3$/i.test(song.audio.name)) out["backing.mp3"] = new Blob([song.audio], { type: "audio/mpeg" });
-  else {
-    const full = await decode(song.audio);
-    const L = full.getChannelData(0), R = full.numberOfChannels > 1 ? full.getChannelData(1) : L;
-    out["backing.mp3"] = await encodeMp3({ L, R }, (p) => onStatus("Convirtiendo a MP3", 0.6 + 0.25 * p));
-  }
+  out["backing.mp3"] = await encodeMp3(split ? split.rest : { L, R }, (p) => onStatus("Convirtiendo a MP3", 0.6 + 0.15 * p));
+  if (split) out["guitar.mp3"] = await encodeMp3(split.guitar, (p) => onStatus("Convirtiendo guitarra", 0.75 + 0.15 * p));
   const coverSrc = song.image || tags.cover;
   if (coverSrc) { try { out["cover.jpg"] = await makeCover(coverSrc); } catch {} }
   out["chart.json"] = new Blob([JSON.stringify({ ...chart, rev: Date.now() })], { type: "application/json" }); // rev: every upload gets fresh file URLs
@@ -239,8 +262,39 @@ export async function convertMp3Song(song, onStatus) {
   const id = slug(`${artist}-${name}`) || slug(song.label);
   const row = {
     id, name, artist, album: tags.album || null, year: tags.year || null, charter: "Corde (automático)", genre: null,
-    duration_ms: Math.round((buf.length / 22050) * 1000), diffs: diffSummary(chart), has_guitar: false, has_cover: !!out["cover.jpg"],
-    audio_offset_ms: /\.mp3$/i.test(song.audio.name) ? 0 : 25, // original MP3 is analysed and played as-is
+    duration_ms: Math.round((full.length / RATE) * 1000), diffs: diffSummary(chart), has_guitar: !!split, has_cover: !!out["cover.jpg"],
+    audio_offset_ms: ENC_DELAY_MS, // analysed before encoding: the encoder's delay is the only shift
   };
-  return { id, row, files: out };
+  return { id, row, files: out, split: split ? "ok" : "no" };
+}
+
+/* ================= songs already in the library: their guitar apart ================= */
+/**
+ * A library song that is one audio (has_guitar false): its backing.mp3 → guitar.mp3 + the rest. The charter's notes
+ * stay (only a fresh rev, so players fetch the new audio); an automatic chart is made again from the guitar.
+ * song: { id, charter, audio_offset_ms }; download: net.js downloadSong. → { files, patch } for net.js uploadStems.
+ */
+export async function separateExisting(song, download, onStatus) {
+  onStatus("Descargando", 0.01);
+  const { chart, stems } = await download({ id: song.id, has_guitar: false }, (p) => onStatus("Descargando", 0.01 + 0.07 * p));
+  const ctx = new OfflineAudioContext(2, RATE, RATE);
+  const buf = await ctx.decodeAudioData(stems[0].data);
+  const L = buf.getChannelData(0), R = buf.numberOfChannels > 1 ? buf.getChannelData(1) : L;
+  await tick();
+  const split = await guitarApart(L, R, onStatus, 0.1, 0.6);
+  if (!split) throw new Error("Este navegador no pudo separar la guitarra");
+  const auto = song.charter === "Corde (automático)";
+  let next = chart;
+  if (auto) {
+    next = autoChart(mono22(split.guitar), 22050, chart.meta || {}, (stage, p) => onStatus("Generando notas", 0.7 + 0.05 * p));
+  }
+  const files = {
+    "backing.mp3": await encodeMp3(split.rest, (p) => onStatus("Convirtiendo a MP3", 0.75 + 0.1 * p)),
+    "guitar.mp3": await encodeMp3(split.guitar, (p) => onStatus("Convirtiendo guitarra", 0.85 + 0.1 * p)),
+    "chart.json": new Blob([JSON.stringify({ ...next, rev: Date.now() })], { type: "application/json" }),
+  };
+  // the new files went through the encoder once more: the audio starts that much later
+  const patch = { audio_offset_ms: (song.audio_offset_ms || 0) + ENC_DELAY_MS };
+  if (auto) { patch.diffs = diffSummary(next); patch.resetScores = true; } // new notes: the old scores were on others
+  return { files, patch };
 }

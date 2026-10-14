@@ -4,3 +4,4 @@ out
 .env
 .DS_Store
 .claude/worktrees/
+vite.config.js.timestamp-*

@@ -72,6 +72,25 @@ Deno.serve(async (req) => {
     return json({ ok: true });
   }
 
+  // a song that was one audio now has its guitar apart (separated in the admin's browser): only what that changes.
+  // diffs come too when the notes were made again from the guitar (an automatic chart); then its old scores go.
+  if (body.action === "stems") {
+    if (!validId(body.id) || !Number.isFinite(body.audio_offset_ms)) return json({ error: "Datos inválidos" }, 400);
+    const patch: Record<string, unknown> = {
+      has_guitar: true, guitar_file: "guitar.mp3", backing_file: "backing.mp3",
+      audio_offset_ms: Math.max(-3000, Math.min(3000, Math.round(body.audio_offset_ms))),
+    };
+    if (body.diffs && typeof body.diffs === "object") patch.diffs = body.diffs;
+    const { data, error } = await admin.from("songs").update(patch).eq("id", body.id).select("id");
+    if (error) return json({ error: error.message }, 500);
+    if (!data?.length) return json({ error: "Esa canción ya no existe" }, 404);
+    if (body.resetScores === true) {
+      const { error: e2 } = await admin.from("scores").delete().eq("song_id", body.id);
+      if (e2) return json({ error: e2.message }, 500);
+    }
+    return json({ ok: true });
+  }
+
   // removes a song: its files and its row (its scores go with it, ON DELETE CASCADE)
   if (body.action === "delete") {
     if (!validId(body.id)) return json({ error: "Datos inválidos" }, 400);
@@ -85,7 +104,7 @@ Deno.serve(async (req) => {
 
   // the whole library, secret songs included (the public library can't see them)
   if (body.action === "list") {
-    const { data, error } = await admin.from("songs").select("id, name, artist, charter, hidden").order("artist").order("name");
+    const { data, error } = await admin.from("songs").select("id, name, artist, charter, hidden, has_guitar, audio_offset_ms").order("artist").order("name");
     if (error) return json({ error: error.message }, 500);
     return json({ songs: data });
   }

@@ -13,9 +13,9 @@ import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from 
 import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, nameStyles } from "./net.js";
 import { shareCard, retoUrl, readReto } from "./share.js";
 import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak } from "./achievements.js";
-import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretSongs, secretBoard, songById } from "./net.js";
+import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretSongs, secretBoard, songById } from "./net.js";
 import { VENUES, TO_ENCORE, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
-import { findSongs, convertSong, findMp3Songs, convertMp3Song } from "./admin.js";
+import { findSongs, convertSong, findMp3Songs, convertMp3Song, separateExisting } from "./admin.js";
 import { fillDifficulties } from "./reduce.js";
 import * as sfx from "./sfx.js";
 import { energyCurve, energyAt } from "./energy.js";
@@ -2822,7 +2822,9 @@ const ADMIN_KEY = "corde.adminCode";
 function isAdminBrowser() { try { return !!localStorage.getItem(ADMIN_KEY); } catch { return false; } }
 try { $("adminCode").value = localStorage.getItem(ADMIN_KEY) || ""; } catch {}
 $("openAdmin").onclick = () => { if (app.game) return; show("admin"); loadAutoList(); };
-if (location.hash === "#admin") setTimeout(() => { show("admin"); loadAutoList(); }, 0);
+// /admin is the same page served cross-origin isolated (netlify.toml): there the guitar separation uses every core
+const adminPath = location.pathname.replace(/\/+$/, "") === "/admin";
+if (location.hash === "#admin" || adminPath) setTimeout(() => { show("admin"); loadAutoList(); }, 0);
 
 // Songs made from a bare MP3. Uploading the same song as a Clone Hero folder replaces them (even with only
 // Expert: the easier levels are built from it), and they can be deleted from here.
@@ -2847,6 +2849,7 @@ async function loadAutoList() {
   let lib = [];
   try { lib = await adminLibrary(); } catch { return; }
   renderSecretAdmin();
+  renderSplit();
   const auto = lib.filter((x) => x.charter === AUTO_CHARTER);
   const ul = $("autoList"); ul.innerHTML = "";
   $("autoBox").hidden = !auto.length;
@@ -2923,8 +2926,10 @@ $("adminUpload").onclick = async () => {
       await uploadSong(code, conv, (p) => set("Subiendo", 0.85 + p * 0.15));
       for (const x of autos) if (x.id !== conv.id) await adminCall({ code, action: "delete", id: x.id });
       const replaced = autos.length ? " · reemplazó la del MP3" : "";
-      if (conv.warnMs) set(`Subida${replaced}, pero revisa: las notas podrían ir desfasadas (unos ${conv.warnMs} ms)`, 1, "warn");
-      else set("Lista" + replaced, 1, "ok");
+      const noSplit = conv.split === "no" ? " · no se pudo separar la guitarra en este navegador" : "";
+      if (conv.warnMs) set(`Subida${replaced}${noSplit}, pero revisa: las notas podrían ir desfasadas (unos ${conv.warnMs} ms)`, 1, "warn");
+      else if (noSplit) set(`Subida${replaced}${noSplit}`, 1, "warn");
+      else set("Lista" + replaced + (conv.split === "ok" ? " · guitarra separada" : ""), 1, "ok");
       ok++;
     } catch (e) { set(e.message || "Error", 0, "bad"); bad++; }
   }
@@ -2932,6 +2937,55 @@ $("adminUpload").onclick = async () => {
   app.songs = []; app.loadedSongId = null; // reload the library (and any re-uploaded song) next time
   loadAutoList();
   $("adminStatus").textContent = `Listo: ${ok} subida${ok === 1 ? "" : "s"}${bad ? `, ${bad} con error` : ""}. ${secret ? "Ya aparecen en «Secretas» (con el código)." : "Ya aparecen en Jugar."}`;
+};
+
+/* --- songs already uploaded as one audio: their guitar apart, one after another, in this browser --- */
+const split = { on: false, stop: false, rows: [] };
+function renderSplit() {
+  const need = (adm.lib || []).filter((x) => !x.has_guitar);
+  $("splitBox").hidden = !adm.lib || (!need.length && !split.rows.length);
+  $("splitHint").textContent = need.length
+    ? `${need.length} ${need.length > 1 ? "canciones son" : "canción es"} un solo audio: al fallar no se calla la guitarra. Tu navegador puede separarla, unos minutos por canción; deja esta pestaña abierta mientras tanto (puedes detenerlo cuando quieras y seguir otro día). Las notas hechas a mano se quedan igual; las automáticas se rehacen desde la guitarra y sus puntajes se reinician.`
+    : "Todas las canciones tienen su guitarra aparte.";
+  // not isolated: one core only, about three times slower
+  if (need.length && !self.crossOriginIsolated) $("splitHint").textContent += ` Para que vaya unas 3 veces más rápido, abre ${location.origin}/admin (usa todos los núcleos de tu computador).`;
+  $("splitGo").textContent = split.on ? (split.stop ? "Deteniendo…" : "Detener") : need.length ? `Separar ${need.length} ${need.length > 1 ? "canciones" : "canción"}` : "Separar";
+  $("splitGo").disabled = (!split.on && !need.length) || split.stop;
+  const ul = $("splitList"); ul.innerHTML = "";
+  for (const r of split.rows.slice(-8)) {
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="n"></span><span class="st ${r.cls || ""}"></span><span class="bar2"><i style="transform:scaleX(${r.p || 0})"></i></span>`;
+    li.querySelector(".n").textContent = r.label; li.querySelector(".st").textContent = r.status || "";
+    ul.appendChild(li);
+  }
+}
+$("splitGo").onclick = async () => {
+  if (split.on) { split.stop = true; renderSplit(); return; }
+  const code = $("adminCode").value.trim();
+  if (!code) { $("splitStatus").textContent = "Escribe el código de administrador."; return; }
+  const queue = (adm.lib || []).filter((x) => !x.has_guitar);
+  split.on = true; split.stop = false; split.rows = [];
+  let ok = 0, bad = 0;
+  const t0 = Date.now();
+  for (const x of queue) {
+    if (split.stop) break;
+    const r = { label: `${x.name}${x.artist ? ` · ${x.artist}` : ""}`, p: 0 };
+    split.rows.push(r);
+    const set = (status, p, cls) => { r.status = status; r.p = p; if (cls) r.cls = cls; renderSplit(); };
+    try {
+      const res = await separateExisting(x, downloadSong, (txt, p) => set(txt, p * 0.9));
+      await uploadStems(code, x.id, res, (p) => set("Subiendo", 0.9 + p * 0.1));
+      x.has_guitar = true;
+      set(res.patch.resetScores ? "Lista · notas rehechas desde la guitarra" : "Lista", 1, "ok");
+      ok++;
+      if (app.loadedSongId === x.id) app.loadedSongId = null;
+    } catch (e) { set(e.message || "Error", 0, "bad"); bad++; }
+    const left = (adm.lib || []).filter((y) => !y.has_guitar).length, per = (Date.now() - t0) / (ok + bad) / 60000;
+    $("splitStatus").textContent = `${ok} lista${ok === 1 ? "" : "s"}${bad ? `, ${bad} con error` : ""}. Faltan ${left}${left && !split.stop ? ` (unos ${Math.round(per * left)} min)` : ""}.`;
+  }
+  split.on = false; split.stop = false;
+  app.songs = []; // the library reloads with the new files
+  renderSplit();
 };
 
 /* --- secret songs, from the admin's side: hide/show songs and change the code --- */
