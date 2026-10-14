@@ -93,10 +93,13 @@ begin
   if found then return w; end if;
   select * into a from accounts where id = p_account;
   if not found then return null; end if;
-  -- welcome: 100, +5 for every song + difficulty already on the boards with its name or from its browsers
-  select 100 + 5 * count(*) into gift from (
+  -- welcome: 100, +5 for every song + difficulty it had played before the shop opened (with its name or from its
+  -- browsers), at most +300. Runs sent after the opening don't count: they pay as they're played, so a script can't
+  -- post a score on every song under a new name and then claim the name for a pile of púas.
+  select 100 + least(300, 5 * count(*)) into gift from (
     select distinct s.song_id, s.diff from scores s
-    where acct_key(s.name) = a.name_key or s.player_key in (select d.device_key from account_devices d where d.account_id = a.id)
+    where s.created_at < timestamptz '2026-10-15 05:00:00+00'
+      and (acct_key(s.name) = a.name_key or s.player_key in (select d.device_key from account_devices d where d.account_id = a.id))
   ) t;
   insert into wallets (account_id, picks, earned_total) values (a.id, gift, gift)
     on conflict (account_id) do nothing returning * into w;
