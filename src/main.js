@@ -11,6 +11,7 @@ import { Game, STAR_READY } from "./game.js";
 import { motionAvailable, motionNeedsPermission, motionReady, requestMotion, onLift, watchMotion, seen as motionSeen } from "./motion.js";
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
 import { accountMe, accountClaim, accountLink, accountSync } from "./net.js";
+import { shareCard } from "./share.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretSongs, secretBoard, songById } from "./net.js";
 import { VENUES, TO_ENCORE, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song } from "./admin.js";
@@ -719,6 +720,7 @@ function finishDuo() {
   });
   sfx.finale(Math.max(...sums.map((x) => x.stars)));
   $("resFail").hidden = true; $("soloRes").hidden = true; $("duoRes").hidden = false;
+  $("shareBtn").hidden = true;
   $("againBtn").hidden = false; $("againBtn").classList.add("primary"); $("otherSongBtn").hidden = false; $("menuBtn").textContent = "Menú";
   $("resRandomBox").hidden = true;
   show("results");
@@ -1388,6 +1390,9 @@ function finishGame() {
   $("pbLine").textContent = pb.beat && pb.old ? `¡Nuevo récord personal! Antes: ${pb.old.score.toLocaleString("es-CO")}`
     : pb.old && !pb.beat ? `Tu mejor: ${pb.old.score.toLocaleString("es-CO")}` : "";
   if (!$("pbLine").textContent) $("pbLine").hidden = true;
+  // the result as a story image: only for songs that were finished
+  app.shareRecord = !!(pb.beat && pb.old);
+  $("shareBtn").hidden = sum.failed;
   $("againBtn").hidden = app.mode === "mp";
   $("resRandomBox").hidden = app.mode === "mp" || !online || (!!app.ctx && !app.ctx.via);
   $("resRandomDiffs").hidden = true; $("resRandomBtn").setAttribute("aria-expanded", "false");
@@ -1606,6 +1611,19 @@ async function showBoard(el, limit, myRank) {
   });
   el.querySelector(".board-empty").hidden = rows.length > 0;
 }
+$("shareBtn").onclick = async () => {
+  const sum = app.lastSummary, s = app.song;
+  if (!sum || !s) return;
+  const b = $("shareBtn"); b.disabled = true;
+  try {
+    await shareCard({
+      song: s.name, artist: s.artist, diff: DIFFS.find((d) => d.key === app.diff)?.name || "", lanes: app.lanes,
+      score: sum.score, stars: sum.stars, acc: sum.acc, maxCombo: sum.maxCombo, hits: sum.hits, total: sum.total,
+      player: settings.name || "", record: app.shareRecord, cover: s.id && s.id !== "local" ? coverOf(s) : "",
+    });
+  } catch (e) { toast("No se pudo crear la imagen."); }
+  b.disabled = false;
+};
 $("againBtn").onclick = () => startGame({ lanes: app.lanes, diff: app.diff, duo: app.duo, ctx: againCtx() });
 $("menuBtn").onclick = () => {
   if (app.mode === "mp") { renderLobby(); show("lobby", false); }
