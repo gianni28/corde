@@ -35,7 +35,7 @@ begin
   ) t;
   return jsonb_build_object('days', days, 'bests', bests, 'tour', tour, 'ach', ach);
 end $$;
-revoke all on function public.acct_merge(jsonb, jsonb) from public, anon, authenticated;
+-- (create or replace keeps acct_merge's privileges: players can't call it directly)
 
 create or replace function public.secret_board(p_code text, p_song_id text, p_diff text, p_lanes int, p_limit int default 1000)
 returns table (name text, score int, acc real, max_combo int)

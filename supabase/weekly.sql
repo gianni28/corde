@@ -32,19 +32,18 @@ create policy "weekly scores are public" on public.weekly_scores for select usin
 revoke all on public.weekly_scores from anon, authenticated;
 grant select on public.weekly_scores to anon, authenticated;
 
--- a validated run (only the submit-score function calls this, after its checks and the account check)
+-- a validated run (only the submit-score function calls this, after its checks and the account check).
+-- security invoker: the server's key bypasses RLS and writes; a player calling it hits RLS (there's no insert policy).
 create or replace function public.weekly_submit(
   p_song_id text, p_diff text, p_lanes int, p_name text, p_score int, p_acc real, p_max_combo int
 ) returns void
-language sql security definer set search_path = public as $$
+language sql security invoker set search_path = public as $$
   insert into weekly_scores as w (week, song_id, diff, lanes, name, score, acc, max_combo)
   values (corde_week(), p_song_id, p_diff, p_lanes, p_name, p_score, coalesce(p_acc, 0), coalesce(p_max_combo, 0))
   on conflict on constraint weekly_scores_board_key do update
     set name = excluded.name, score = excluded.score, acc = excluded.acc, max_combo = excluded.max_combo, updated_at = now()
     where excluded.score > w.score
 $$;
-revoke all on function public.weekly_submit(text, text, int, text, int, real, int) from public, anon, authenticated;
-grant execute on function public.weekly_submit(text, text, int, text, int, real, int) to service_role;
 
 -- this week's board for one song + difficulty + strings (hidden songs drop out: songs is filtered for players)
 create or replace view public.board_week_song with (security_invoker = true) as
