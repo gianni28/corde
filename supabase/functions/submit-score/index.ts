@@ -80,6 +80,13 @@ Deno.serve(async (req) => {
     : await db.from("scores").insert({ ...board, lanes, player_key: key, ...row });
   if (error) return json({ error: error.message }, 500);
 
+  // this week's board keeps the week's best (weekly.sql); it never blocks the main board
+  const { error: wErr } = await db.rpc("weekly_submit", {
+    p_song_id: b.song_id, p_diff: b.diff, p_lanes: lanes, p_name: accountName, p_score: score,
+    p_acc: Number(b.acc) || 0, p_max_combo: Math.round(Number(b.max_combo) || 0),
+  });
+  if (wErr) console.warn("weekly:", wErr.message);
+
   const best = newRecord ? score : prev!.score;
   const { count } = await db.from("board_song").select("name", { count: "exact", head: true }).match({ ...board, lanes }).gt("score", best);
   return json({ best, rank: (count || 0) + 1, newRecord, lanes });

@@ -15,6 +15,7 @@ export const DEFAULTS = {
   duoKeys: [["KeyA", "KeyS", "KeyD", "KeyF", "KeyG", "Space"], ["KeyH", "KeyJ", "KeyK", "KeyL", "Semicolon", "Enter"]],
   duoNames: ["Jugador 1", "Jugador 2"],
   duoDiffs: ["medium", "medium"],
+  boardPeriod: "week", // the boards show "week" (Monday to Sunday) or "all" (every run ever)
 };
 
 // Touch-only device = phone or tablet (4 lanes). Some Windows PCs with a touchscreen report a coarse pointer and no
