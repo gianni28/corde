@@ -21,15 +21,28 @@ const ENC_DELAY_MS = 25;
 
 /** The guitar apart from the rest ({ guitar, rest }, each { L, R }), or null when this browser can't (it says why). */
 async function guitarApart(L, R, onStatus, from, span) {
+  let clock = null;
   try {
     const { splitGuitar, separationThreads } = await import("./separate.js"); // only the admin page loads the model
     const t0 = Date.now(), cores = separationThreads();
     const mmss = () => { const s = Math.round((Date.now() - t0) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
-    onStatus(`Preparando la separación (la primera vez descarga 13 MB) · ${cores} ${cores > 1 ? "núcleos" : "núcleo"}`, from);
-    return await splitGuitar(L, R, (p, c) => onStatus(c ? `Separando la guitarra · parte ${c.chunk} de ${c.totalChunks} · ${mmss()}` : "Separando la guitarra", from + span * p));
+    const coresTxt = `${cores} ${cores > 1 ? "núcleos" : "núcleo"}`;
+    // what it's doing right now, with a clock that keeps running (so a long step never looks frozen)
+    let stage = {}, frac = 0;
+    const show = () => onStatus(
+      stage.stage === "download" ? `Descargando el modelo (solo la primera vez)${stage.total ? ` · ${Math.round((100 * stage.loaded) / stage.total)} %` : ""} · ${mmss()}`
+        : stage.stage === "part" ? `Separando la guitarra · parte ${stage.chunk} de ${stage.totalChunks} · ${mmss()} · ${coresTxt}`
+        : `Preparando el modelo · ${coresTxt} · ${mmss()}`,
+      from + span * frac);
+    show();
+    clock = setInterval(show, 1000);
+    return await splitGuitar(L, R, (p, c = {}) => { stage = c; frac = p; show(); });
   } catch (e) {
     console.warn("separación:", e);
+    guitarApart.error = e?.message || String(e);
     return null;
+  } finally {
+    clearInterval(clock);
   }
 }
 // mono at 22.05 kHz, what the chart analysis listens to
@@ -286,7 +299,7 @@ export async function separateExisting(song, download, onStatus) {
   const L = buf.getChannelData(0), R = buf.numberOfChannels > 1 ? buf.getChannelData(1) : L;
   await tick();
   const split = await guitarApart(L, R, onStatus, 0.1, 0.6);
-  if (!split) throw new Error("Este navegador no pudo separar la guitarra");
+  if (!split) throw new Error(`No se pudo separar la guitarra: ${guitarApart.error || "error desconocido"}`);
   const auto = song.charter === "Corde (automático)";
   let next = chart;
   if (auto) {
