@@ -16,7 +16,9 @@ function loadImg(src) {
     im.crossOrigin = "anonymous";
     im.onload = () => res(im);
     im.onerror = () => res(null);
-    im.src = src;
+    // its own address: the library already shows this cover without CORS, and the browser would reuse that
+    // copy, which a canvas is not allowed to read (the cover would silently be missing from the card)
+    im.src = src + (src.includes("?") ? "&" : "?") + "card=1";
   });
 }
 
