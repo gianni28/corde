@@ -5,7 +5,6 @@
 // player hits the notes, and a miss silences what the model heard as guitar.
 // Only the admin page loads this module (and onnxruntime-web with it): players never download any of it.
 import separate from "@audio/neural-separate";
-import * as ort from "onnxruntime-web/wasm";
 
 /**
  * L, R: the song at 44.1 kHz. onProgress(fraction). device: "wasm" | "webgpu" | undefined (SCNet's default: wasm).
@@ -13,8 +12,14 @@ import * as ort from "onnxruntime-web/wasm";
  */
 export async function splitGuitar(L, R, onProgress = () => {}, device) {
   onProgress(0);
-  // every core but one when the page may use threads (cross-origin isolated); otherwise onnxruntime runs on one
-  if (self.crossOriginIsolated) ort.env.wasm.numThreads = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1));
+  // every core but one when the page may use threads (cross-origin isolated); otherwise onnxruntime runs on one.
+  // Imported here, not at the top: onnxruntime must stay a chunk of its own, because its threads start by loading
+  // that same file as their script (bundled into this one, they'd load this module and never answer). It's the same
+  // module @audio/neural-runtime loads (vite.config.js), so the setting reaches it.
+  if (self.crossOriginIsolated) {
+    const ort = await import("onnxruntime-web/wasm");
+    ort.env.wasm.numThreads = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1));
+  }
   const opts = {
     sampleRate: 44100, model: "scnet", targets: ["other"],
     // each sample heard in two 11 s windows instead of four: half the time, the same guitar (measured: 3.17 vs 3.18 dB)
