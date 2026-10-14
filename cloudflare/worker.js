@@ -10,12 +10,20 @@ const CORS = {
 };
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
     if (request.method !== "GET" && request.method !== "HEAD") return new Response("Método no permitido", { status: 405, headers: CORS });
 
     const key = decodeURIComponent(new URL(request.url).pathname.slice(1));
     if (!/^[a-z0-9][a-z0-9-]{0,79}\/[a-z0-9.]+$/.test(key)) return new Response("No encontrado", { status: 404, headers: CORS });
+
+    // copia guardada en el centro de datos de Cloudflare más cercano (la segunda persona que pide la canción la recibe al instante)
+    const cache = caches.default;
+    const cacheKey = new Request(new URL(request.url).origin + "/" + key, { method: "GET" });
+    if (request.method === "GET" && !request.headers.has("Range")) {
+      const hit = await cache.match(cacheKey);
+      if (hit) { const r = new Response(hit.body, hit); r.headers.set("X-Corde-Cache", "HIT"); return r; }
+    }
 
     const obj = request.method === "HEAD"
       ? await env.BUCKET.head(key)
@@ -34,6 +42,9 @@ export default {
       headers.set("Content-Range", `bytes ${off}-${off + len - 1}/${obj.size}`);
       return new Response(obj.body, { status: 206, headers });
     }
-    return new Response(obj.body, { headers });
+    headers.set("X-Corde-Cache", "MISS");
+    const res = new Response(obj.body, { headers });
+    if (request.method === "GET" && !key.endsWith(".json")) ctx.waitUntil(cache.put(cacheKey, res.clone())); // el chart siempre fresco
+    return res;
   },
 };
