@@ -24,7 +24,7 @@ async function guitarApart(L, R, onStatus, from, span) {
   let clock = null;
   try {
     const { splitGuitar, separationThreads } = await import("./separate.js"); // only the admin page loads the model
-    const t0 = Date.now(), cores = separationThreads();
+    const t0 = Date.now(), cores = await separationThreads();
     const mmss = () => { const s = Math.round((Date.now() - t0) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
     const coresTxt = `${cores} ${cores > 1 ? "núcleos" : "núcleo"}`;
     // what it's doing right now, with a clock that keeps running (so a long step never looks frozen)

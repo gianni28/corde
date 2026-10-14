@@ -13,8 +13,14 @@ const ortImports = {
   },
 };
 
+// onnxruntime's file under its own name: browsers that cached it before /assets/* carried the COEP header (immutable,
+// a year) would keep starting its threads without it, and the separation would hang there
+const chunkFileNames = (c) => (c.name.startsWith("ort.") ? "assets/[name]-coep-[hash].js" : "assets/[name]-[hash].js");
+
 export default defineConfig({
   plugins: [ortImports],
+  // the separation's worker (src/separate.worker.js): onnxruntime stays its own chunk in there too
+  worker: { format: "es", plugins: () => [ortImports], rollupOptions: { output: { chunkFileNames } } },
   // in dev, pre-bundling would skip the plugin above (and ort's .wasm lookups): those load as they are
   optimizeDeps: { exclude: ["@audio/neural-separate", "@audio/neural-runtime", "onnxruntime-web"] },
   build: {
@@ -22,9 +28,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: { three: ["three"], supabase: ["@supabase/supabase-js"] },
-        // onnxruntime's file under its own name: browsers that cached it before /assets/* carried the COEP header
-        // (immutable, a year) would keep starting its threads without it, and the separation would hang there
-        chunkFileNames: (c) => (c.name.startsWith("ort.") ? "assets/[name]-coep-[hash].js" : "assets/[name]-[hash].js"),
+        chunkFileNames,
       },
     },
   },
