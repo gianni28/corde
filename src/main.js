@@ -1787,13 +1787,14 @@ function previewShop() {
   const look = { ...equipped, [shop.cat]: shop.sel || equipped[shop.cat] };
   applyLook(look);
   R.previewStar?.(shop.cat === "star");
+  R.previewCrowd?.(shop.cat === "crowd"); // the crowd only lights up in quiet parts: hold the lights up while you look
   if (shop.cat === "streak") streakSample(look.streak);
   else $("shopStreak").classList.remove("show");
 }
 function endShopPreview() {
   if (!shop.preview) return;
   shop.preview = false; shop.armed = null; clearTimeout(shop.armT); clearTimeout(shop.streakT);
-  R.previewStar?.(false);
+  R.previewStar?.(false); R.previewCrowd?.(false);
   $("shopStreak").classList.remove("show");
   applyLook();
 }
