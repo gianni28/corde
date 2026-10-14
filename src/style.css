@@ -60,9 +60,12 @@ button { cursor: pointer; }
 }
 /* short PC screens: a smaller logo leaves room for the level card */
 @media (min-width: 1000px) and (max-height: 820px) {
-  .home .logo h1 { font-size: min(clamp(104px, 15.3vw, 220px), 23vh); }
-  .home-main { gap: 20px; }
+  .home .logo h1 { font-size: min(clamp(104px, 15.3vw, 220px), 18vh); }
+  .home .menu button { font-size: min(clamp(32px, 4.6vw, 40px), 4.8vh); }
+  .home-main { gap: 14px; }
 }
+/* if it still doesn't fit, the column starts at the top and scrolls (centred, its top would be cut off) */
+@media (min-width: 1000px) { .home { align-items: safe center; } }
 .logo { position: relative; }
 .logo h1 {
   position: relative; margin: 0; font: 400 clamp(104px, 19vw, 220px)/.86 var(--rock); letter-spacing: .01em;
