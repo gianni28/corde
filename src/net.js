@@ -255,10 +255,10 @@ export const accountSync = (secret, progress) => rpcJson("account_sync", { p_sec
 export const shopBuy = (secret, slot, item) => rpcJson("shop_buy", { p_secret: secret, p_slot: slot, p_item: item });
 /** Puts on an item you own (or a slot's default) → wallet | { error: "not_owned" | "no_account" } */
 export const shopEquip = (secret, slot, item) => rpcJson("shop_equip", { p_secret: secret, p_slot: slot, p_item: item });
-/** The players whose name has a style on the boards → [{ name_key, style }] (name_key: lowercase, no accents). */
+/** The players with an account: their name's style and level on the boards → [{ name_key, style, level }] (name_key: lowercase, no accents). */
 export async function nameStyles() {
   if (!supabase) return [];
-  const { data, error } = await supabase.from("name_styles").select("name_key, style");
+  const { data, error } = await supabase.from("name_styles").select("name_key, style, level");
   if (error) throw new Error(error.message);
   return data || [];
 }

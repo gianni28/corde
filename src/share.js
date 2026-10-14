@@ -37,8 +37,50 @@ function fit(ctx, text, font, size, maxW) {
   return s;
 }
 
+// the player's name as the shop styled it (same looks as the .nm-* classes on the boards), and their level
+const NAME_COLORS = { dorado: "#f5c518", corona: "#f5c518", rosa: "#ff6fbf", cian: "#4fe3ff", verde: "#4cff7a", electrico: "#e9fbff", estrella: "#fff6d0" };
+const NAME_GLOW = { dorado: "rgba(245,197,24,.6)", corona: "rgba(245,197,24,.6)", rosa: "rgba(255,79,168,.6)", cian: "rgba(63,220,255,.6)",
+  verde: "rgba(60,255,120,.5)", electrico: "#3fa8ff", estrella: "rgba(255,190,60,.8)", plata: "rgba(200,220,240,.45)" };
+function drawName(ctx, name, style, level, x, y, maxW) {
+  const size = fit(ctx, name, `600 {s}px ${DISPLAY}`, style && style !== "normal" ? 46 : 42, maxW);
+  const w = ctx.measureText(name).width, x0 = x - w / 2;
+  ctx.save();
+  if (style === "fuego" || style === "plata") {
+    const g = ctx.createLinearGradient(0, y - size * 0.8, 0, y);
+    const stops = style === "fuego" ? ["#ffe066", "#ff8a1a", "#e8201a"] : ["#ffffff", "#c9d3dc", "#7d8a96"];
+    stops.forEach((c, i) => g.addColorStop(i / 2, c));
+    ctx.fillStyle = g;
+  } else if (style === "arcoiris") {
+    const g = ctx.createLinearGradient(x0, 0, x0 + w, 0);
+    ["#ff4a4a", "#ffb020", "#ffe83a", "#4cff7a", "#3ac8ff", "#a45bff", "#ff4fa8"].forEach((c, i, a) => g.addColorStop(i / (a.length - 1), c));
+    ctx.fillStyle = g;
+  } else ctx.fillStyle = NAME_COLORS[style] || "#a8998a";
+  if (NAME_GLOW[style]) { ctx.shadowColor = NAME_GLOW[style]; ctx.shadowBlur = style === "electrico" ? 22 : 16; }
+  ctx.fillText(name, x, y);
+  ctx.shadowBlur = 0;
+  if (style === "corona") { // the crown before the name
+    const cw = size * 0.95, ch = cw * 0.75, cx = x0 - cw - size * 0.2, cy = y - size * 0.72;
+    const g = ctx.createLinearGradient(0, cy, 0, cy + ch);
+    g.addColorStop(0, "#fff1a0"); g.addColorStop(0.55, "#f5c518"); g.addColorStop(1, "#b8860b");
+    ctx.fillStyle = g;
+    const P = [[1.5, 17.5], [3.4, 4.8], [8.8, 10.2], [12, 1.5], [15.2, 10.2], [20.6, 4.8], [22.5, 17.5]];
+    ctx.beginPath(); P.forEach(([a, b], i) => ctx[i ? "lineTo" : "moveTo"](cx + (a / 24) * cw, cy + (b / 19) * ch)); ctx.closePath(); ctx.fill();
+  }
+  if (style === "estrella") { ctx.fillStyle = "#ffd23a"; ctx.shadowColor = "#ffb020"; ctx.shadowBlur = 14; ctx.textAlign = "left"; ctx.fillText(" ★", x0 + w, y); }
+  ctx.restore();
+  if (level > 0) { // a small pill after the name
+    ctx.save();
+    ctx.font = `700 26px ${DISPLAY}`;
+    const t = `NV ${level}`, tw = ctx.measureText(t).width + 22, px = x + w / 2 + (style === "estrella" ? size * 1.3 : size * 0.35);
+    ctx.fillStyle = "rgba(245,197,24,.16)"; ctx.strokeStyle = "rgba(245,197,24,.7)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(px, y - 31, tw, 38, 19) : ctx.rect(px, y - 31, tw, 38); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#f5c518"; ctx.textAlign = "left"; ctx.fillText(t, px + 11, y - 3);
+    ctx.restore();
+  }
+}
+
 /**
- * r: { song, artist, diff, lanes, score, stars, acc, maxCombo, hits, total, player, record, cover }
+ * r: { song, artist, diff, lanes, score, stars, acc, maxCombo, hits, total, player, record, cover, nameStyle, level }
  * Returns a PNG Blob.
  */
 export async function drawCard(r) {
@@ -123,10 +165,7 @@ export async function drawCard(r) {
   ctx.fillStyle = "#f2e8d8"; ctx.fillText(tag, W / 2, 1011);
 
   // player + score
-  if (r.player) {
-    fit(ctx, r.player.toUpperCase(), `600 {s}px ${DISPLAY}`, 42, W - 200);
-    ctx.fillStyle = "#a8998a"; ctx.fillText(r.player.toUpperCase(), W / 2, 1100);
-  }
+  if (r.player) drawName(ctx, r.player.toUpperCase(), r.nameStyle, r.level, W / 2, 1100, W - 260);
   const score = Math.round(r.score).toLocaleString("es-CO");
   const ss = fit(ctx, score, `700 {s}px ${DISPLAY}`, 170, W - 140);
   ctx.save();
