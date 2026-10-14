@@ -219,7 +219,17 @@ export async function adminCall(body) {
 
 /** Uploads a converted song: signed URLs for each file, then the catalog row. */
 export async function uploadSong(code, { id, row, files }, onProgress) {
-  const names = Object.keys(files);
+  await putFiles(code, id, files, onProgress);
+  await adminCall({ code, action: "save", row });
+}
+/** A library song's guitar, separated (admin.js separateExisting): its new files, then only what changed in its row. */
+export async function uploadStems(code, id, { files, patch }, onProgress) {
+  await putFiles(code, id, files, onProgress);
+  await adminCall({ code, action: "stems", id, ...patch });
+}
+async function putFiles(code, id, files, onProgress) {
+  // the chart last: its new hash is what sends players to the new audio (downloadSong), so it never points at files not there yet
+  const names = Object.keys(files).sort((a, b) => (a === "chart.json") - (b === "chart.json"));
   const { uploads } = await adminCall({ code, action: "sign", id, files: names });
   let done = 0;
   for (const u of uploads) {
@@ -229,7 +239,6 @@ export async function uploadSong(code, { id, row, files }, onProgress) {
     if (!res.ok) throw new Error(`subiendo ${u.name}: ${res.status}`);
     onProgress && onProgress(++done / uploads.length);
   }
-  await adminCall({ code, action: "save", row });
 }
 
 /* ---------------- accounts ---------------- */
