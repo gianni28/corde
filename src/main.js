@@ -2822,7 +2822,9 @@ const ADMIN_KEY = "corde.adminCode";
 function isAdminBrowser() { try { return !!localStorage.getItem(ADMIN_KEY); } catch { return false; } }
 try { $("adminCode").value = localStorage.getItem(ADMIN_KEY) || ""; } catch {}
 $("openAdmin").onclick = () => { if (app.game) return; show("admin"); loadAutoList(); };
-if (location.hash === "#admin") setTimeout(() => { show("admin"); loadAutoList(); }, 0);
+// /admin is the same page served cross-origin isolated (netlify.toml): there the guitar separation uses every core
+const adminPath = location.pathname.replace(/\/+$/, "") === "/admin";
+if (location.hash === "#admin" || adminPath) setTimeout(() => { show("admin"); loadAutoList(); }, 0);
 
 // Songs made from a bare MP3. Uploading the same song as a Clone Hero folder replaces them (even with only
 // Expert: the easier levels are built from it), and they can be deleted from here.
@@ -2945,6 +2947,8 @@ function renderSplit() {
   $("splitHint").textContent = need.length
     ? `${need.length} ${need.length > 1 ? "canciones son" : "canción es"} un solo audio: al fallar no se calla la guitarra. Tu navegador puede separarla, unos minutos por canción; deja esta pestaña abierta mientras tanto (puedes detenerlo cuando quieras y seguir otro día). Las notas hechas a mano se quedan igual; las automáticas se rehacen desde la guitarra y sus puntajes se reinician.`
     : "Todas las canciones tienen su guitarra aparte.";
+  // not isolated: one core only, about three times slower
+  if (need.length && !self.crossOriginIsolated) $("splitHint").textContent += ` Para que vaya unas 3 veces más rápido, abre ${location.origin}/admin (usa todos los núcleos de tu computador).`;
   $("splitGo").textContent = split.on ? (split.stop ? "Deteniendo…" : "Detener") : need.length ? `Separar ${need.length} ${need.length > 1 ? "canciones" : "canción"}` : "Separar";
   $("splitGo").disabled = (!split.on && !need.length) || split.stop;
   const ul = $("splitList"); ul.innerHTML = "";
