@@ -656,6 +656,9 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .ctx-res > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .ctx-res b { font: 600 18px/1.2 var(--display); letter-spacing: .02em; }
 .ctx-res small { color: #ffcf9b; font-size: 15px; }
+.reto-res { --ctx: var(--gold); }
+.reto-res svg { width: 26px; height: 26px; fill: var(--gold); flex: none; }
+.reto-line.win { color: var(--gold); text-shadow: 0 0 12px rgba(245,197,24,.5); }
 .daily-res svg { width: 28px; height: 28px; flex: none; }
 .tour-res { --ctx: var(--gold); flex-wrap: wrap; }
 .tour-res .primary { flex: 1 1 100%; font-size: 20px !important; padding: 13px 16px !important; }

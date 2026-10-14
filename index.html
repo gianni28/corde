@@ -6,6 +6,15 @@
 <title>Corde</title>
 <meta name="description" content="Corde — juego de ritmo multijugador en el navegador. Toca la guitarra con el teclado o la pantalla táctil.">
 <meta name="theme-color" content="#0a0605">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Corde">
+<meta property="og:title" content="Corde — toca rock con tu celular">
+<meta property="og:description" content="Juego de guitarra en el navegador, gratis y sin descargar nada. ¿Cuántos puntos sacas?">
+<meta property="og:image" content="https://cordegame.netlify.app/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://cordegame.netlify.app/">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -175,6 +184,10 @@
       <div class="song-head">
         <img id="setupCover" alt="">
         <div><h2 id="setupName"></h2><p id="setupArtist"></p></div>
+      </div>
+      <div class="ctx-res reto-res" id="retoBox" hidden>
+        <svg aria-hidden="true"><use href="#pick"/></svg>
+        <div><span class="label">Reto</span><b id="retoMsg"></b></div>
       </div>
       <div class="field">
         <span class="label">Dificultad</span>
@@ -466,6 +479,7 @@
         <div><span class="label">Mejor racha</span><b id="resCombo"></b></div>
       </div>
       <p class="pb-line" id="pbLine" hidden></p>
+      <p class="pb-line reto-line" id="retoLine" hidden></p>
       <button class="btn share-btn" id="shareBtn" aria-label="Compartir" title="Compartir" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#share"/></svg></button>
       <div class="ctx-res daily-res" id="dailyRes" hidden>
         <svg aria-hidden="true"><use href="#flame"/></svg>
