@@ -1,6 +1,7 @@
 // Corde — 3D renderer. Look: mid-2000s rock club stage (brick wall, amp walls, drum riser,
 // tungsten PAR cans, haze, pyro) behind a Guitar-Hero-style rosewood highway. setStage() re-tints the same
-// rig for the tour venues, from a friend's garage to a stadium (see STAGES).
+// rig for the tour venues, from a friend's garage to a stadium (see STAGES); setSkin() puts on the looks the
+// player bought in the shop (necks, notes, flames, strings, star power, crowd: see skins.js).
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
@@ -9,8 +10,9 @@ import { Pass, FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js"
 import { CopyShader } from "three/examples/jsm/shaders/CopyShader.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { createCrowd, createBand } from "./stagecrew.js";
+import { LANE_HEX, NECKS, GEMS, FLAMES, STRINGS, STARS, CROWDS, resolveSkin, grime } from "./skins.js";
 
-export const LANE_HEX = [0x1fd14a, 0xe8202c, 0xf5c518, 0x1f6fe0, 0xf57a12];
+export { LANE_HEX };
 const HL = 24; // highway length (world units)
 const LW = 1.0; // lane width
 const MAX_GEMS = 260;
@@ -27,41 +29,6 @@ function canvasTex(w, h, draw, { repeat = false, srgb = true } = {}) {
   t.anisotropy = 8;
   if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
-}
-function grime(g, w, h, n, a) {
-  for (let i = 0; i < n; i++) {
-    const x = Math.random() * w, y = Math.random() * h, r = rnd(4, 40);
-    const rg = g.createRadialGradient(x, y, 0, x, y, r);
-    rg.addColorStop(0, `rgba(0,0,0,${a})`); rg.addColorStop(1, "rgba(0,0,0,0)");
-    g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2);
-  }
-}
-
-function rosewoodTex() {
-  return canvasTex(512, 1024, (g, w, h) => {
-    g.fillStyle = "#2a1610"; g.fillRect(0, 0, w, h);
-    for (let i = 0; i < 420; i++) {
-      const x = Math.random() * w, a = rnd(0.03, 0.12);
-      g.strokeStyle = Math.random() < 0.55 ? `rgba(90,52,30,${a})` : `rgba(8,3,2,${a * 1.8})`;
-      g.lineWidth = rnd(0.5, 3);
-      g.beginPath(); g.moveTo(x, 0);
-      const ph = Math.random() * 10;
-      for (let y = 0; y <= h; y += 16) g.lineTo(x + Math.sin(y * 0.006 + ph) * 5, y);
-      g.stroke();
-    }
-    grime(g, w, h, 60, 0.18);
-    // darker edges, like a worn neck
-    const e = g.createLinearGradient(0, 0, w, 0);
-    e.addColorStop(0, "rgba(0,0,0,.65)"); e.addColorStop(0.12, "rgba(0,0,0,0)"); e.addColorStop(0.88, "rgba(0,0,0,0)"); e.addColorStop(1, "rgba(0,0,0,.65)");
-    g.fillStyle = e; g.fillRect(0, 0, w, h);
-    // mother-of-pearl dots
-    const dot = (x, y) => {
-      const rg = g.createRadialGradient(x - 5, y - 5, 1, x, y, 20);
-      rg.addColorStop(0, "rgba(255,250,240,.55)"); rg.addColorStop(0.5, "rgba(217,210,195,.4)"); rg.addColorStop(0.85, "rgba(157,151,140,.25)"); rg.addColorStop(1, "rgba(60,50,40,0)");
-      g.fillStyle = rg; g.beginPath(); g.arc(x, y, 14, 0, 7); g.fill();
-    };
-    dot(w / 2, h * 0.25); dot(w * 0.3, h * 0.75); dot(w * 0.7, h * 0.75);
-  }, { repeat: true });
 }
 
 function brickTex() {
@@ -462,19 +429,47 @@ export function createRenderer(canvas) {
   /* --- highways: one per player (two side by side when two people share a PC) --- */
   const tmpM = new THREE.Matrix4(), tmpC = new THREE.Color(), tmpV = new THREE.Vector3(), tmpS = new THREE.Vector3(), tmpQ = new THREE.Quaternion();
   const WHITE = new THREE.Color(1, 1, 1);
-  // star power on: HDR colours so the notes glow (instance colours also feed the emissive term)
-  const STAR_ON_BODY = new THREE.Color(0.1, 1.15, 2.6), STAR_ON_DOME = new THREE.Color(0.75, 1.9, 2.8), STAR_ON_GEM = new THREE.Color(0.55, 1.5, 2.6);
-  const STAR_ON_HALO = new THREE.Color(0.15, 0.7, 1.25), STAR_HALO = new THREE.Color(0.7, 0.85, 1.1), STAR_WHITE = new THREE.Color(1.5, 1.6, 1.75), STAR_TAIL = new THREE.Color(0.15, 1.1, 2.4);
+  // star-phrase notes stay white and dead notes grey whatever the skin: they tell the player something
+  const STAR_HALO = new THREE.Color(0.7, 0.85, 1.1), STAR_WHITE = new THREE.Color(1.5, 1.6, 1.75);
+  const DEAD_GEM = new THREE.Color(0x24201e), DEAD_TAIL = new THREE.Color(0x2e2a28);
   const Y_AXIS = new THREE.Vector3(0, 1, 0);
-  const BOARD_WARM = new THREE.Color(0xffffff), BOARD_STAR = new THREE.Color(0x7cc6ff), EDGE_WARM = new THREE.Color(0xfff2e0), EDGE_STAR = new THREE.Color(0x6fd8ff);
-  const LIGHT_WARM = new THREE.Color(0xffa860), LIGHT_STAR = new THREE.Color(0x5ab8ff);
+  const cols = (n) => Array.from({ length: n }, () => new THREE.Color());
+
+  // The skin (the looks bought in the shop, see skins.js and setSkin below), worked out into what the frame loop reads:
+  // every neck wears the same one. Colours are linear; above 1 they glow (and feed the bloom).
+  const sk = {
+    ids: resolveSkin(),
+    // neck: its self-light (colour, strength) and the strike light, warm and with star power
+    board: new THREE.Color(), boardStar: new THREE.Color(), boardEmissive: 0.35, light: new THREE.Color(), lightStar: new THREE.Color(),
+    // edges [left, right, strike line], their brightness; strings always lit in their lane colour (0: only when hit)
+    edge: cols(3), edgeStar: new THREE.Color(), edgeK: 1, laneGlow: 0,
+    // per lane: the colour (caps, string flashes), each gem part, the tails, a glow under the notes (haloSize 0: none)
+    lane: cols(5), body: cols(5), dome: cols(5), ring: cols(5), ringLane: false, tail: cols(5), halo: cols(5), haloSize: 0, twinkle: false,
+    // hit flames: flipbook, colour per lane, hue going round (0: no); sparks per lane [r,g,b cool, r,g,b hot]
+    fire: null, flame: cols(5), flameRainbow: 0, flameK: 1, spark: new Float32Array(30),
+    // star power: notes, tails, glows, sparks, the venue's rim light, the ready fire (flipbook + colour); hue going round
+    starBody: new THREE.Color(), starDome: new THREE.Color(), starGem: new THREE.Color(), starHalo: new THREE.Color(), starTail: new THREE.Color(),
+    starSpark: new Float32Array(6), starRim: new THREE.Color(), ready: null, readyCol: new THREE.Color(), starRainbow: false,
+  };
+  let previewStar = false; // the shop shows star power on the menus' neck: since when (s), or false
+  const DEMO_STAR = { star: true, ready: false }, DEMO_READY = { star: false, ready: true };
 
   // made once, shared by every neck
   const dotTex = softDotTex();
   const blueFire = fireFrames(6, BLUE_FIRE);
-  const boardBase = rosewoodTex(); boardBase.repeat.set(1, (HL + 5) / 6);
+  let paleFire = null; // white fire, tinted per skin through the sprite's colour (made the first time a skin needs it)
+  // neck canvases by id: the one on the necks and the one before it (the shop flips between two); older ones go
+  const neckCache = new Map();
+  function neckTex(id) {
+    let t = neckCache.get(id);
+    if (!t) { t = canvasTex(512, 1024, NECKS[id].draw, { repeat: true }); t.repeat.set(1, (HL + 5) / 6); renderer.initTexture(t); }
+    neckCache.delete(id); neckCache.set(id, t);
+    for (const [k, old] of neckCache) if (neckCache.size > 2 && k !== id) { neckCache.delete(k); old.dispose(); }
+    return t;
+  }
   const fadeAlpha = canvasTex(4, 256, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, "#fff"); gr.addColorStop(0.35, "#000"); g.fillStyle = gr; g.fillRect(0, 0, w, h); }, { srgb: false });
   const chromeMat = new THREE.MeshStandardMaterial({ color: 0xd8d4cc, metalness: 1, roughness: 0.18 });
+  const railMat = chromeMat.clone(); // the rails take the strings' metal; the button bezels stay chrome
   const railGeo = new THREE.BoxGeometry(0.12, 0.09, HL + 5), edgeGeo = new THREE.BoxGeometry(0.035, 0.02, HL + 5);
   const strGeo = new THREE.CylinderGeometry(0.016, 0.016, HL + 3, 6); strGeo.rotateX(Math.PI / 2);
   const fretGeo = new THREE.BoxGeometry(1, 0.04, 0.08);
@@ -493,30 +488,147 @@ export function createRenderer(canvas) {
   const gemDomeGeo = new THREE.SphereGeometry(0.33, 28, 10, 0, Math.PI * 2, 0, Math.PI / 2); gemDomeGeo.scale(1, 0.4, 1); gemDomeGeo.translate(0, 0.14, 0);
   const gemRingGeo = new THREE.TorusGeometry(0.365, 0.04, 10, 40); gemRingGeo.rotateX(Math.PI / 2); gemRingGeo.translate(0, 0.14, 0);
   const tailGeo = new THREE.BoxGeometry(1, 1, 1);
+  // the instance colour also lights the part, k times (a uniform: every glowing part shares one shader; the skins set
+  // it). Before the shop this waited for USE_INSTANCING_COLOR, which only the vertex shader gets, so nothing ever
+  // glowed this way: 0 is today's look.
   const glowInstance = (mat, k) => {
+    const u = (mat.userData.glow = { value: k });
     mat.onBeforeCompile = (s) => {
-      s.fragmentShader = s.fragmentShader.replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>\n#ifdef USE_INSTANCING_COLOR\n totalEmissiveRadiance += vColor * ${k.toFixed(2)};\n#endif`);
+      s.uniforms.uGlow = u;
+      s.fragmentShader = "uniform float uGlow;\n" + s.fragmentShader.replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\n#ifdef USE_COLOR\n totalEmissiveRadiance += vColor * uGlow;\n#endif");
     };
+    mat.customProgramCacheKey = () => "glow";
     return mat;
   };
   const gemBaseMat = new THREE.MeshStandardMaterial({ color: 0x080808, metalness: 0.3, roughness: 0.35 });
-  const gemBodyMat = glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.05, roughness: 0.3 }), 0.1);
-  const gemDomeMat = glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.05, roughness: 0.1 }), 0.16);
-  const gemRingMat = new THREE.MeshStandardMaterial({ color: 0xf2eee6, metalness: 0.1, roughness: 0.25, emissive: 0xffffff, emissiveIntensity: 0.12 });
-  const tailMat = glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 }), 0.35);
+  const gemBodyMat = glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.05, roughness: 0.3 }), 0);
+  const gemDomeMat = glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.05, roughness: 0.1 }), 0);
+  // the white band (lane-coloured and glowing in some skins: white instance colours and no glow by default)
+  const gemRingMat = glowInstance(new THREE.MeshStandardMaterial({ color: 0xf2eee6, metalness: 0.1, roughness: 0.25, emissive: 0xffffff, emissiveIntensity: 0.12 }), 0);
+  const tailMat = glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 }), 0);
   // star-phrase notes are white stars (like the classics), with a glow under them that doesn't need bloom (phones)
   const starShape = new THREE.Shape();
   for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + (i * Math.PI) / 5, r = i % 2 ? 0.2 : 0.47; i ? starShape.lineTo(Math.cos(a) * r, Math.sin(a) * r) : starShape.moveTo(Math.cos(a) * r, Math.sin(a) * r); }
   const starGeo = new THREE.ExtrudeGeometry(starShape, { depth: 0.07, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.045, bevelSegments: 2 });
   starGeo.rotateX(-Math.PI / 2); starGeo.translate(0, 0.07, 0);
-  const starMat = glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.1, roughness: 0.2, emissive: 0xe4f4ff, emissiveIntensity: 0.95 }), 0.45);
+  const starMat = glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.1, roughness: 0.2, emissive: 0xe4f4ff, emissiveIntensity: 0.95 }), 0);
   const haloGeo = new THREE.PlaneGeometry(1, 1); haloGeo.rotateX(-Math.PI / 2);
   const haloMat = new THREE.MeshBasicMaterial({ map: dotTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
   const SPARKS = 240;
 
+  // Gem shapes for the skins (parts: base, body, dome, ring; no ring: hidden). Same footprint (radius about .42) and
+  // height (top about .27) as the round ones, so the timing reads the same; made the first time they're worn.
+  const gemShapes = { round: { base: gemBaseGeo, body: gemBodyGeo, dome: gemDomeGeo, ring: gemRingGeo } };
+  const flat = (g) => { const n = g.toNonIndexed(); n.computeVertexNormals(); g.dispose(); return n; }; // facets
+  const at = (g, y, ry = 0) => { if (ry) g.rotateY(ry); g.translate(0, y, 0); return g; };
+  function gemShape(key) {
+    if (gemShapes[key]) return gemShapes[key];
+    let G;
+    if (key === "square") {
+      // rounded squares: a flat slab, a pillow on top, a frame for the band
+      const rsq = (r, c, hole) => {
+        const s = new THREE.Shape();
+        s.moveTo(-r + c, -r); s.lineTo(r - c, -r); s.absarc(r - c, -r + c, c, -Math.PI / 2, 0); s.lineTo(r, r - c); s.absarc(r - c, r - c, c, 0, Math.PI / 2);
+        s.lineTo(-r + c, r); s.absarc(-r + c, r - c, c, Math.PI / 2, Math.PI); s.lineTo(-r, -r + c); s.absarc(-r + c, -r + c, c, Math.PI, Math.PI * 1.5);
+        if (hole) s.holes.push(rsq(...hole));
+        return s;
+      };
+      const slab = (shape, depth, y, bevel = 0) => {
+        const g = new THREE.ExtrudeGeometry(shape, { depth, curveSegments: 4, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel * 0.8, bevelSegments: 3 });
+        g.rotateX(-Math.PI / 2); return at(g, y);
+      };
+      G = { base: slab(rsq(0.39, 0.12), 0.09, -0.045), body: slab(rsq(0.34, 0.1), 0.12, 0.02), dome: slab(rsq(0.28, 0.08), 0.02, 0.16, 0.06), ring: slab(rsq(0.37, 0.11, [0.315, 0.08]), 0.05, 0.115) };
+    } else if (key === "pixel") {
+      // 8-bit: stepped "circles" of blocks, a white pixel of shine
+      const disc = (r, h, y) => mergeGeometries([[2, 1.15], [1.6, 1.6], [1.15, 2]].map(([a, b]) => new THREE.BoxGeometry(r * a, h, r * b).translate(0, y, 0)));
+      G = { base: disc(0.42, 0.09, 0), body: disc(0.37, 0.12, 0.08), dome: disc(0.27, 0.08, 0.17), ring: new THREE.BoxGeometry(0.12, 0.03, 0.12).translate(-0.13, 0.215, -0.13) };
+    } else if (key === "crystal") {
+      // a cut stone: octagonal, faceted, a table on top
+      G = {
+        base: flat(at(new THREE.CylinderGeometry(0.4, 0.42, 0.09, 8), 0)), body: flat(at(new THREE.CylinderGeometry(0.36, 0.39, 0.12, 8), 0.08)),
+        dome: flat(at(new THREE.CylinderGeometry(0.17, 0.36, 0.13, 8), 0.205, Math.PI / 8)), ring: null,
+      };
+    } else {
+      // diamond: a white girdle and crown, the lane colour in the table and through it
+      G = {
+        base: flat(at(new THREE.CylinderGeometry(0.4, 0.42, 0.06, 16), -0.01)), body: flat(at(new THREE.CylinderGeometry(0.39, 0.4, 0.07, 16), 0.055)),
+        ring: flat(at(new THREE.CylinderGeometry(0.21, 0.39, 0.12, 16, 1, true), 0.15, Math.PI / 16)), dome: flat(at(new THREE.CylinderGeometry(0.21, 0.27, 0.09, 8), 0.2)),
+      };
+    }
+    return (gemShapes[key] = G);
+  }
+
+  /** Works the skin's ids out into `sk` and the shared materials (uniforms only: nothing recompiles). */
+  function buildSkin(ids) {
+    const N = NECKS[ids.neck], Gm = GEMS[ids.gems], F = FLAMES[ids.flames], St = STRINGS[ids.strings], Sp = STARS[ids.star];
+    sk.ids = ids;
+    // neck
+    sk.board.setHex(N.tint ?? 0xffffff); sk.boardEmissive = N.emissive; sk.light.setHex(N.light ?? 0xffa860);
+    // strings, rails, beat bars, edges
+    railMat.color.setHex(St.rail[0]); railMat.metalness = St.rail[1]; railMat.roughness = St.rail[2];
+    fretMat.color.setHex(St.fret[0]); fretMat.metalness = St.fret[1]; fretMat.roughness = St.fret[2]; fretMat.emissive.setHex(St.fretGlow);
+    St.edges.forEach((c, j) => sk.edge[j].setHex(c));
+    sk.edgeK = St.k; sk.laneGlow = St.laneGlow || 0;
+    // gems: each part's colour per lane, worked out once (the frame loop only copies)
+    const mix = (out, i, p, def = 0) => out.setHex(Gm.lanes[i]).lerp(tmpC.setHex(p.to ?? 0xffffff), p.mix ?? def).multiplyScalar(p.mul ?? 1);
+    for (let i = 0; i < 5; i++) {
+      sk.lane[i].setHex(Gm.lanes[i]);
+      mix(sk.body[i], i, Gm.body); mix(sk.dome[i], i, Gm.dome, 0.1);
+      if (Gm.ring.lane != null) mix(sk.ring[i], i, { mix: Gm.ring.lane, mul: Gm.ring.mul }); else sk.ring[i].copy(WHITE);
+      sk.tail[i].copy(sk.lane[i]).multiplyScalar(Gm.tail ?? 1);
+      if (Gm.halo) mix(sk.halo[i], i, Gm.halo);
+    }
+    sk.ringLane = Gm.ring.lane != null; sk.haloSize = Gm.halo ? Gm.halo.size : 0; sk.twinkle = !!Gm.halo?.twinkle;
+    const fin = (m, p, glow) => {
+      m.metalness = p.metal; m.roughness = p.rough;
+      if (p.color != null) m.color.setHex(p.color);
+      if (m.emissive) { m.emissive.setHex(p.emissive ?? 0); m.emissiveIntensity = p.ei ?? 0; }
+      if (m.userData.glow) m.userData.glow.value = glow;
+    };
+    fin(gemBodyMat, Gm.body, Gm.body.glow ?? 0); fin(gemDomeMat, Gm.dome, Gm.dome.glow ?? 0); tailMat.userData.glow.value = Gm.tailGlow ?? 0;
+    fin(gemRingMat, Gm.ring, Gm.ring.glow ?? 0); fin(gemBaseMat, Gm.base, 0);
+    // hit flames: today's fire, or white fire in a colour (per lane, or going round the colour wheel)
+    if (F.tint == null && !F.lane && !F.rainbow) { sk.fire = fire; sk.flame.forEach((c) => c.copy(WHITE)); }
+    else { sk.fire = paleFire || (paleFire = fireFrames(6, PALE_FIRE)); for (let i = 0; i < 5; i++) flameColor(i, F.lane ? tmpC.setHex(Gm.lanes[i]) : tmpC.setHex(F.tint ?? 0xffffff), F.k); }
+    sk.flameRainbow = F.rainbow ? 1 : 0; sk.flameK = F.k ?? 1;
+    if (F.tint == null && !F.lane && !F.rainbow) for (let i = 0; i < 5; i++) sk.spark.set([1, 0.45, 0, 1, 0.95, 0.35], i * 6); // today's warm sparks
+    // star power
+    sk.starRainbow = !!Sp.rainbow;
+    if (Sp.hue == null) {
+      // today's electric blue, exactly
+      sk.starBody.setRGB(0.1, 1.15, 2.6); sk.starDome.setRGB(0.75, 1.9, 2.8); sk.starGem.setRGB(0.55, 1.5, 2.6); sk.starHalo.setRGB(0.15, 0.7, 1.25); sk.starTail.setRGB(0.15, 1.1, 2.4);
+      sk.boardStar.setHex(0x7cc6ff); sk.edgeStar.setHex(0x6fd8ff); sk.lightStar.setHex(0x5ab8ff); sk.starRim.setHex(0x3fb4ff).multiplyScalar(1.1);
+      sk.starSpark.set([0.35, 0.75, 1, 0.65, 0.95, 1]); sk.ready = blueFire; sk.readyCol.copy(WHITE);
+    } else starColors(tmpC.setHex(Sp.hue));
+  }
+  const PALE_FIRE = [[255, 255, 255], [236, 236, 236], [196, 196, 196], [140, 140, 140]];
+  const hue = new THREE.Color();
+  // a flame's colour from a hue: k above 1 burns hotter (the white core shows); its sparks go from that colour to white
+  function flameColor(i, c, k = 1) {
+    const m = Math.max(c.r, c.g, c.b, 1e-4);
+    hue.setRGB(c.r / m, c.g / m, c.b / m);
+    sk.flame[i].copy(hue).lerp(WHITE, 0.12).multiplyScalar(k);
+    sparkRange(sk.spark, i * 6, 0, 0.6);
+  }
+  // sparks from the hue: [cool r,g,b, hot r,g,b] at o, mixed towards white by a and b (no allocation: runs per frame)
+  function sparkRange(out, o, a, b) {
+    out[o] = hue.r + (1 - hue.r) * a; out[o + 1] = hue.g + (1 - hue.g) * a; out[o + 2] = hue.b + (1 - hue.b) * a;
+    out[o + 3] = hue.r + (1 - hue.r) * b; out[o + 4] = hue.g + (1 - hue.g) * b; out[o + 5] = hue.b + (1 - hue.b) * b;
+  }
+  // every star power colour from one hue (the shades today's blue has, a little less white so warm hues stay saturated)
+  function starColors(c) {
+    const m = Math.max(c.r, c.g, c.b, 1e-4);
+    hue.setRGB(c.r / m, c.g / m, c.b / m);
+    sk.starBody.copy(hue).multiplyScalar(1.9); sk.starDome.copy(hue).lerp(WHITE, 0.1).multiplyScalar(2.1); sk.starGem.copy(hue).lerp(WHITE, 0.15).multiplyScalar(2.2);
+    sk.starHalo.copy(hue).multiplyScalar(1.25); sk.starTail.copy(hue).multiplyScalar(2);
+    sk.boardStar.copy(hue).lerp(WHITE, 0.18); sk.edgeStar.copy(hue).lerp(WHITE, 0.25); sk.lightStar.copy(hue).lerp(WHITE, 0.05); sk.starRim.copy(hue).multiplyScalar(1.1);
+    sparkRange(sk.starSpark, 0, 0.4, 0.75);
+    sk.ready = paleFire || (paleFire = fireFrames(6, PALE_FIRE)); sk.readyCol.copy(hue).lerp(WHITE, 0.15).multiplyScalar(1.5);
+  }
+
   function createHighway() {
     const hwy = new THREE.Group(); scene.add(hwy);
-    const h = { group: hwy, lanes: 5, starGlow: 0, readyGlow: 0, phraseT: 9, sparkBlue: false };
+    const h = { group: hwy, lanes: 5, starGlow: 0, readyGlow: 0, phraseT: 9, sparkStar: false };
     const laneX = (i) => (i - (h.lanes - 1) / 2) * LW;
     h.laneX = laneX;
     h.width = () => h.lanes * LW + 0.5;
@@ -524,16 +636,18 @@ export function createRenderer(canvas) {
     // the light over the strike line (warm; blue with star power)
     const strikeLight = new THREE.PointLight(0xffa860, 1.6, 5, 1.8); strikeLight.position.set(0, 1.3, 0.8); hwy.add(strikeLight);
 
-    const boardTex = boardBase.clone(); boardTex.needsUpdate = true;
-    const board = new THREE.Mesh(new THREE.PlaneGeometry(1, HL + 5), new THREE.MeshStandardMaterial({ map: boardTex, roughness: 0.5, metalness: 0.05, emissiveMap: boardTex, emissive: 0xffffff, emissiveIntensity: 0.35 }));
+    // the neck's own copy of the skin's canvas (each neck scrolls it at its own speed)
+    let boardTex = null;
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(1, HL + 5), new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0.05, emissive: 0xffffff, emissiveIntensity: 0.35 }));
     board.rotation.x = -Math.PI / 2; board.position.set(0, 0, -HL / 2 + 2.5); hwy.add(board);
     // fade the far end of the neck into darkness
     const fade = new THREE.Mesh(new THREE.PlaneGeometry(1, 8), new THREE.MeshBasicMaterial({ color: 0x070403, transparent: true, depthWrite: false, alphaMap: fadeAlpha }));
     fade.rotation.x = -Math.PI / 2; fade.position.set(0, 0.2, -HL + 3.6); hwy.add(fade);
 
-    const edgeMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xfff2e0, emissiveIntensity: 0.55 });
-    const rails = [-1, 1].map(() => { const m = new THREE.Mesh(railGeo, chromeMat); m.position.set(0, 0.04, -HL / 2 + 2.5); hwy.add(m); return m; });
-    const edges = [-1, 1].map(() => { const m = new THREE.Mesh(edgeGeo, edgeMat); m.position.set(0, 0.1, -HL / 2 + 2.5); hwy.add(m); return m; });
+    // glowing edges: left, right and along the strike line (one colour each, so a skin can make them two-tone)
+    const edgeMats = [0, 1, 2].map(() => new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xfff2e0, emissiveIntensity: 0.55 }));
+    const rails = [-1, 1].map(() => { const m = new THREE.Mesh(railGeo, railMat); m.position.set(0, 0.04, -HL / 2 + 2.5); hwy.add(m); return m; });
+    const edges = [0, 1].map((j) => { const m = new THREE.Mesh(edgeGeo, edgeMats[j]); m.position.set(0, 0.1, -HL / 2 + 2.5); hwy.add(m); return m; });
 
     // strings (silver; flash the lane colour when hit)
     const strings = [];
@@ -549,7 +663,7 @@ export function createRenderer(canvas) {
 
     // strikeline bar
     const strikeBar = new THREE.Mesh(strikeGeo, strikeMat); strikeBar.position.set(0, 0.03, 0); hwy.add(strikeBar);
-    const strikeEdge = new THREE.Mesh(strikeEdgeGeo, edgeMat); strikeEdge.position.set(0, 0.07, -0.12); hwy.add(strikeEdge);
+    const strikeEdge = new THREE.Mesh(strikeEdgeGeo, edgeMats[2]); strikeEdge.position.set(0, 0.07, -0.12); hwy.add(strikeEdge);
 
     const buttons = [];
     for (let i = 0; i < 5; i++) {
@@ -568,7 +682,7 @@ export function createRenderer(canvas) {
     const gemBase = mk(gemBaseGeo, gemBaseMat), gemBody = mk(gemBodyGeo, gemBodyMat), gemDome = mk(gemDomeGeo, gemDomeMat), gemRing = mk(gemRingGeo, gemRingMat);
     const tails = mk(tailGeo, tailMat), starGem = mk(starGeo, starMat), halos = mk(haloGeo, haloMat);
     halos.renderOrder = 2;
-    [gemBody, gemDome, tails, starGem, halos].forEach((m) => m.setColorAt(0, new THREE.Color()));
+    [gemBody, gemDome, gemRing, tails, starGem, halos].forEach((m) => m.setColorAt(0, new THREE.Color()));
 
     // hit fire + sparks
     const flames = [];
@@ -596,7 +710,9 @@ export function createRenderer(canvas) {
     const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({ map: dotTex, size: 0.1, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
     sparks.frustumCulled = false; hwy.add(sparks);
     let sparkIdx = 0;
-    function burst(x, n, white = false, blue = false, power = 1) {
+    // star: sparks in the star power colour (default: the lane's flame colour, from cool to hot)
+    function burst(x, n, white = false, star = false, power = 1, lane = 0) {
+      const c = h.sparkStar || star ? sk.starSpark : sk.spark, o = h.sparkStar || star ? 0 : lane * 6;
       for (let k = 0; k < n; k++) {
         const i = sparkIdx++ % SPARKS;
         spPos[i * 3] = x + rnd(-0.25, 0.25); spPos[i * 3 + 1] = 0.25; spPos[i * 3 + 2] = rnd(-0.1, 0.1);
@@ -604,10 +720,30 @@ export function createRenderer(canvas) {
         sparkLife[i] = rnd(0.35, 0.7) * Math.sqrt(power);
         const hot = Math.random();
         if (white) { spCol[i * 3] = 0.85 + hot * 0.15; spCol[i * 3 + 1] = 0.92 + hot * 0.08; spCol[i * 3 + 2] = 1; }
-        else if (h.sparkBlue || blue) { spCol[i * 3] = 0.35 + hot * 0.3; spCol[i * 3 + 1] = 0.75 + hot * 0.2; spCol[i * 3 + 2] = 1; }
-        else { spCol[i * 3] = 1; spCol[i * 3 + 1] = 0.45 + hot * 0.5; spCol[i * 3 + 2] = hot * 0.35; }
+        else for (let j = 0; j < 3; j++) spCol[i * 3 + j] = c[o + j] + hot * (c[o + 3 + j] - c[o + j]);
       }
     }
+
+    /** Puts on the skin in `sk` (buildSkin): the neck's canvas, gem shapes, colours that are set once. */
+    h.applySkin = () => {
+      const N = NECKS[sk.ids.neck], base = neckTex(sk.ids.neck);
+      if (!boardTex || boardTex.source !== base.source) {
+        // a copy shares the uploaded canvas; cloning marks it changed, which would upload it all over again
+        const v = base.source.version, t = base.clone(); t.source.version = v;
+        board.material.map = board.material.emissiveMap = t;
+        boardTex?.dispose(); boardTex = t;
+      }
+      board.material.roughness = N.rough ?? 0.5; board.material.metalness = N.metal ?? 0.05;
+      const G = gemShape(GEMS[sk.ids.gems].shape);
+      gemBase.geometry = G.base; gemBody.geometry = G.body; gemDome.geometry = G.dome;
+      gemRing.visible = !!G.ring; if (G.ring) gemRing.geometry = G.ring;
+      const S = STRINGS[sk.ids.strings];
+      for (let i = 0; i < 5; i++) {
+        const m = strings[i].mesh.material; m.color.setHex(S.string[0]); m.metalness = S.string[1]; m.roughness = S.string[2];
+        const cap = buttons[i].cap.material; cap.color.copy(sk.lane[i]); cap.emissive.copy(sk.lane[i]);
+        flames[i].sp.material.color.copy(sk.flame[i]);
+      }
+    };
 
     h.layout = (n) => {
       h.lanes = n;
@@ -631,11 +767,11 @@ export function createRenderer(canvas) {
       if (lane >= h.lanes) return;
       flames[lane].t = 0;
       strings[lane].vib = 1; strings[lane].glow = 1; buttons[lane].press = 1;
-      burst(laneX(lane), sustain ? 6 : 14);
+      burst(laneX(lane), sustain ? 6 : 14, false, false, 1, lane);
     };
     h.holdSpark = (lane) => {
       if (lane >= h.lanes) return;
-      if (Math.random() < 0.45) burst(laneX(lane), 1);
+      if (Math.random() < 0.45) burst(laneX(lane), 1, false, false, 1, lane);
       const f = flames[lane]; if (f.t > 0.12) f.t = 0.12;
       strings[lane].glow = Math.max(strings[lane].glow, 0.7); strings[lane].vib = Math.max(strings[lane].vib, 0.4);
     };
@@ -643,25 +779,30 @@ export function createRenderer(canvas) {
     h.starPhrase = () => { h.phraseT = 0; for (let i = 0; i < h.lanes; i++) burst(laneX(i), 16, true, false, 1.35); };
 
     // s: { t, look, notes:[{t,lane,dur,state,holding}], from, pressed[], beats[[t,bar]], star, starReady }
-    h.update = (s, { now, dt, pulse }) => {
-      const { t, look, notes, from = 0, pressed = [], beats = [], star = false, starReady = false } = s;
+    // demo: the menus' neck with star power on (the shop's preview), unless the caller says otherwise
+    h.update = (s, { now, dt, pulse, demo = null }) => {
+      const { t, look, notes, from = 0, pressed = [], beats = [] } = s;
+      const star = s.star ?? demo?.star ?? false, starReady = s.starReady ?? demo?.ready ?? false;
       const lanes = h.lanes;
       const speed = HL / look;
       const zOf = (time) => -(time - t) * speed;
       strikeLight.intensity = 1.4 + pulse * 0.8;
-      edgeMat.emissiveIntensity = 0.5 + pulse * 0.35;
-      // star power: the neck, its edges and the strike light turn blue
+      // star power: the neck, its edges and the strike light turn blue (or the skin's colour)
       h.starGlow += ((star ? 1 : 0) - h.starGlow) * Math.min(1, dt * 6);
       h.readyGlow += ((starReady && !star ? 1 : 0) - h.readyGlow) * Math.min(1, dt * 5);
       h.phraseT += dt;
       const starGlow = h.starGlow, readyGlow = h.readyGlow;
+      if (sk.starRainbow && (starGlow > 0.005 || readyGlow > 0.005)) starColors(hue.setHSL((now * 0.15) % 1, 1, 0.5));
       const flash = h.phraseT < 0.5 ? Math.pow(1 - h.phraseT / 0.5, 2) : 0;
-      h.sparkBlue = star;
-      board.material.emissive.copy(BOARD_WARM).lerp(BOARD_STAR, starGlow);
-      board.material.emissiveIntensity = 0.35 + starGlow * 0.3 + flash * 0.9;
-      edgeMat.emissive.copy(EDGE_WARM).lerp(EDGE_STAR, Math.max(starGlow, readyGlow * (0.55 + 0.45 * Math.sin(now * 9))));
-      edgeMat.emissiveIntensity += starGlow * 0.5 + readyGlow * 0.6 + flash * 2;
-      strikeLight.color.copy(LIGHT_WARM).lerp(LIGHT_STAR, Math.max(starGlow, readyGlow * 0.7));
+      h.sparkStar = star;
+      board.material.emissive.copy(sk.board).lerp(sk.boardStar, starGlow);
+      board.material.emissiveIntensity = sk.boardEmissive + starGlow * 0.3 + flash * 0.9;
+      const edgeK = Math.max(starGlow, readyGlow * (0.55 + 0.45 * Math.sin(now * 9)));
+      for (let j = 0; j < 3; j++) {
+        edgeMats[j].emissive.copy(sk.edge[j]).lerp(sk.edgeStar, edgeK);
+        edgeMats[j].emissiveIntensity = (0.5 + pulse * 0.35 + starGlow * 0.5 + readyGlow * 0.6 + flash * 2) * sk.edgeK;
+      }
+      strikeLight.color.copy(sk.light).lerp(sk.lightStar, Math.max(starGlow, readyGlow * 0.7));
       strikeLight.intensity += flash * 3 + readyGlow * 0.6;
       // phrase completed: white flares on every fret
       for (let i = 0; i < lanes; i++) {
@@ -673,7 +814,7 @@ export function createRenderer(canvas) {
       readyFire.forEach((sp, k) => {
         sp.visible = readyGlow > 0.02;
         if (!sp.visible) return;
-        sp.material.map = blueFire[(Math.floor(now * 20) + k * 2) % blueFire.length];
+        sp.material.map = sk.ready[(Math.floor(now * 20) + k * 2) % sk.ready.length]; sp.material.color.copy(sk.readyCol);
         sp.material.opacity = readyGlow * (k > 1 ? 0.6 : 0.95);
         const fl = 1 + 0.12 * Math.sin(now * 23 + k * 2);
         sp.scale.set((k > 1 ? 0.7 : 0.95) * fl, (k > 1 ? 1.35 : 2.0) * fl * (0.7 + 0.3 * readyGlow), 1);
@@ -711,7 +852,7 @@ export function createRenderer(canvas) {
             const dead = n.state === 2 || (n.state === 1 && !n.holding);
             const wob = n.holding ? Math.sin(now * 45 + i) * 0.035 : 0;
             tmpM.compose(tmpV.set(x + wob, 0.075, z1 + len / 2), tmpQ.identity(), tmpS.set(n.holding ? 0.2 : 0.16, 0.045, len));
-            if (dead) tmpC.setHex(0x2e2a28); else if (star) tmpC.copy(STAR_TAIL); else if (isStar) tmpC.copy(STAR_WHITE); else tmpC.setHex(LANE_HEX[n.lane]);
+            tmpC.copy(dead ? DEAD_TAIL : star ? sk.starTail : isStar ? STAR_WHITE : sk.tail[n.lane]);
             if (n.holding) tmpC.multiplyScalar(1.6);
             tails.setColorAt(ti, tmpC);
             tails.setMatrixAt(ti, tmpM); ti++;
@@ -724,21 +865,29 @@ export function createRenderer(canvas) {
           // a white star (blue while star power is on), with a soft glow under it
           tmpQ.setFromAxisAngle(Y_AXIS, Math.sin(now * 2.2 + i) * 0.35);
           tmpM.compose(tmpV.set(x, 0.05, z), tmpQ, tmpS.setScalar(0.95 * (0.96 + 0.06 * starPulse)));
-          starGem.setMatrixAt(si, tmpM); starGem.setColorAt(si, star ? STAR_ON_GEM : WHITE); si++;
+          starGem.setMatrixAt(si, tmpM); starGem.setColorAt(si, star ? sk.starGem : WHITE); si++;
           tmpM.compose(tmpV.set(x, 0.03, z), tmpQ.identity(), tmpS.set(1.9 * starPulse, 1, 1.9 * starPulse));
-          halos.setMatrixAt(hi, tmpM); halos.setColorAt(hi, star ? STAR_ON_HALO : STAR_HALO); hi++;
+          halos.setMatrixAt(hi, tmpM); halos.setColorAt(hi, star ? sk.starHalo : STAR_HALO); hi++;
           continue;
         }
         tmpM.compose(tmpV.set(x, 0.05, z), tmpQ.identity(), tmpS.set(0.9, 0.9, 0.9));
         gemBase.setMatrixAt(gi, tmpM); gemBody.setMatrixAt(gi, tmpM); gemDome.setMatrixAt(gi, tmpM); gemRing.setMatrixAt(gi, tmpM);
-        if (n.state === 2) { tmpC.setHex(0x24201e); gemBody.setColorAt(gi, tmpC); gemDome.setColorAt(gi, tmpC); }
+        if (n.state === 2) { gemBody.setColorAt(gi, DEAD_GEM); gemDome.setColorAt(gi, DEAD_GEM); gemRing.setColorAt(gi, sk.ringLane ? DEAD_GEM : WHITE); }
         else if (star) {
-          // star power on: every note turns electric blue and glows
-          gemBody.setColorAt(gi, STAR_ON_BODY); gemDome.setColorAt(gi, STAR_ON_DOME);
+          // star power on: every note turns electric blue (or the skin's colour) and glows
+          gemBody.setColorAt(gi, sk.starBody); gemDome.setColorAt(gi, sk.starDome); gemRing.setColorAt(gi, sk.ringLane ? sk.starGem : WHITE);
           tmpM.compose(tmpV.set(x, 0.03, z), tmpQ.identity(), tmpS.set(1.45, 1, 1.45));
-          halos.setMatrixAt(hi, tmpM); halos.setColorAt(hi, STAR_ON_HALO); hi++;
+          halos.setMatrixAt(hi, tmpM); halos.setColorAt(hi, sk.starHalo); hi++;
         }
-        else { tmpC.setHex(LANE_HEX[n.lane]); gemBody.setColorAt(gi, tmpC); gemDome.setColorAt(gi, tmpC.lerp(WHITE, 0.1)); }
+        else {
+          gemBody.setColorAt(gi, sk.body[n.lane]); gemDome.setColorAt(gi, sk.dome[n.lane]); gemRing.setColorAt(gi, sk.ring[n.lane]);
+          if (sk.haloSize) {
+            // a glow under the note in its own colour (neon: reads without bloom; diamonds: a twinkle)
+            const tw = sk.twinkle ? 0.55 + 0.45 * Math.pow(Math.max(0, Math.sin(now * 5 + i * 2.4)), 3) : 1, sz = sk.haloSize * (sk.twinkle ? 0.8 + 0.3 * tw : 1);
+            tmpM.compose(tmpV.set(x, 0.03, z), tmpQ.identity(), tmpS.set(sz, 1, sz));
+            halos.setMatrixAt(hi, tmpM); halos.setColorAt(hi, tmpC.copy(sk.halo[n.lane]).multiplyScalar(tw)); hi++;
+          }
+        }
         gi++;
       }
       for (const m of [gemBase, gemBody, gemDome, gemRing]) { m.count = gi; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
@@ -755,10 +904,11 @@ export function createRenderer(canvas) {
         const st = strings[i];
         st.vib *= Math.pow(0.02, dt); st.glow *= Math.pow(0.002, dt);
         st.mesh.position.x = laneX(i) + Math.sin(now * 95 + i) * 0.035 * st.vib;
-        st.mesh.material.emissive.setHex(LANE_HEX[i]).multiplyScalar(st.glow * 0.4);
+        st.mesh.material.emissive.copy(sk.lane[i]).multiplyScalar(sk.laneGlow + st.glow * 0.4);
         const f = flames[i]; f.t += dt;
         const k = f.t / 0.32;
-        f.sp.material.map = fire[(Math.floor(now * 22) + i) % fire.length];
+        if (sk.flameRainbow) { flameColor(i, hue.setHSL((now * 0.25 + i / 5) % 1, 1, 0.5), sk.flameK); f.sp.material.color.copy(sk.flame[i]); }
+        f.sp.material.map = sk.fire[(Math.floor(now * 22) + i) % sk.fire.length];
         f.sp.material.opacity = k < 1 ? (1 - k) : 0;
         f.sp.visible = k < 1;
         f.sp.scale.set(0.95 + k * 0.25, 1.5 + k * 0.9, 1);
@@ -770,9 +920,11 @@ export function createRenderer(canvas) {
       }
       sparkGeo.attributes.position.needsUpdate = true; sparkGeo.attributes.color.needsUpdate = true;
     };
+    h.applySkin();
     h.layout(5);
     return h;
   }
+  buildSkin(sk.ids);
   const hws = [createHighway()];
   // with two players each neck has its own camera and its own half of the screen; the venue camera stays centred
   const hwCams = [new THREE.PerspectiveCamera(55, 1, 0.1, 220), new THREE.PerspectiveCamera(55, 1, 0.1, 220)];
@@ -1065,14 +1217,14 @@ export function createRenderer(canvas) {
   const scr = { x: 0, y: 0 };
 
   const api = {
-    _internals: { camera, baseCam, bg, crowd },
+    _internals: { camera, baseCam, bg, crowd, renderer, scene },
     setLanes: layoutLanes,
     /** 1 player (one neck in the middle) or 2 (two necks, split screen). */
     setPlayers(n) {
       n = n > 1 ? 2 : 1;
       if (n === players) return;
       players = n;
-      while (hws.length < n) { const h = createHighway(); h.group.position.x = SPLIT_X * hws.length; h.layout(hws[0].lanes); hws.push(h); }
+      while (hws.length < n) { const h = createHighway(); h.group.position.x = SPLIT_X * hws.length; h.layout(hws[0].lanes); hws.push(h); } // wears the skin already
       hws.forEach((h, k) => (h.group.visible = k < n));
       scenePass.enabled = n === 1; splitPass.enabled = n > 1;
       applyLevel(); // MSAA is for one player only; fits the cameras and looks at the screen again
@@ -1108,6 +1260,23 @@ export function createRenderer(canvas) {
     setHype(v) { hype = Math.max(0, Math.min(1, v)); },
     /** A star phrase was completed: a white flash and a fountain of white sparks over every fret. */
     starPhrase(p = 0) { hws[p]?.starPhrase(); },
+    /** The looks from the shop, { neck, gems, flames, strings, star, crowd } of ids (skins.js; missing or unknown: the
+     *  default), on every neck. Menus only: a new neck draws its canvas (tens of ms on a phone), the rest is cheap. */
+    setSkin(equipped) {
+      const ids = resolveSkin(equipped);
+      if (Object.keys(ids).every((k) => ids[k] === sk.ids[k])) return;
+      const crowdWas = sk.ids.crowd;
+      buildSkin(ids);
+      hws.forEach((h) => h.applySkin());
+      crowd.setLights(CROWDS[ids.crowd]);
+      if (ids.crowd !== crowdWas) crowd.showLights(4); // a new crowd look: they hold up their lights for a moment
+    },
+    /** The ids being shown (after defaults). */
+    skinInfo() { return { ...sk.ids }; },
+    /** The shop's preview: while on, the menus' neck shows star power (and the ready fire), not during a song. */
+    previewStar(on) { previewStar = on ? previewStar || performance.now() / 1000 : false; },
+    /** The shop's preview: while on, the crowd holds up its lights. */
+    previewCrowd(on) { crowd.showLights(on ? Infinity : 0); },
     laneFromClientX(x, rect) {
       const h = hws[0];
       let best = 0, bd = 1e9;
@@ -1148,8 +1317,9 @@ export function createRenderer(canvas) {
       }
       const bpos = beatTrack.count + phase;
 
-      // the necks (each player's notes, buttons, fire and star power)
-      for (let k = 0; k < players; k++) hws[k].update(P[k] || P[0], { now, dt, pulse });
+      // the necks (each player's notes, buttons, fire and star power); the shop's star preview: on for 5 s, ready for 2
+      const demo = previewStar && !state.players ? (now - previewStar) % 7 < 5 ? DEMO_STAR : DEMO_READY : null;
+      for (let k = 0; k < players; k++) hws[k].update(P[k] || P[0], { now, dt, pulse, demo });
       let starGlow = 0; for (let k = 0; k < players; k++) starGlow = Math.max(starGlow, hws[k].starGlow);
 
       // lights: brighter, punchier and changing colour faster when the song is loud; dim and warm when it's calm
@@ -1174,7 +1344,7 @@ export function createRenderer(canvas) {
       peopleDt += dt;
       if (frameNo % LEVELS[level].bgEvery === 0) {
         rimCol.copy(colA).lerp(colB, 0.35).multiplyScalar((0.55 + 0.5 * E + pk * 0.5) * S.rim);
-        if (starGlow > 0.01) rimCol.lerp(tmpC.setHex(0x3fb4ff).multiplyScalar(1.1), starGlow * 0.75);
+        if (starGlow > 0.01) rimCol.lerp(sk.starRim, starGlow * 0.75);
         const fdt = Math.min(0.1, peopleDt); peopleDt = 0;
         camera.updateMatrixWorld();
         const f = { bpos, ph: phase, bar: beatTrack.bar, E: Math.min(1, E + starGlow * 0.12), P: punch, hype: hypeS, star: starGlow, dt: fdt, now, rim: rimCol };
