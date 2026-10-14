@@ -30,7 +30,7 @@ const crowd = (a, b = a) => `radial-gradient(ellipse 9% 30% at 8% 100%, #050303 
   + ` radial-gradient(circle, ${a} 0 1.6px, transparent 2.6px) 3px 4px / 17px 13px, radial-gradient(circle, ${b} 0 1.4px, transparent 2.4px) 11px 9px / 23px 15px, linear-gradient(180deg, #120c14, #241418)`;
 const glow = (c) => `radial-gradient(circle at 50% 50%, #fff 0 7%, ${c} 20%, transparent 58%), radial-gradient(circle at 50% 50%, ${c}55, transparent 75%), #06080d`;
 
-/** Every item: { slot, id, name, price, req?, desc?, sw?, cols? } — req: the logro that gives it (it's claimed, not bought);
+/** Every item: { slot, id, name, price, req?, lvl? (a level's prize, claimed like a logro's), desc?, sw?, cols? } — req: the logro that gives it (it's claimed, not bought);
  *  sw: the card's CSS background; cols: the colours of the card's little gems / flames / name / streak. */
 export const ITEMS = [
   // mástiles (the neck the notes come down)
@@ -96,6 +96,9 @@ export const ITEMS = [
   { slot: "name", id: "fuego", name: "Fuego", price: 800 },
   { slot: "name", id: "arcoiris", name: "Arcoíris", price: 1500 },
   { slot: "name", id: "corona", name: "Corona", price: 0, req: "leyenda", desc: "Tu nombre en oro y con corona en todas las clasificaciones. Para leyendas de la gira." },
+  { slot: "name", id: "plata", name: "Plata", price: 0, lvl: 5, desc: "Tu nombre en plata brillante. Premio del nivel 5." },
+  { slot: "name", id: "electrico", name: "Eléctrico", price: 0, lvl: 10, desc: "Tu nombre echando chispas. Premio del nivel 10." },
+  { slot: "name", id: "estrella", name: "Estrella", price: 0, lvl: 20, desc: "Tu nombre con una estrella que brilla. Premio del nivel 20." },
   // rachas (the "¡Racha de 50!" pop-up)
   { slot: "streak", id: "clasica", name: "Clásica", price: 0 },
   { slot: "streak", id: "neon", name: "Neón", price: 250 },

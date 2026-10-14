@@ -58,6 +58,11 @@ button { cursor: pointer; }
   .home .logo h1 { font-size: clamp(104px, 15.3vw, 220px); } /* leaves room for the board on the right */
   .home .home-board { width: clamp(300px, 30vw, 400px); flex: none; }
 }
+/* short PC screens: a smaller logo leaves room for the level card */
+@media (min-width: 1000px) and (max-height: 820px) {
+  .home .logo h1 { font-size: min(clamp(104px, 15.3vw, 220px), 23vh); }
+  .home-main { gap: 20px; }
+}
 .logo { position: relative; }
 .logo h1 {
   position: relative; margin: 0; font: 400 clamp(104px, 19vw, 220px)/.86 var(--rock); letter-spacing: .01em;
@@ -607,6 +612,34 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
   background: linear-gradient(100deg, rgba(196,22,28,.55), rgba(40,14,10,.85) 55%, rgba(14,10,9,.9)); border: 1px solid #000; border-radius: 4px;
   box-shadow: inset 0 0 0 1px rgba(255,140,60,.35), 0 10px 30px rgba(0,0,0,.5); color: var(--ink); transition: transform .12s, filter .12s; }
 .daily-card:hover, .daily-card:focus-visible { transform: translateX(6px); filter: brightness(1.12); outline: none; }
+/* level and the day's challenges */
+.retos-card { pointer-events: auto; display: flex; flex-direction: column; gap: 5px; width: min(380px, 100%); margin-top: -16px; padding: 8px 12px; color: var(--ink);
+  background: linear-gradient(100deg, rgba(40,30,8,.85), rgba(14,10,9,.9)); border: 1px solid #000; border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(245,197,24,.3), 0 10px 30px rgba(0,0,0,.5); }
+.rc-head { display: flex; align-items: center; gap: 10px; width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.rc-count { font: 700 12px var(--display); letter-spacing: .1em; text-transform: uppercase; color: #ffd27a; white-space: nowrap; }
+.rc-count::after { content: " ▾"; }
+.retos-card.open .rc-count::after { content: " ▴"; }
+/* the list opens over what's above the card, so the menu never moves */
+.retos-card { position: relative; }
+.rc-drop { position: absolute; left: -1px; right: -1px; bottom: calc(100% + 4px); z-index: 2; display: flex; flex-direction: column; gap: 5px; padding: 10px 12px;
+  background: linear-gradient(180deg, #2a2008, #120d09); border: 1px solid #000; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(245,197,24,.35), 0 10px 30px rgba(0,0,0,.6); }
+.retos-card:not(.open) .rc-drop { display: none; }
+.rc-lvl { font: 700 13px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--gold); white-space: nowrap; }
+.rc-lvl b { font-size: 20px; letter-spacing: 0; }
+.rc-bar { flex: 1; height: 7px; border-radius: 4px; background: rgba(255,255,255,.1); overflow: hidden; box-shadow: inset 0 0 0 1px #000; }
+.rc-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #b8860b, #f5c518, #fff1a0); transition: width .4s; }
+.rc-head small { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.rc-label { font: 700 11px var(--display); letter-spacing: .2em; text-transform: uppercase; color: #ffd27a; }
+.rc-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.rc-list li { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.rc-list li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-list li em { font-style: normal; font-size: 12px; color: var(--muted); }
+.rc-list li b { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; color: var(--gold); }
+.rc-list li b svg { width: 13px; height: 13px; fill: var(--gold); }
+.rc-list li.done span { color: var(--muted); text-decoration: line-through; }
+.rc-list li.done b { color: #4cff7a; }
+.rc-foot { font-size: 12px; color: var(--muted); }
 /* cover art, or a flame when the song has none */
 .dc-art, .dh-art { position: relative; display: grid; place-items: center; overflow: hidden; background: radial-gradient(circle at 50% 70%, #6a1a08, #1a0906 70%); box-shadow: 0 0 0 1px #000, 0 0 0 2px rgba(255,180,120,.4); }
 .dc-art { width: 58px; height: 58px; }
@@ -999,6 +1032,12 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .nm-arcoiris { background: linear-gradient(90deg, #ff4a4a, #ffb020, #ffe83a, #4cff7a, #3ac8ff, #a45bff, #ff4fa8, #ff4a4a) 0 0 / 200% 100%;
   -webkit-background-clip: text; background-clip: text; color: transparent; animation: nmRainbow 4s linear infinite; }
 @keyframes nmRainbow { to { background-position: 200% 0; } }
+.nm-plata { background: linear-gradient(180deg, #ffffff 0%, #c9d3dc 45%, #7d8a96 100%); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 6px rgba(200,220,240,.35)); }
+.nm-electrico { color: #e9fbff; text-shadow: 0 0 4px #3fe8ff, 0 0 12px #3fa8ff, 0 0 22px #8a5bff; animation: nmZap 2.2s steps(1) infinite; }
+@keyframes nmZap { 0%, 100% { opacity: 1; } 92% { opacity: .55; } 95% { opacity: 1; } 97% { opacity: .7; } }
+.nm-estrella { color: #fff6d0; text-shadow: 0 0 8px rgba(255,214,90,.7), 0 0 18px rgba(255,170,40,.45); }
+.nm-estrella::after { content: "★"; margin-left: .25em; color: #ffd23a; text-shadow: 0 0 8px #ffb020; animation: nmTwinkle 1.6s ease-in-out infinite; display: inline-block; }
+@keyframes nmTwinkle { 50% { transform: scale(.8) rotate(20deg); opacity: .7; } }
 .nm-corona::before { content: ""; display: inline-block; width: 1.05em; height: .8em; margin-right: .25em; vertical-align: -.04em; background: linear-gradient(180deg, #fff1a0, #f5c518 55%, #b8860b);
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 19'%3E%3Cpath d='M1.5 17.5 3.4 4.8l5.4 5.4L12 1.5l3.2 8.7 5.4-5.4 1.9 12.7z'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 19'%3E%3Cpath d='M1.5 17.5 3.4 4.8l5.4 5.4L12 1.5l3.2 8.7 5.4-5.4 1.9 12.7z'/%3E%3C/svg%3E") center / contain no-repeat; }

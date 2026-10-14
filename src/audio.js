@@ -75,7 +75,6 @@ export class Player {
     this.startAt = 0;
     this.lastHeard = 0;
     this.paused = false;
-    this.missSfx = true;
   }
   /** Start after `delay` seconds, from song second `from` (practice starts in the middle of the song). */
   start(delay, from = 0) {
@@ -137,17 +136,19 @@ export class Player {
     const c = audioCtx();
     this.guitarGain.gain.setTargetAtTime(on ? 1 : 0, c.currentTime, on ? 0.01 : 0.03);
   }
-  /** Miss: a short, quiet muted-string "chk" (well under the song), rate-limited. */
-  missSound() {
-    if (!this.missSfx) return;
+  /** Passed note: a short, quiet muted-string "chk" (well under the song), rate-limited. */
+  missSound() { this._sfx(missBuffer, 2400, 0.12, "_lastMiss"); }
+  /** Wrong press: a soft out-of-tune twang, so it doesn't sound like a passed note. */
+  wrongSound() { this._sfx(wrongBuffer, 1800, 0.09, "_lastWrong"); }
+  _sfx(make, cutoff, gain, key) {
     const c = audioCtx();
-    if (c.currentTime - (this._lastMiss || 0) < 0.12) return;
-    this._lastMiss = c.currentTime;
+    if (c.currentTime - (this[key] || 0) < 0.12) return;
+    this[key] = c.currentTime;
     const src = c.createBufferSource();
-    src.buffer = missBuffer(c);
-    src.playbackRate.value = 0.92 + Math.random() * 0.16;
-    const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 2400;
-    const g = c.createGain(); g.gain.value = 0.12;
+    src.buffer = make(c);
+    src.playbackRate.value = 0.94 + Math.random() * 0.12;
+    const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = cutoff;
+    const g = c.createGain(); g.gain.value = gain;
     src.connect(lp).connect(g).connect(this.master || c.destination);
     src.start();
   }
@@ -183,4 +184,24 @@ function missBuffer(c) {
   _miss = c.createBuffer(1, len, rate);
   _miss.copyToChannel(out, 0);
   return _miss;
+}
+
+/* ---------- wrong-press sound: two detuned plucked strings (a sour little twang) ---------- */
+let _wrong = null;
+function wrongBuffer(c) {
+  if (_wrong && _wrong.sampleRate === c.sampleRate) return _wrong;
+  const rate = c.sampleRate, len = Math.floor(rate * 0.16);
+  const out = new Float32Array(len);
+  let peak = 0;
+  for (let i = 0; i < len; i++) {
+    const t = i / rate;
+    let v = 0;
+    for (const f of [147, 156]) for (let h = 1; h <= 5; h++) v += Math.sin(2 * Math.PI * f * h * t) / h;
+    out[i] = v * Math.exp(-t / 0.045) * Math.min(1, i / (rate * 0.002));
+    peak = Math.max(peak, Math.abs(out[i]));
+  }
+  for (let i = 0; i < len; i++) out[i] /= peak || 1;
+  _wrong = c.createBuffer(1, len, rate);
+  _wrong.copyToChannel(out, 0);
+  return _wrong;
 }

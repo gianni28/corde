@@ -7,7 +7,6 @@ export const DEFAULTS = {
   speed: 1.5, // seconds of highway visible
   offsetMs: 0, // + = notes later
   gfx: "auto", // "auto" | "high" | "low"
-  missSfx: true,
   autoSync: true,
   name: "",
   starMode: "motion", // phone: star power by "motion" (lift/shake) or "tap" (the multiplier) — tap never asks for permission

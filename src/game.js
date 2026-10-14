@@ -156,7 +156,7 @@ export class Game {
     } else if (t > -0.5 && t >= this.practiceUntil) {
       // Forgive double taps and presses that are just outside the window of a nearby note in this lane.
       const near = t - this.lastHit[lane] < 0.18 || this.notes.some((n, i) => i >= this.next - 4 && i < this.next + 24 && n.lane === lane && Math.abs(n.t - t) < 0.22);
-      if (!near) { this.breakCombo(false); this.rockBy(-0.015); this.events.push({ type: "ghost", lane }); }
+      if (!near) { this.breakCombo(); this.player.wrongSound(); this.rockBy(-0.015); this.events.push({ type: "ghost", lane }); }
     }
   }
 
@@ -188,11 +188,10 @@ export class Game {
     }
   }
 
-  breakCombo(sound) {
+  breakCombo() {
     this.combo = 0;
     this.level = Math.max(1, this.level - 1); this.toNext = 0;
     this.player.guitar(false);
-    if (sound) this.player.missSound();
   }
 
   update(t) {
@@ -204,7 +203,7 @@ export class Game {
       const n = N[i];
       if (n.t > t) break;
       if (n.state === 0 && t - n.t > WINDOW) {
-        n.state = 2; this.missed++; this.breakCombo(this.combo > 0);
+        n.state = 2; this.missed++; this.breakCombo(); this.player.missSound();
         this.rockBy(-0.03);
         // a missed note breaks its star phrase: the rest of the phrase turns into normal notes
         if (n.star != null && n.star >= 0) { const ph = this.phrases[n.star]; if (!ph.lost) { ph.lost = true; ph.notes.forEach((m) => (m.star = -1)); } }

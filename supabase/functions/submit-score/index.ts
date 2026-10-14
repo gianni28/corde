@@ -94,6 +94,8 @@ Deno.serve(async (req) => {
     p_secret: b.secret, p_song_id: b.song_id, p_diff: b.diff,
     p_stars: Math.min(5, Math.max(1, Math.round(Number(b.stars) || 1))),
     p_first: !prev, p_record: newRecord && !!prev,
+    // the day's challenges (progress.sql)
+    p_acc: Math.min(1, Math.max(0, Number(b.acc) || 0)), p_combo: Math.max(0, Math.round(Number(b.max_combo) || 0)),
   });
   if (pErr) console.warn("picks:", pErr.message);
 

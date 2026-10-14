@@ -1403,7 +1403,6 @@ function startGame({ lanes, diff, practice = null, duo = null, ctx = null }) {
   stopGame();
   picksRun++; // a late answer about the last run no longer touches the results
   const player = new Player(app.decoded);
-  player.missSfx = settings.missSfx;
   const common = { chart: app.chart, lanes, offsetMs: settings.offsetMs, songOffsetMs: app.songOffsetMs || 0, look: +settings.speed, autoSync: settings.autoSync };
   if (duo) {
     // same song, each with their own difficulty; nobody gets booed off the stage
@@ -1484,7 +1483,6 @@ function pauseGame() {
 function resumeGame() {
   if (!app.game || !app.paused) return;
   for (const g of games()) { g.pressed.fill(false); g.look = +settings.speed; g.offset = settings.offsetMs / 1000; }
-  app.game.player.missSfx = settings.missSfx;
   const g = app.game, pausedAt = g.lastT;
   if (pausedAt <= 0) { g.player.resume().then(() => { app.paused = false; }); show("play", false); return; }
   // rewind animation: the highway runs backwards ~10 s, then the music restarts there
@@ -1740,6 +1738,11 @@ async function ensureAccount() {
 // Prices and what you own live on the server: this only shows them and asks.
 const fmtPicks = (n) => Math.max(0, Math.floor(+n || 0)).toLocaleString("es-CO");
 const owns = (it) => isDefault(it) || !!app.wallet?.owned.has(ownedKey(it.slot, it.id));
+// prizes: a logro's (req) or a level's (lvl), claimed for free once earned
+const isPrize = (it) => !!(it.req || it.lvl);
+const prizeWon = (it) => it.req ? !!achievementsWon()[it.req] : it.lvl ? (app.wallet?.level || 1) >= it.lvl : false;
+const prizeLock = (it) => it.req ? `Logro: ${achName(it.req)}` : `Nivel ${it.lvl}`;
+const prizeOf = (it) => it.req ? `Premio del logro «${achName(it.req)}»` : `Premio del nivel ${it.lvl}`;
 const achName = (id) => ACHIEVEMENTS.find((a) => a.id === id)?.name || id;
 const shopOffline = () => !online || navigator.onLine === false;
 const SHOP_ERRORS = {
@@ -1748,9 +1751,11 @@ const SHOP_ERRORS = {
 };
 // the account's wallet → app.wallet, and its look goes on (and is remembered in this browser)
 function setWallet(w) {
-  if (!w || typeof w !== "object") { app.wallet = null; renderPicks(); return; }
+  if (!w || typeof w !== "object") { app.wallet = null; renderPicks(); renderRetos(); return; }
   setEquipped(w.equipped);
-  app.wallet = { picks: Math.max(0, Math.floor(+w.picks || 0)), owned: new Set(Array.isArray(w.owned) ? w.owned : []), equipped };
+  app.wallet = { picks: Math.max(0, Math.floor(+w.picks || 0)), owned: new Set(Array.isArray(w.owned) ? w.owned : []), equipped,
+    xp: Math.max(0, Math.floor(+w.xp || 0)), level: Math.max(1, Math.floor(+w.level || 1)), ch: Array.isArray(w.ch) ? w.ch : [] };
+  renderRetos();
   renderPicks();
   restyleNames();
 }
@@ -1767,6 +1772,42 @@ function renderPicks() {
   }
   $("picksBal").textContent = app.wallet ? ` · tienes ${fmtPicks(app.wallet.picks)}` : "";
 }
+// levels: level L starts at 25(L-1)² + 75(L-1) xp (the server's level_of); every púa earned playing is xp
+const levelStart = (L) => 25 * (L - 1) ** 2 + 75 * (L - 1);
+const CH_TEXT = {
+  runs: (n) => `Termina ${n} canciones`, stars: (n) => `Saca ${n} estrellas en una canción`,
+  acc: (n) => `Termina una canción con ${n}% de precisión`, combo: (n) => `Haz un combo de ${n} notas`,
+  hard: () => "Termina una canción en Difícil o Experto", expert: () => "Termina una canción en Experto",
+};
+const chText = (c) => (CH_TEXT[c.k] || (() => "Reto"))(c.n);
+// the home menu's card: the level, its bar, and the day's three challenges
+function renderRetos() {
+  const w = app.wallet, card = $("retosCard");
+  card.hidden = !w || !w.ch.length;
+  if (card.hidden) return;
+  const L = w.level, a = levelStart(L), b = levelStart(L + 1);
+  $("rcLvl").textContent = L;
+  $("rcBar").style.width = `${Math.max(0, Math.min(100, ((w.xp - a) / (b - a)) * 100))}%`;
+  $("rcXp").textContent = `${Math.max(0, w.xp - a)}/${b - a} XP`;
+  const list = $("rcList"); list.textContent = "";
+  let done = 0;
+  for (const c of w.ch) {
+    const p = Math.min(+c.p || 0, c.n), ok = p >= c.n; done += ok;
+    const li = document.createElement("li"); li.className = ok ? "done" : "";
+    const t = document.createElement("span"); t.textContent = chText(c);
+    li.append(t);
+    if (!ok && (c.k === "runs" || c.k === "combo" || c.k === "acc" || c.k === "stars") && p > 0) {
+      const em = document.createElement("em"); em.textContent = c.k === "runs" ? `${p}/${c.n}` : c.k === "acc" ? `${p}%` : `${p}`; li.append(em);
+    }
+    const r = document.createElement("b"); r.innerHTML = ok ? "✓" : `<svg aria-hidden="true"><use href="#pick"/></svg>`;
+    if (!ok) r.append(`${c.r}`);
+    li.append(r); list.append(li);
+  }
+  $("rcCount").textContent = `${done}/${w.ch.length}`;
+  $("rcFoot").textContent = done >= w.ch.length ? "¡Retos de hoy completos! Mañana hay nuevos."
+    : `Los tres: +30 púas extra · Nivel ${L + 1}: +${25 * (L + 1)} púas`;
+}
+$("rcToggle").onclick = () => { const c = $("retosCard"); c.classList.toggle("open"); $("rcToggle").setAttribute("aria-expanded", String(c.classList.contains("open"))); };
 // the balance may have changed on another device: ask again quietly when the shop opens
 async function refreshWallet() {
   if (!account || shopOffline()) return;
@@ -1848,9 +1889,9 @@ function revealShopSel() {
 }
 function shopCard(it) {
   const b = document.createElement("button");
-  const on = equipped[it.slot] === it.id, mine = owns(it), won = !!it.req && !!achievementsWon()[it.req];
+  const on = equipped[it.slot] === it.id, mine = owns(it), won = prizeWon(it);
   b.type = "button"; b.dataset.id = it.id;
-  b.className = "shop-item" + (on ? " on" : "") + (it.req ? " excl" : "") + (!mine && it.req && !won ? " locked" : "");
+  b.className = "shop-item" + (on ? " on" : "") + (isPrize(it) ? " excl" : "") + (!mine && isPrize(it) && !won ? " locked" : "");
   b.setAttribute("role", "option"); b.setAttribute("aria-selected", String(shop.sel === it.id));
   b.innerHTML = `<span class="sw"></span><span class="si-name"></span><span class="si-state"></span>`;
   fillSwatch(b.querySelector(".sw"), it);
@@ -1858,9 +1899,9 @@ function shopCard(it) {
   const st = b.querySelector(".si-state");
   if (on) { st.textContent = "Equipado"; st.className += " is-on"; }
   else if (mine) st.textContent = "Usar";
-  else if (it.req) {
+  else if (isPrize(it)) {
     st.innerHTML = won ? "" : `<svg aria-hidden="true"><use href="#lock"/></svg>`;
-    st.append(won ? "¡Reclámalo!" : `Logro: ${achName(it.req)}`);
+    st.append(won ? "¡Reclámalo!" : prizeLock(it));
     st.className += won ? " is-claim" : " is-lock";
   } else {
     st.innerHTML = `<svg aria-hidden="true"><use href="#pick"/></svg>`;
@@ -1908,10 +1949,11 @@ function selectShopItem(id) {
 function renderShopDetail() {
   const it = itemOf(shop.cat, shop.sel) || itemOf(shop.cat, equipped[shop.cat]);
   const w = app.wallet, can = !!w && !!account && !shopOffline();
-  const on = equipped[it.slot] === it.id, mine = owns(it), won = !!it.req && !!achievementsWon()[it.req];
+  const on = equipped[it.slot] === it.id, mine = owns(it), won = prizeWon(it);
   const key = ownedKey(it.slot, it.id), btn = $("shopAct"), info = $("sdInfo");
   $("sdName").textContent = it.name;
   info.textContent = on ? "Lo tienes puesto." : mine ? (isDefault(it) ? "El de siempre." : "Es tuyo.")
+    : it.lvl ? (won ? `${prizeOf(it)}: es tuyo gratis.` : `${it.desc || prizeOf(it)} Vas en el nivel ${w?.level || 1}.`)
     : it.req ? (won ? `Ganaste el logro «${achName(it.req)}»: es tuyo gratis.` : it.desc || `Se gana con el logro «${achName(it.req)}».`)
     : w && w.picks < it.price ? `Te faltan ${fmtPicks(it.price - w.picks)} púas. Las ganas terminando canciones.`
     : it.desc || "";
@@ -1920,15 +1962,15 @@ function renderShopDetail() {
     const n = document.createElement("span");
     n.className = it.id === "normal" ? "sd-me" : `sd-me nm-${it.id}`;
     n.textContent = settings.name || "Tu nombre";
-    info.textContent = "Así te verán todos: "; info.appendChild(n);
+    info.textContent = (isPrize(it) && !mine ? (won ? "Es tuyo gratis. " : `Se gana con: ${prizeLock(it)}. `) : "") + "Así te verán todos: "; info.appendChild(n);
   }
   const armed = shop.armed === key;
   btn.classList.toggle("armed", armed);
   btn.classList.toggle("primary", !on);
   btn.classList.toggle("is-on", on);
-  btn.textContent = on ? "Equipado" : mine ? "Usar" : it.req ? (won ? "Reclamar" : "Bloqueado")
+  btn.textContent = on ? "Equipado" : mine ? "Usar" : isPrize(it) ? (won ? "Reclamar" : "Bloqueado")
     : armed ? `¿Seguro? ${fmtPicks(it.price)} púas` : `Comprar · ${fmtPicks(it.price)}`;
-  btn.disabled = on || shop.busy || !can || (!mine && (it.req ? !won : w.picks < it.price));
+  btn.disabled = on || shop.busy || !can || (!mine && (isPrize(it) ? !won : w.picks < it.price));
 }
 $("shopCats").onclick = (e) => {
   const b = e.target.closest("button[data-c]");
@@ -1945,7 +1987,7 @@ $("shopAct").onclick = () => {
   const it = itemOf(shop.cat, shop.sel);
   if (!it || shop.busy || equipped[it.slot] === it.id) return;
   if (owns(it)) return shopDo("equip", it);
-  if (it.req) return shopDo("buy", it); // a logro's prize: claimed, nothing to confirm
+  if (isPrize(it)) return shopDo("buy", it); // a logro's or a level's prize: claimed, nothing to confirm
   // buying asks twice: "Comprar · 300" → "¿Seguro? 300 púas"
   const key = ownedKey(it.slot, it.id);
   if (shop.armed !== key) {
@@ -1973,8 +2015,8 @@ async function shopDo(kind, it) {
     if (kind === "buy") {
       sfx.unlock();
       const slot = SLOTS.find((s) => s.id === it.slot).name;
-      celebrate({ kicker: it.req ? "Premio reclamado" : "¡Es tuyo!", title: it.name, kind: "shop", ms: 2600,
-        sub: it.req ? `${slot}: ya lo tienes puesto. Premio del logro «${achName(it.req)}».` : `${slot}: ya lo tienes puesto. Te quedan ${fmtPicks(app.wallet.picks)} púas.` });
+      celebrate({ kicker: isPrize(it) ? "Premio reclamado" : "¡Es tuyo!", title: it.name, kind: "shop", ms: 2600,
+        sub: isPrize(it) ? `${slot}: ya lo tienes puesto. ${prizeOf(it)}.` : `${slot}: ya lo tienes puesto. Te quedan ${fmtPicks(app.wallet.picks)} púas.` });
     }
   } else if (r?.error) {
     toast(SHOP_ERRORS[r.error] || "No se pudo.");
@@ -2003,11 +2045,27 @@ function gotPicks(p, run, row = true) {
   if (+p.base > 0) parts.push(`${fmtPicks(p.base)} por la canción`);
   if (p.first) parts.push(`primera vez +${typeof p.first === "number" ? p.first : 15}`);
   if (p.record) parts.push(`récord +${typeof p.record === "number" ? p.record : 10}`);
-  $("picksMsg").textContent = earned > 0 ? `+${fmtPicks(earned)} púas` : "Sin púas esta vez";
+  // the day's challenges done with this run, and a new level (progress.sql)
+  const chs = Array.isArray(p.challenges) ? p.challenges : [], lv = p.level && typeof p.level === "object" ? p.level : null;
+  const extra = chs.reduce((s, c) => s + (+c.r || 0), 0) + (+p.all || 0) + (lv ? +lv.reward || 0 : 0);
+  const won = chs.map((c) => `reto «${chText(c)}» +${c.r}`);
+  if (+p.all > 0) won.push(`los tres retos +${p.all}`);
+  if (lv) won.push(`nivel ${lv.to} +${lv.reward}`);
+  if (p.reason !== "cooldown") refreshWallet(); // the challenges' progress on the home menu's card
+  if (lv) {
+    const prize = ITEMS.find((it) => it.lvl && it.lvl > lv.from && it.lvl <= lv.to);
+    celebrate({ kicker: "¡Subiste de nivel!", title: `Nivel ${lv.to}`, kind: "shop", ms: 3200,
+      sub: `+${fmtPicks(lv.reward)} púas` + (prize ? ` · Ya puedes reclamar «${prize.name}» en la Tienda` : "") });
+  } else if (chs.length) {
+    celebrate({ kicker: +p.all > 0 ? "¡Retos de hoy completos!" : "¡Reto cumplido!", title: chText(chs[0]), kind: "shop", ms: 2800,
+      sub: `+${fmtPicks(extra)} púas` });
+  }
+  const total = earned + extra;
+  $("picksMsg").textContent = total > 0 ? `+${fmtPicks(total)} púas` : "Sin púas esta vez";
   $("picksSub").textContent = p.reason === "cooldown" ? "Terminaste canciones muy seguidas: la próxima sí cuenta."
-    : p.reason === "cap" ? (earned > 0 ? "Llegaste al máximo de púas de hoy. Mañana ganas más." : "Ya ganaste el máximo de púas de hoy. Mañana ganas más.")
-    : parts.join(" · ");
-  $("picksRes").classList.toggle("none", !(earned > 0));
+    : p.reason === "cap" ? [earned > 0 ? "Llegaste al máximo de púas de hoy. Mañana ganas más." : "Ya ganaste el máximo de púas de hoy. Mañana ganas más.", ...won].join(" · ")
+    : [...parts, ...won].join(" · ");
+  $("picksRes").classList.toggle("none", !(total > 0));
   $("picksRes").hidden = false;
 }
 
@@ -2396,7 +2454,6 @@ function renderSettings() {
   $("openAdmin").hidden = !isAdminBrowser() || !online || touch || !!app.game;
   document.querySelectorAll("#laneSeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === settings.laneMode));
   document.querySelectorAll("#qualitySeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.v === settings.gfx));
-  document.querySelectorAll("#missSeg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === "on") === String(settings.missSfx)));
   document.querySelectorAll("#syncSeg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === "on") === String(settings.autoSync)));
   const n = deviceLanes();
   $("laneHint").textContent = settings.laneMode === "auto"
@@ -2468,7 +2525,6 @@ document.querySelectorAll("#starSeg button").forEach((b) => (b.onclick = () => {
   if (settings.starMode === "tap") stopMotionTest(); else if (liftOn()) onLift(liftStar);
   renderSettings();
 }));
-document.querySelectorAll("#missSeg button").forEach((b) => (b.onclick = () => { settings.missSfx = b.dataset.v === "on"; save(); renderSettings(); }));
 document.querySelectorAll("#syncSeg button").forEach((b) => (b.onclick = () => { settings.autoSync = b.dataset.v === "on"; save(); if (app.game) app.game.autoSync = settings.autoSync; renderSettings(); }));
 $("speed").oninput = (e) => { settings.speed = +e.target.value; save(); renderSettings(); };
 $("offset").oninput = (e) => { settings.offsetMs = +e.target.value; save(); renderSettings(); };
