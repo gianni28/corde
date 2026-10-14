@@ -158,12 +158,18 @@ const shop = { cat: "neck", sel: null, armed: null, armT: 0, streakT: 0, busy: f
 // menu on a phone). It stops when a song starts and picks up again back in the menus.
 const MENU_MUSIC = ["home", "library", "setup", "settings", "logros", "mp", "lobby", "admin", "tutorial", "duo", "daily", "tour", "tienda"];
 const wideMQ = matchMedia("(min-width: 1000px)");
+// admin uploads (declared up here: the menu music and the frame loop ask about them from the first moment)
+const adm = { songs: [], busy: false };
+const split = { on: false, stop: false, rows: [] }; // the library's songs whose guitar is being separated
+// while the admin uploads or separates songs, the stage and the menu music rest (they'd take the processor from it)
+function adminWorking() { return adm.busy || split.on; }
+function adminWorkChanged() { syncMenuMusic(); }
 const music = createMenuMusic({ onChange: () => renderNowPlaying() });
 // It starts as soon as the page opens: a random song is fetched right away and plays the moment the browser
 // allows sound. Chrome allows it straight away on sites you use a lot and in the installed app; otherwise the first
 // touch, click or key starts it (already loaded, so instantly), with a "touch to listen" hint until then.
 function syncMenuMusic() {
-  if (MENU_MUSIC.includes(app.screen) && !app.game && !document.hidden) music.play(); else music.pause();
+  if (MENU_MUSIC.includes(app.screen) && !app.game && !document.hidden && !adminWorking()) music.play(); else music.pause();
   renderNowPlaying();
 }
 let npSong = null;
@@ -2387,6 +2393,8 @@ let prev = performance.now(), lastNet = 0;
 const en = { e: 0.55, p: 0 };
 function frame(now) {
   requestAnimationFrame(frame);
+  // the admin converting or separating songs: the stage stands still, every core goes to that work
+  if (adminWorking()) { prev = now; return; }
   const dt = Math.min(0.1, (now - prev) / 1000); prev = now;
   const g = app.game, gs = games();
   if (g && app.rewinding) {
@@ -2816,7 +2824,6 @@ function renderRanking() {
 window.__corde = { app, R, music };
 
 /* ================= admin uploads ================= */
-const adm = { songs: [], busy: false };
 const ADMIN_KEY = "corde.adminCode";
 // The upload screen is hidden for everyone; the admin opens it once with /#admin and it stays visible in that browser.
 function isAdminBrowser() { try { return !!localStorage.getItem(ADMIN_KEY); } catch { return false; } }
@@ -2906,7 +2913,7 @@ $("adminUpload").onclick = async () => {
   if (!code) { $("adminStatus").textContent = "Escribe el código de administrador."; return; }
   try { await adminCall({ code, action: "check" }); } catch (e) { $("adminStatus").textContent = e.message; return; }
   try { localStorage.setItem(ADMIN_KEY, code); } catch {}
-  adm.busy = true; renderAdmin();
+  adm.busy = true; renderAdmin(); adminWorkChanged();
   let lib = [];
   try { lib = await adminLibrary(); } catch {}
   const secret = $("adminSecret").checked;
@@ -2933,14 +2940,13 @@ $("adminUpload").onclick = async () => {
       ok++;
     } catch (e) { set(e.message || "Error", 0, "bad"); bad++; }
   }
-  adm.busy = false; renderAdmin();
+  adm.busy = false; renderAdmin(); adminWorkChanged();
   app.songs = []; app.loadedSongId = null; // reload the library (and any re-uploaded song) next time
   loadAutoList();
   $("adminStatus").textContent = `Listo: ${ok} subida${ok === 1 ? "" : "s"}${bad ? `, ${bad} con error` : ""}. ${secret ? "Ya aparecen en «Secretas» (con el código)." : "Ya aparecen en Jugar."}`;
 };
 
 /* --- songs already uploaded as one audio: their guitar apart, one after another, in this browser --- */
-const split = { on: false, stop: false, rows: [] };
 function renderSplit() {
   const need = (adm.lib || []).filter((x) => !x.has_guitar);
   $("splitBox").hidden = !adm.lib || (!need.length && !split.rows.length);
@@ -2964,7 +2970,7 @@ $("splitGo").onclick = async () => {
   const code = $("adminCode").value.trim();
   if (!code) { $("splitStatus").textContent = "Escribe el código de administrador."; return; }
   const queue = (adm.lib || []).filter((x) => !x.has_guitar);
-  split.on = true; split.stop = false; split.rows = [];
+  split.on = true; split.stop = false; split.rows = []; adminWorkChanged();
   let ok = 0, bad = 0;
   const t0 = Date.now();
   for (const x of queue) {
@@ -2983,7 +2989,7 @@ $("splitGo").onclick = async () => {
     const left = (adm.lib || []).filter((y) => !y.has_guitar).length, per = (Date.now() - t0) / (ok + bad) / 60000;
     $("splitStatus").textContent = `${ok} lista${ok === 1 ? "" : "s"}${bad ? `, ${bad} con error` : ""}. Faltan ${left}${left && !split.stop ? ` (unos ${Math.round(per * left)} min)` : ""}.`;
   }
-  split.on = false; split.stop = false;
+  split.on = false; split.stop = false; adminWorkChanged();
   app.songs = []; // the library reloads with the new files
   renderSplit();
 };
