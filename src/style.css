@@ -580,7 +580,8 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 /* share the result as an image for stories: gold, so it stands out from the grey buttons without competing with "Otra vez" */
 .share-btn { align-self: flex-start; display: inline-flex !important; align-items: center; justify-content: center; gap: 10px;
   color: var(--gold) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.14), inset 0 0 0 1px rgba(245,197,24,.55), 0 3px 0 #000, 0 0 18px rgba(245,197,24,.18) !important; }
-.share-btn svg { width: 20px; height: 20px; fill: var(--gold); flex: none; }
+.share-btn { width: 52px; height: 48px; padding: 0 !important; }
+.share-btn svg { width: 24px; height: 24px; fill: var(--gold); flex: none; }
 .share-btn:disabled { opacity: .6; }
 
 /* room invite */
