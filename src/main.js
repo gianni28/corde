@@ -122,7 +122,7 @@ function setNameClass(el, st) {
   for (const c of [...el.classList]) if (c.startsWith("nm-")) el.classList.remove(c);
   if (st && st !== "normal") el.classList.add("nm-" + st);
 }
-// and their level, a small badge before the name (players with an account)
+// and their level, a tag after the name (players with an account): "NV 7", slanted so it never reads as a position
 const nameLevel = new Map(); // name key → level
 function levelOfKey(k) {
   if (app.wallet && k && k === nameKey(settings.name)) return app.wallet.level;
@@ -131,8 +131,8 @@ function levelOfKey(k) {
 function setNameLevel(el, lv) {
   let b = el.querySelector(":scope > .lv");
   if (!(lv > 0)) { b?.remove(); return; }
-  if (!b) { b = document.createElement("span"); b.className = "lv"; el.prepend(b); }
-  b.textContent = lv; b.title = `Nivel ${lv}`;
+  if (!b) { b = document.createElement("span"); el.append(b); }
+  b.innerHTML = `<i>NV</i>${lv}`; b.title = `Nivel ${lv}`;
   b.className = `lv t${Math.min(3, Math.floor(lv / 10))}`; // bronze, silver, gold, purple
 }
 function styledName(el, name) { el.dataset.nk = nameKey(name); setNameClass(el, styleOfKey(el.dataset.nk)); setNameLevel(el, levelOfKey(el.dataset.nk)); }
