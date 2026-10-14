@@ -82,11 +82,18 @@ export class Player {
     c.resume();
     this.master = c.createGain(); this.master.gain.value = 0.9; this.master.connect(c.destination);
     this.guitarGain = c.createGain(); this.guitarGain.connect(this.master);
+    // a song that's one mp3 has no guitar to silence: a miss muffles the mids of the whole song instead
+    this.muffle = null;
+    if (!this.stems.some((s) => s.guitar)) {
+      this.muffle = c.createBiquadFilter(); this.muffle.type = "peaking";
+      this.muffle.frequency.value = 1600; this.muffle.Q.value = 0.7; this.muffle.gain.value = 0;
+      this.muffle.connect(this.master);
+    }
     const when = c.currentTime + delay;
     this.startAt = when - from;
     for (const s of this.stems) {
       const src = c.createBufferSource(); src.buffer = s.buffer;
-      src.connect(s.guitar ? this.guitarGain : this.master);
+      src.connect(s.guitar ? this.guitarGain : this.muffle || this.master);
       if (from >= 0) src.start(when, from); else src.start(when - from);
       this.sources.push(src);
     }
@@ -106,7 +113,7 @@ export class Player {
     this.startAt = when - songTime;
     for (const s of this.stems) {
       const src = c.createBufferSource(); src.buffer = s.buffer;
-      src.connect(s.guitar ? this.guitarGain : this.master);
+      src.connect(s.guitar ? this.guitarGain : this.muffle || this.master);
       if (songTime >= 0) src.start(when, songTime); else src.start(when - songTime);
       this.sources.push(src);
     }
@@ -135,6 +142,7 @@ export class Player {
     if (!this.guitarGain) return;
     const c = audioCtx();
     this.guitarGain.gain.setTargetAtTime(on ? 1 : 0, c.currentTime, on ? 0.01 : 0.03);
+    if (this.muffle) this.muffle.gain.setTargetAtTime(on ? 0 : -14, c.currentTime, on ? 0.02 : 0.04);
   }
   /** Passed note: a short, quiet muted-string "chk" (well under the song), rate-limited. */
   missSound() { this._sfx(missBuffer, 4200, 0.38, "_lastMiss"); }
