@@ -2130,16 +2130,20 @@ function renderInvite() {
   $("inviteWa").href = `https://wa.me/?text=${encodeURIComponent(`${inviteText(code)}: ${roomLink(code)}`)}`;
 }
 // opened from an invite: straight into the room (asks for a name first if this browser has none)
-function joinFromLink() {
+// any link (a room, a challenge) waits until this browser has its account: the welcome card asks for the name first
+async function waitForName() {
+  while (welcome.open || !settings.name) await new Promise((res) => setTimeout(res, 300));
+}
+async function joinFromLink() {
   const m = location.hash.match(/^#sala-([a-z]{4})$/i);
   if (!m) return;
   history.replaceState(null, "", location.pathname + location.search);
   const code = m[1].toUpperCase();
-  $("mpName").value = settings.name || ""; $("mpErr").hidden = true; $("joinCode").value = code;
+  await waitForName();
+  $("mpName").value = settings.name; $("mpErr").hidden = true; $("joinCode").value = code;
   $("duoCard").hidden = $("duoOr").hidden = touch;
   show("mp");
-  if (settings.name) enterRoom(code);
-  else { $("mpErr").textContent = `Escribe tu nombre y toca Unirme para entrar a la sala ${code}.`; $("mpErr").hidden = false; $("mpName").focus(); }
+  enterRoom(code);
 }
 setTimeout(joinFromLink, 0);
 // opened from a challenge link: once there's a name, straight to that song with the score to beat
@@ -2147,7 +2151,7 @@ async function openFromReto() {
   const r = readReto();
   if (!r) return;
   history.replaceState(null, "", location.pathname + location.hash);
-  while (welcome.open || !settings.name) await new Promise((res) => setTimeout(res, 300));
+  await waitForName();
   app.reto = r;
   const s = await findSong(r.songId);
   if (!s) { app.reto = null; return toast("Esa canción ya no está en Corde."); }
