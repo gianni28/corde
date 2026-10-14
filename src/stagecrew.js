@@ -83,6 +83,10 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
   lgeo.setAttribute("color", new THREE.BufferAttribute(lightCol, 3));
   const lights = new THREE.Points(lgeo, new THREE.PointsMaterial({ map: dotTex, size: 0.9, vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: false }));
   lights.frustumCulled = false; lights.renderOrder = 62; layer.add(lights);
+  // what they hold up (the shop's "Público"): "lighters" (warm, flickering), "phones" (cold white, steady), "red",
+  // "sticks" (glow sticks, every one its own neon colour); held up for a while however loud the song is (showLights)
+  let lightKind = "lighters", liftFor = 0;
+  const STICKS = [[0.35, 1, 0.2], [1, 0.25, 0.75], [0.2, 0.85, 1], [1, 0.9, 0.15], [0.65, 0.3, 1], [1, 0.5, 0.1]];
 
   let people = [];
   const M = new THREE.Matrix4(), P = new THREE.Matrix4(), A = new THREE.Matrix4(), B = new THREE.Matrix4(), T = new THREE.Matrix4();
@@ -164,6 +168,8 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
     const { bpos, ph, E, hype, star, dt, now } = f;
     const lvl = clamp01(E * (0.62 + 0.38 * hype) + star * 0.25);  // how into it the crowd is
     const calm = 1 - smooth(0.22, 0.5, E);
+    liftFor = Math.max(-1, liftFor - dt);
+    const up = Math.max(calm, smooth(0, 0.6, liftFor)); // lights up: the quiet parts, or showLights
     uni.uRim.value.copy(f.rim);
     const k = Math.min(1, dt * 8);
     let li = 0;
@@ -188,7 +194,7 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
       // arms: targets by style and energy, eased so poses blend instead of popping
       const a = p.arms;
       let uL = 0.12, uR = 0.12, bL = 0.35, bR = 0.35, oL = 0.1, oR = 0.1;
-      const light = p.lighter && calm > 0.4;
+      const light = p.lighter && up > 0.4;
       if (light) {
         uR = 2.55; bR = 0.25; oR = 0.12 + Math.sin(now * 0.9 + p.sway) * 0.28; // sways slowly over the head
       } else if (into > 0.05) {
@@ -205,18 +211,29 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
       if (light) {
         v.set(0, -0.74, 0).applyMatrix4(M.multiplyMatrices(P, fr));
         lightPos[li * 3] = v.x; lightPos[li * 3 + 1] = v.y; lightPos[li * 3 + 2] = v.z;
-        const fl = 0.75 + 0.25 * Math.sin(now * 13 + i * 3.1);
-        lightCol[li * 3] = fl; lightCol[li * 3 + 1] = fl * 0.92; lightCol[li * 3 + 2] = fl * 0.78;
+        if (lightKind === "phones") { const fl = 0.9 + 0.06 * Math.sin(now * 2 + i); lightCol[li * 3] = fl * 0.74; lightCol[li * 3 + 1] = fl * 0.86; lightCol[li * 3 + 2] = fl; }
+        else if (lightKind === "sticks") { const c = STICKS[(i * 7 + 3) % STICKS.length], fl = 0.85 + 0.15 * Math.sin(now * 3 + i * 1.7); lightCol[li * 3] = c[0] * fl; lightCol[li * 3 + 1] = c[1] * fl; lightCol[li * 3 + 2] = c[2] * fl; }
+        else {
+          const fl = 0.75 + 0.25 * Math.sin(now * 13 + i * 3.1);
+          if (lightKind === "red") { lightCol[li * 3] = fl; lightCol[li * 3 + 1] = fl * 0.1; lightCol[li * 3 + 2] = fl * 0.07; }
+          else { lightCol[li * 3] = fl; lightCol[li * 3 + 1] = fl * 0.92; lightCol[li * 3 + 2] = fl * 0.78; }
+        }
         li++;
       }
     }
     for (const kk in parts) { parts[kk].instanceMatrix.needsUpdate = true; }
     lgeo.setDrawRange(0, li);
     lgeo.attributes.position.needsUpdate = true; lgeo.attributes.color.needsUpdate = true;
-    lights.material.opacity = smooth(0.4, 0.75, calm);
+    lights.material.opacity = smooth(0.4, 0.75, up);
   }
 
-  return { layout, update, setVisible(on) { layer.visible = on; }, get count() { return people.length; } };
+  return {
+    layout, update, setVisible(on) { layer.visible = on; }, get count() { return people.length; },
+    /** What the crowd holds up: "lighters" | "phones" | "red" | "sticks". */
+    setLights(kind) { lightKind = kind || "lighters"; },
+    /** Lights up for the next `s` seconds whatever the song does (Infinity: until called with 0). */
+    showLights(s) { liftFor = s; },
+  };
 }
 
 /* ======================================================================
