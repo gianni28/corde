@@ -19,6 +19,13 @@ export default defineConfig({
   optimizeDeps: { exclude: ["@audio/neural-separate", "@audio/neural-runtime", "onnxruntime-web"] },
   build: {
     chunkSizeWarningLimit: 900,
-    rollupOptions: { output: { manualChunks: { three: ["three"], supabase: ["@supabase/supabase-js"] } } },
+    rollupOptions: {
+      output: {
+        manualChunks: { three: ["three"], supabase: ["@supabase/supabase-js"] },
+        // onnxruntime's file under its own name: browsers that cached it before /assets/* carried the COEP header
+        // (immutable, a year) would keep starting its threads without it, and the separation would hang there
+        chunkFileNames: (c) => (c.name.startsWith("ort.") ? "assets/[name]-coep-[hash].js" : "assets/[name]-[hash].js"),
+      },
+    },
   },
 });
