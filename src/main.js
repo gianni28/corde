@@ -133,6 +133,7 @@ function setNameLevel(el, lv) {
   if (!(lv > 0)) { b?.remove(); return; }
   if (!b) { b = document.createElement("span"); b.className = "lv"; el.prepend(b); }
   b.textContent = lv; b.title = `Nivel ${lv}`;
+  b.className = `lv t${Math.min(3, Math.floor(lv / 10))}`; // bronze, silver, gold, purple
 }
 function styledName(el, name) { el.dataset.nk = nameKey(name); setNameClass(el, styleOfKey(el.dataset.nk)); setNameLevel(el, levelOfKey(el.dataset.nk)); }
 const restyleNames = () => document.querySelectorAll("[data-nk]").forEach((el) => { setNameClass(el, styleOfKey(el.dataset.nk)); setNameLevel(el, levelOfKey(el.dataset.nk)); });

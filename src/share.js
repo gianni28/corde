@@ -72,9 +72,10 @@ function drawName(ctx, name, style, level, x, y, maxW) {
     ctx.save();
     ctx.font = `700 26px ${DISPLAY}`;
     const t = `NV ${level}`, tw = ctx.measureText(t).width + 22, px = x + w / 2 + (style === "estrella" ? size * 1.3 : size * 0.35);
-    ctx.fillStyle = "rgba(245,197,24,.16)"; ctx.strokeStyle = "rgba(245,197,24,.7)"; ctx.lineWidth = 2;
+    const tier = [["#e0a060", "205,127,50"], ["#e6ecf2", "200,212,224"], ["#f5c518", "245,197,24"], ["#e8c8ff", "170,90,255"]][Math.min(3, Math.floor(level / 10))];
+    ctx.fillStyle = `rgba(${tier[1]},.18)`; ctx.strokeStyle = `rgba(${tier[1]},.75)`; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.roundRect ? ctx.roundRect(px, y - 31, tw, 38, 19) : ctx.rect(px, y - 31, tw, 38); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = "#f5c518"; ctx.textAlign = "left"; ctx.fillText(t, px + 11, y - 3);
+    ctx.fillStyle = tier[0]; ctx.textAlign = "left"; ctx.fillText(t, px + 11, y - 3);
     ctx.restore();
   }
 }
