@@ -202,3 +202,8 @@ select a.name_key, nullif(w.equipped ->> 'name', 'normal') as style,
 from public.wallets w join public.accounts a on a.id = w.account_id;
 revoke all on public.name_styles from public, anon, authenticated;
 grant select on public.name_styles to anon, authenticated;
+
+-- more level prizes: 3, 15, 30 and 50
+insert into public.shop_items (slot, id, price, req, sort, lvl) values
+  ('strings', 'bronce', 0, null, 20, 3), ('flames', 'aurora', 0, null, 20, 15), ('star', 'atardecer', 0, null, 20, 30), ('streak', 'platino', 0, null, 20, 50)
+on conflict (slot, id) do update set lvl = excluded.lvl, price = 0, req = null;

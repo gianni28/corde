@@ -513,6 +513,7 @@ export const FLAMES = {
   notas: { lane: true, k: 1.8 },
   arcoiris: { rainbow: true, k: 1.8 },
   perfecto: { tint: 0xffe6a6, k: 2.2 },
+  aurora: { tint: 0x3dffc8, k: 2.1 },
 };
 
 /* ================= strings, rails, edges ================= */
@@ -524,6 +525,7 @@ export const STRINGS = {
   negras: { string: [0x1a1a1c, 0.2, 0.75], rail: [0x18181a, 0.35, 0.6], fret: [0x3a3a3e, 0.6, 0.5], fretGlow: 0x121214, edges: [0xc8d4ff, 0xc8d4ff, 0xc8d4ff], k: 0.55 },
   oro: { string: [0xffcc55, 1, 0.2], rail: [0xe8b54a, 1, 0.18], fret: [0xe2b452, 1, 0.24], fretGlow: 0x4a3008, edges: [0xffc64a, 0xffc64a, 0xffd780], k: 1.05 },
   hielo: { string: [0xe6eef6, 1, 0.12], rail: [0xe4ecf4, 1, 0.12], fret: [0xd8e6f0, 1, 0.18], fretGlow: 0x1c3a4c, edges: [0x5ff0ff, 0x5ff0ff, 0xa0f8ff], k: 1.15 },
+  bronce: { string: [0xc98a4a, 1, 0.3], rail: [0xa8682e, 1, 0.26], fret: [0xb87a40, 1, 0.3], fretGlow: 0x3a2008, edges: [0xe0a060, 0xe0a060, 0xf0c080], k: 1 },
   neon: { string: [0x2a2a30, 0.6, 0.4], rail: [0x2a2240, 0.8, 0.3], fret: [0x9a86c0, 0.8, 0.3], fretGlow: 0x3a1460, edges: [0xff3fc8, 0x3ff0ff, 0xd070ff], k: 1.25, laneGlow: 0.32 },
 };
 
@@ -538,6 +540,7 @@ export const STARS = {
   verde: { hue: 0x26ff8c, css: "#3dffa0" },
   morado: { hue: 0x9446ff, css: "#b072ff" },
   arcoiris: { hue: 0xff40c0, rainbow: true, css: "#ff5cd6" },
+  atardecer: { hue: 0xff7a12, css: "#ff9a3a" },
 };
 
 /* ================= the crowd's lights ================= */

@@ -70,6 +70,7 @@ export const ITEMS = [
   { slot: "flames", id: "plasma", name: "Plasma", price: 500, cols: ["#e8fbff", "#ffffff", "#bff4ff"], glow: "#3fe0ff" },
   { slot: "flames", id: "notas", name: "Del color de la nota", price: 600, cols: [LANES[0], LANES[2], LANES[3]] },
   { slot: "flames", id: "arcoiris", name: "Arcoíris", price: 1000, cols: ["#ff3a3a", "#3aff6a", "#3a8aff"], rainbow: true },
+  { slot: "flames", id: "aurora", name: "Aurora", price: 0, lvl: 15, cols: ["#3dffc8", "#b0fff0", "#2ad0ff"], glow: "#3dffc8", desc: "Fuego verde agua, como una aurora boreal. Premio del nivel 15." },
   { slot: "flames", id: "perfecto", name: "Perfeccionista", price: 0, req: "sin-fallar", cols: ["#fff6d8", "#ffffff", "#ffe08a"], glow: "#f5c518", desc: "Fuego blanco y dorado. Premio por terminar una canción sin fallar." },
   // cuerdas y bordes
   { slot: "strings", id: "acero", name: "Acero", price: 0, sw: strings("#cfd4da", "#8f969e") },
@@ -77,6 +78,7 @@ export const ITEMS = [
   { slot: "strings", id: "negras", name: "Negro mate", price: 150, sw: strings("#050505", "#4a4a5e", "linear-gradient(90deg, #3a2014, #5a3220 50%, #3a2014)") },
   { slot: "strings", id: "oro", name: "Doradas", price: 200, sw: strings("#f5c518", "#ffcf5a") },
   { slot: "strings", id: "hielo", name: "Hielo", price: 300, sw: strings("#eef3f6", "#5fe8ff") },
+  { slot: "strings", id: "bronce", name: "Bronce", price: 0, lvl: 3, sw: strings("#d08a48", "#a8682e"), desc: "Cuerdas y bordes de bronce. Premio del nivel 3." },
   { slot: "strings", id: "neon", name: "Neón de colores", price: 500,
     sw: `linear-gradient(90deg, #ff4fa8 0 4%, transparent 4% 96%, #3fe8ff 96%), linear-gradient(90deg, transparent 9.2%, ${LANES[0]} 9.2% 10.8%, transparent 10.8% 29.2%, ${LANES[1]} 29.2% 30.8%, transparent 30.8% 49.2%, ${LANES[2]} 49.2% 50.8%, transparent 50.8% 69.2%, ${LANES[3]} 69.2% 70.8%, transparent 70.8% 89.2%, ${LANES[4]} 89.2% 90.8%, transparent 90.8%), linear-gradient(90deg, #1a0d14, #2a1420 50%, #1a0d14)` },
   // poder estrella
@@ -86,6 +88,7 @@ export const ITEMS = [
   { slot: "star", id: "rojo", name: "Rojo", price: 300, cols: ["#ff3a30"] },
   { slot: "star", id: "verde", name: "Verde", price: 300, cols: ["#3aff7a"] },
   { slot: "star", id: "morado", name: "Morado", price: 300, cols: ["#b06bff"] },
+  { slot: "star", id: "atardecer", name: "Atardecer", price: 0, lvl: 30, cols: ["#ff9a3a"], desc: "El poder estrella se vuelve naranja atardecer. Premio del nivel 30." },
   { slot: "star", id: "arcoiris", name: "Arcoíris", price: 1200, cols: ["#ff3a3a", "#ffd23a", "#3aff6a", "#3a8aff", "#c43aff"], rainbow: true },
   // tu nombre (everyone sees it on the boards)
   { slot: "name", id: "normal", name: "Normal", price: 0 },
@@ -105,6 +108,7 @@ export const ITEMS = [
   { slot: "streak", id: "fuego", name: "Fuego", price: 400 },
   { slot: "streak", id: "oro", name: "Oro", price: 600 },
   { slot: "streak", id: "arcoiris", name: "Arcoíris", price: 900 },
+  { slot: "streak", id: "platino", name: "Platino", price: 0, lvl: 50, desc: "Rachas de platino con brillo morado. Premio del nivel 50." },
   // público (the lights in the crowd)
   { slot: "crowd", id: "encendedores", name: "Encendedores", price: 0, sw: crowd("#ffc060", "#ff9a30") },
   { slot: "crowd", id: "celulares", name: "Celulares", price: 150, sw: crowd("#e8f4ff", "#9fd0ff") },

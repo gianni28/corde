@@ -1030,6 +1030,10 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .lv { display: inline-block; min-width: 1.7em; margin-right: .4em; padding: 0 .3em; border-radius: 999px; vertical-align: .12em;
   font: 700 .62em/1.55 var(--display); letter-spacing: 0; text-align: center; color: #f5c518; -webkit-text-fill-color: #f5c518;
   background: rgba(245,197,24,.14); box-shadow: inset 0 0 0 1px rgba(245,197,24,.55); text-shadow: none; animation: none; filter: none; }
+/* tiers: bronze 1-9, silver 10-19, gold 20-29, purple 30+ */
+.lv.t0 { color: #e0a060; -webkit-text-fill-color: #e0a060; background: rgba(205,127,50,.14); box-shadow: inset 0 0 0 1px rgba(205,127,50,.6); }
+.lv.t1 { color: #e6ecf2; -webkit-text-fill-color: #e6ecf2; background: rgba(200,212,224,.14); box-shadow: inset 0 0 0 1px rgba(200,212,224,.6); }
+.lv.t3 { color: #e8c8ff; -webkit-text-fill-color: #e8c8ff; background: rgba(150,70,255,.25); box-shadow: inset 0 0 0 1px rgba(190,120,255,.8), 0 0 8px rgba(160,80,255,.6); }
 .nm-dorado, .nm-corona { color: var(--gold); text-shadow: 0 0 10px rgba(245,197,24,.45); }
 .nm-rosa { color: #ff6fbf; text-shadow: 0 0 10px rgba(255,79,168,.4); }
 .nm-cian { color: #4fe3ff; text-shadow: 0 0 10px rgba(63,220,255,.4); }
@@ -1063,7 +1067,9 @@ body.streak-oro #hud .streak, .streak.st-oro, .sw-streak .st-oro { background: l
 body.streak-arcoiris #hud .streak, .streak.st-arcoiris, .sw-streak .st-arcoiris { background: linear-gradient(90deg, #ff3a3a, #ffb020, #ffe83a, #3aff6a, #3ac8ff, #a45bff, #ff3a9a, #ff3a3a) 0 0 / 200% 100%;
   -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-stroke: 1.5px #1a0a20; filter: drop-shadow(0 4px 0 #000) drop-shadow(0 0 16px rgba(255,255,255,.3)); }
 body.streak-arcoiris #hud .streak.show, .streak.st-arcoiris.show { animation: streak 1.6s ease-out forwards, nmRainbow 1.2s linear infinite; }
-.sw-streak .st-fuego, .sw-streak .st-oro, .sw-streak .st-arcoiris { -webkit-text-stroke-width: 1px; filter: drop-shadow(0 2px 0 #000); }
+body.streak-platino #hud .streak, .streak.st-platino, .sw-streak .st-platino { background: linear-gradient(180deg, #ffffff 0%, #e4e8f0 30%, #7a7f8c 50%, #f0f2f8 64%, #a8aebc 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-stroke: 1.5px #1a1030; filter: drop-shadow(0 4px 0 #000) drop-shadow(0 0 22px rgba(170,90,255,.8)); }
+.sw-streak .st-platino, .sw-streak .st-fuego, .sw-streak .st-oro, .sw-streak .st-arcoiris { -webkit-text-stroke-width: 1px; filter: drop-shadow(0 2px 0 #000); }
 .sw-streak .st-fuego { -webkit-text-stroke-width: .6px; text-shadow: 0 0 3px #fff, 0 -2px 4px #ffd23a, 1px -4px 6px #ff8a1a, -1px -7px 9px #e8201a; }
 .sw-streak .st-neon { text-shadow: 0 0 4px #3fe8ff, 0 0 10px #3fe8ff, 0 0 18px #ff4fd8; }
 
