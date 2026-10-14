@@ -1,9 +1,10 @@
 // Corde — admin upload relay.
-// The browser converts songs locally, then asks this function (with the admin code) for signed upload URLs
+// The browser converts songs locally, then asks this function (with the admin code) for signed upload URLs (Cloudflare R2)
 // and to save the catalog row. The service-role key never leaves Supabase.
 // It also manages the secret songs: hiding/showing a song and changing the code that unlocks them.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { AwsClient } from "npm:aws4fetch@1.0.20";
 
 // sha-256 of the admin code (the code itself is not stored here)
 const CODE_HASH = "fba187d20f8355ecf4b72424ffbe2e2e805bb6ca47c89b245a9120a833e3d3b9";
@@ -19,6 +20,10 @@ async function sha256(s: string) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+// The song files live in Cloudflare R2 (free downloads): uploads get a signed PUT URL for the bucket.
+const env = (k: string) => Deno.env.get(k) || "";
+const r2 = () => new AwsClient({ accessKeyId: env("R2_ACCESS_KEY_ID"), secretAccessKey: env("R2_SECRET_ACCESS_KEY"), service: "s3", region: "auto" });
+const r2Url = (path: string) => `https://${env("R2_ACCOUNT_ID")}.r2.cloudflarestorage.com/${env("R2_BUCKET")}/${path}`;
 const validId = (id: unknown) => typeof id === "string" && /^[a-z0-9][a-z0-9-]{0,79}$/.test(id);
 
 Deno.serve(async (req) => {
@@ -38,9 +43,8 @@ Deno.serve(async (req) => {
     for (const name of body.files) {
       if (!FILES.has(name)) return json({ error: `Archivo no permitido: ${name}` }, 400);
       const path = `${body.id}/${name}`;
-      const { data, error } = await admin.storage.from("songs").createSignedUploadUrl(path, { upsert: true });
-      if (error) return json({ error: error.message }, 500);
-      out.push({ name, path, token: data.token });
+      const signed = await r2().sign(`${r2Url(path)}?X-Amz-Expires=3600`, { method: "PUT", aws: { signQuery: true } });
+      out.push({ name, path, url: signed.url });
     }
     return json({ uploads: out });
   }
@@ -71,7 +75,9 @@ Deno.serve(async (req) => {
   // removes a song: its files and its row (its scores go with it, ON DELETE CASCADE)
   if (body.action === "delete") {
     if (!validId(body.id)) return json({ error: "Datos inválidos" }, 400);
-    await admin.storage.from("songs").remove([...FILES].map((f) => `${body.id}/${f}`));
+    const client = r2();
+    await Promise.all([...FILES].map((f) => client.fetch(r2Url(`${body.id}/${f}`), { method: "DELETE" }).catch(() => null)));
+    await admin.storage.from("songs").remove([...FILES].map((f) => `${body.id}/${f}`)); // leftovers from before R2
     const { error } = await admin.from("songs").delete().eq("id", body.id);
     if (error) return json({ error: error.message }, 500);
     return json({ ok: true });

@@ -17,6 +17,7 @@ import { promisify } from "node:util";
 import "dotenv/config";
 import ffmpegPath from "ffmpeg-static";
 import { createClient } from "@supabase/supabase-js";
+import { AwsClient } from "aws4fetch";
 import { midiToChart, chartTextToChart, parseIni, iniMeta, diffSummary } from "../src/chart.js";
 
 const run = promisify(execFile);
@@ -33,7 +34,7 @@ if (!root || !fs.existsSync(root)) {
   process.exit(1);
 }
 
-let supabase = null;
+let supabase = null, r2 = null;
 if (!DRY) {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -42,7 +43,13 @@ if (!DRY) {
     process.exit(1);
   }
   supabase = createClient(url, key, { auth: { persistSession: false } });
+  // the song files go to Cloudflare R2 (the catalog stays in Supabase)
+  for (const k of ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"]) {
+    if (!process.env[k]) { console.error(`Falta ${k} en el archivo .env (mira .env.example).`); process.exit(1); }
+  }
+  r2 = new AwsClient({ accessKeyId: process.env.R2_ACCESS_KEY_ID, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY, service: "s3", region: "auto" });
 }
+const r2Url = (p) => `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${process.env.R2_BUCKET}/${p}`;
 
 const slug = (s) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
 const stripTags = (s = "") => s.replace(/<[^>]+>/g, "").trim();
@@ -114,8 +121,9 @@ async function processSong(dir) {
     const types = { "chart.json": "application/json", "backing.mp3": "audio/mpeg", "guitar.mp3": "audio/mpeg", "cover.jpg": "image/jpeg" };
     for (const f of fs.readdirSync(out)) {
       if (!types[f]) continue;
-      const { error } = await supabase.storage.from("songs").upload(`${id}/${f}`, fs.readFileSync(path.join(out, f)), { contentType: types[f], upsert: true, cacheControl: "31536000" });
-      if (error) throw new Error(`subiendo ${f}: ${error.message}`);
+      const res = await r2.fetch(r2Url(`${id}/${f}`), { method: "PUT", body: fs.readFileSync(path.join(out, f)),
+        headers: { "Content-Type": types[f], "Cache-Control": f === "chart.json" ? "no-cache" : "public, max-age=31536000" } });
+      if (!res.ok) throw new Error(`subiendo ${f}: ${res.status} ${await res.text()}`);
     }
     const { error } = await supabase.from("songs").upsert(row);
     if (error) throw new Error(`guardando en la tabla: ${error.message}`);
