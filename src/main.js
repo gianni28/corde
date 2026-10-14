@@ -11,7 +11,7 @@ import { Game, STAR_READY } from "./game.js";
 import { motionAvailable, motionNeedsPermission, motionReady, requestMotion, onLift, watchMotion, seen as motionSeen } from "./motion.js";
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
 import { accountMe, accountClaim, accountLink, accountSync } from "./net.js";
-import { shareCard } from "./share.js";
+import { shareCard, retoUrl, readReto } from "./share.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretSongs, secretBoard, songById } from "./net.js";
 import { VENUES, TO_ENCORE, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song } from "./admin.js";
@@ -560,6 +560,12 @@ function openSetup() {
   const cov = s.coverUrl || coverOf(s);
   $("setupCover").hidden = !cov; if (cov) $("setupCover").src = cov;
   app.diff = defaultDiff(app.chart, lanes);
+  // opened from a challenge link: its difficulty, and the score to beat on top
+  if (app.reto && app.reto.songId !== s.id) app.reto = null;
+  const reto = app.reto;
+  if (reto && notesFor(app.chart, reto.diff, lanes).length) app.diff = reto.diff;
+  $("retoBox").hidden = !reto;
+  if (reto) $("retoMsg").textContent = `${reto.name || "Alguien"} sacó ${reto.score.toLocaleString("es-CO")} en ${DIFFS.find((d) => d.key === reto.diff).name}. ¿Le ganas?`;
   app.boardLanes = lanes;
   const draw = () => { renderDiffChips($("setupDiffs"), app.chart, lanes, app.diff, (k) => { app.diff = k; settings.lastDiff = k; save(); draw(); }); showBoard($("setupBoard"), 5); };
   draw();
@@ -721,6 +727,7 @@ function finishDuo() {
   sfx.finale(Math.max(...sums.map((x) => x.stars)));
   $("resFail").hidden = true; $("soloRes").hidden = true; $("duoRes").hidden = false;
   $("shareBtn").hidden = true;
+  $("retoLine").hidden = true;
   $("againBtn").hidden = false; $("againBtn").classList.add("primary"); $("otherSongBtn").hidden = false; $("menuBtn").textContent = "Menú";
   $("resRandomBox").hidden = true;
   show("results");
@@ -1392,6 +1399,15 @@ function finishGame() {
   if (!$("pbLine").textContent) $("pbLine").hidden = true;
   // the result as a story image: only for songs that were finished
   app.shareRecord = !!(pb.beat && pb.old);
+  const reto = app.reto && app.song && app.reto.songId === app.song.id && app.reto.diff === app.diff ? app.reto : null;
+  const who = reto?.name || "tu retador";
+  $("retoLine").hidden = !reto;
+  if (reto) {
+    const gap = Math.abs(sum.score - reto.score).toLocaleString("es-CO");
+    const won = !sum.failed && sum.score > reto.score;
+    $("retoLine").classList.toggle("win", won);
+    $("retoLine").textContent = won ? `¡Le ganaste a ${who} por ${gap}!` : `Te faltaron ${gap} para ganarle a ${who}.`;
+  }
   $("shareBtn").hidden = sum.failed;
   $("againBtn").hidden = app.mode === "mp";
   $("resRandomBox").hidden = app.mode === "mp" || !online || (!!app.ctx && !app.ctx.via);
@@ -1615,12 +1631,19 @@ $("shareBtn").onclick = async () => {
   const sum = app.lastSummary, s = app.song;
   if (!sum || !s) return;
   const b = $("shareBtn"); b.disabled = true;
+  const diffName = DIFFS.find((d) => d.key === app.diff)?.name || "";
+  const link = s.id && s.id !== "local" ? retoUrl({ songId: s.id, diff: app.diff, score: sum.score, name: settings.name }) : "";
+  // copied right away, while the tap still counts: Instagram doesn't take the link, it goes in the link sticker
+  let copied = null;
+  if (link) copied = navigator.clipboard?.writeText(link).then(() => true, () => false);
+  const text = link ? `¿Me ganas en ${s.name}? Saqué ${sum.score.toLocaleString("es-CO")} en ${diffName} 🎸 ${link}` : "";
   try {
-    await shareCard({
+    const how = await shareCard({
       song: s.name, artist: s.artist, diff: DIFFS.find((d) => d.key === app.diff)?.name || "", lanes: app.lanes,
       score: sum.score, stars: sum.stars, acc: sum.acc, maxCombo: sum.maxCombo, hits: sum.hits, total: sum.total,
       player: settings.name || "", record: app.shareRecord, cover: s.id && s.id !== "local" ? coverOf(s) : "",
-    });
+    }, text);
+    if (how !== "cancelled" && copied && (await copied)) toast("Link del reto copiado: pégalo en el sticker de link de tu historia.", 4500);
   } catch (e) { toast("No se pudo crear la imagen."); }
   b.disabled = false;
 };
@@ -2119,6 +2142,20 @@ function joinFromLink() {
   else { $("mpErr").textContent = `Escribe tu nombre y toca Unirme para entrar a la sala ${code}.`; $("mpErr").hidden = false; $("mpName").focus(); }
 }
 setTimeout(joinFromLink, 0);
+// opened from a challenge link: once there's a name, straight to that song with the score to beat
+async function openFromReto() {
+  const r = readReto();
+  if (!r) return;
+  history.replaceState(null, "", location.pathname + location.hash);
+  while (welcome.open || !settings.name) await new Promise((res) => setTimeout(res, 300));
+  app.reto = r;
+  const s = await findSong(r.songId);
+  if (!s) { app.reto = null; return toast("Esa canción ya no está en Corde."); }
+  app.mode = "solo";
+  try { await loadLibrarySong(s); openSetup(); }
+  catch (e) { toast(e.message); show("home", false); }
+}
+setTimeout(openFromReto, 0);
 addEventListener("hashchange", joinFromLink);
 $("leaveRoom").onclick = () => { app.room?.leave(); app.room = null; app.mode = "solo"; app.history = []; show("home", false); };
 

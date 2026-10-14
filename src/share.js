@@ -170,11 +170,25 @@ export async function drawCard(r) {
 }
 
 /** Opens the phone's share sheet with the card; on computers it downloads the image instead. */
-export async function shareCard(r) {
+// The challenge link: opens the game straight on this song and difficulty, with the score to beat.
+export function retoUrl({ songId, diff, score, name }) {
+  const q = new URLSearchParams({ reto: songId, dif: diff, pts: String(Math.round(score)), de: name || "" });
+  return `${location.origin}/?${q}`;
+}
+/** Reads a challenge from the address (null when there is none or it looks wrong). */
+export function readReto(search = location.search) {
+  const q = new URLSearchParams(search);
+  const songId = q.get("reto"), diff = q.get("dif"), score = Math.round(Number(q.get("pts")));
+  if (!songId || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(songId) || !["easy", "medium", "hard", "expert"].includes(diff) || !(score > 0)) return null;
+  return { songId, diff, score, name: (q.get("de") || "").trim().slice(0, 16) };
+}
+
+/** Opens the phone's share sheet with the card (and the challenge text, which WhatsApp keeps); on computers it downloads the image. */
+export async function shareCard(r, text = "") {
   const blob = await drawCard(r);
   const file = new File([blob], `corde-${(r.song || "resultado").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`, { type: "image/png" });
   if (navigator.canShare?.({ files: [file] })) {
-    try { await navigator.share({ files: [file] }); return "shared"; }
+    try { await navigator.share(text ? { files: [file], text } : { files: [file] }); return "shared"; }
     catch (e) { if (e.name === "AbortError") return "cancelled"; }
   }
   const a = document.createElement("a");
