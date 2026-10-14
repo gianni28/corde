@@ -298,10 +298,11 @@ begin
   if found then
     perform wallet_ensure(acc);
     select * into w from wallets where account_id = acc for update;
-    if w.daily_bonus_day is null or w.daily_bonus_day < p_day then
+    -- keyed on the Bogotá day it's paid (not the song's day): yesterday's song then today's pays once
+    if w.daily_bonus_day is null or w.daily_bonus_day < today then
       got := wallet_pay(acc, 25, 'daily', p_day::text);
       why := case when got < 25 then 'cap' else 'ok' end;
-      update wallets set daily_bonus_day = p_day where account_id = acc returning * into w;
+      update wallets set daily_bonus_day = today where account_id = acc returning * into w;
     else
       why := 'paid';
     end if;
