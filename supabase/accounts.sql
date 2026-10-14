@@ -7,7 +7,10 @@
 --    reserved for them (one of those browsers claims it the first time it opens the updated game).
 --  - account_link: another device joins an account with its 4-letter code (shown in Ajustes on a linked device).
 --  - account_sync: merges a browser's progress into the account and hands back the merged progress.
--- Scores (submit-score and submit_daily) only go through when the name is this browser's account.
+-- Scores (submit-score and submit_daily) only go through when the name is this browser's account, or, for a browser
+-- that has no account yet, a name nobody has claimed.
+-- shop.sql (applied later) adds the wallet to acct_json, makes account_me volatile and adds the púas to submit_daily:
+-- re-run it after this file.
 
 create extension if not exists unaccent with schema extensions;
 
@@ -130,15 +133,21 @@ begin
   return merged;
 end $$;
 
-/** For the score paths: the account's spelling of the name, if this browser owns it; otherwise an error. */
+/** For the score paths: the name to post with, or an error. A browser with an account posts with its account's
+ *  spelling of the name; a browser from before accounts (none yet) may still post with a name nobody has claimed.
+ *  So a name coming back doesn't mean the browser has an account (the púas look the account up themselves). */
 create or replace function public.account_guard(p_name text, p_secret text) returns text
 language plpgsql stable security definer set search_path = public as $$
-declare a accounts;
+declare a accounts; owner accounts; nm text := acct_clean(p_name);
 begin
   select x.* into a from accounts x join account_devices d on d.account_id = x.id where d.device_key = acct_device(p_secret);
-  if not found then raise exception 'Primero escribe tu nombre' using errcode = '42501'; end if;
-  if a.name_key <> acct_key(acct_clean(p_name)) then raise exception 'Ese nombre es de otra cuenta' using errcode = '42501'; end if;
-  return a.name;
+  if found then
+    if a.name_key <> acct_key(nm) then raise exception 'Ese nombre es de otra cuenta' using errcode = '42501'; end if;
+    return a.name;
+  end if;
+  select * into owner from accounts where name_key = acct_key(nm);
+  if found then raise exception 'Ese nombre es de otra cuenta' using errcode = '42501'; end if;
+  return nm;
 end $$;
 
 revoke all on function public.acct_merge(jsonb, jsonb), public.acct_json(public.accounts), public.account_guard(text, text) from public, anon, authenticated;
