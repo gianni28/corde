@@ -7,6 +7,9 @@ const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5c
 export const BUCKET = "songs";
 // The song files (audio, charts, covers) are served from Cloudflare R2: free downloads, 10 GB free.
 const FILES_URL = import.meta.env.VITE_FILES_URL || "https://pub-daa029222392489f9b136b1d23fac19a.r2.dev";
+// The game's downloads (chart + audio) go through a Cloudflare Worker that keeps a copy of each song version near
+// the players; if it ever fails (or its free daily quota runs out) the same file comes from the bucket's own link.
+const SONGS_URL = import.meta.env.VITE_SONGS_URL || "https://corde-files.a-gianni2003.workers.dev";
 
 export const supabase = URL && KEY ? createClient(URL, KEY, { realtime: { params: { eventsPerSecond: 20 } } }) : null;
 export const online = !!supabase;
@@ -54,10 +57,15 @@ export async function downloadSong(song, onProgress) {
   if (song.has_guitar) files.push({ name: "guitar", file: song.guitar_file || "guitar.mp3", guitar: true });
   const prog = new Array(files.length).fill(0), tot = new Array(files.length).fill(1);
   const report = () => onProgress && onProgress(prog.reduce((a, b) => a + b, 0) / Math.max(1, tot.reduce((a, b) => a + b, 0)));
-  const chartBuf = await fetchBuf(`${fileUrl(song.id, "chart.json")}?t=${Date.now()}`, null, { cache: "no-store" });
+  // the Worker first, the bucket's link if that fails
+  const get = async (file, query, onP, init) => {
+    try { return await fetchBuf(`${SONGS_URL}/${song.id}/${file}?${query}`, onP, init); }
+    catch (e) { console.warn("worker:", e.message); return fetchBuf(`${fileUrl(song.id, file)}?${query}`, onP, init); }
+  };
+  const chartBuf = await get("chart.json", `t=${Date.now()}`, null, { cache: "no-store" });
   const v = hashBytes(chartBuf);
   const chart = JSON.parse(new TextDecoder().decode(chartBuf));
-  const stems = await Promise.all(files.map((f, i) => fetchBuf(`${fileUrl(song.id, f.file)}?v=${v}`, (g, t) => { prog[i] = g; tot[i] = t || g * 2; report(); })));
+  const stems = await Promise.all(files.map((f, i) => get(f.file, `v=${v}`, (g, t) => { prog[i] = g; tot[i] = t || g * 2; report(); })));
   return { chart, v, stems: stems.map((data, i) => ({ name: files[i].name, guitar: files[i].guitar, data })) };
 }
 

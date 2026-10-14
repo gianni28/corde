@@ -5,7 +5,7 @@ const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
   "Access-Control-Allow-Headers": "Range, Content-Type",
-  "Access-Control-Expose-Headers": "Content-Length, Content-Range, ETag",
+  "Access-Control-Expose-Headers": "Content-Length, Content-Range, ETag, X-Corde-Cache",
   "Access-Control-Max-Age": "86400",
 };
 
@@ -17,10 +17,13 @@ export default {
     const key = decodeURIComponent(new URL(request.url).pathname.slice(1));
     if (!/^[a-z0-9][a-z0-9-]{0,79}\/[a-z0-9.]+$/.test(key)) return new Response("No encontrado", { status: 404, headers: CORS });
 
-    // copia guardada en el centro de datos de Cloudflare más cercano (la segunda persona que pide la canción la recibe al instante)
+    // copia guardada en el centro de datos de Cloudflare más cercano (la segunda persona que pide la canción la recibe al instante).
+    // Solo para pedidos con ?v= (la versión de la canción): si la vuelves a subir desde #admin, la versión cambia y nunca se sirve la vieja.
+    const url = new URL(request.url), v = url.searchParams.get("v");
     const cache = caches.default;
-    const cacheKey = new Request(new URL(request.url).origin + "/" + key, { method: "GET" });
-    if (request.method === "GET" && !request.headers.has("Range")) {
+    const useCache = request.method === "GET" && !!v && /^[a-z0-9]{1,16}$/.test(v) && !request.headers.has("Range");
+    const cacheKey = new Request(`${url.origin}/${key}?v=${v}`, { method: "GET" });
+    if (useCache) {
       const hit = await cache.match(cacheKey);
       if (hit) { const r = new Response(hit.body, hit); r.headers.set("X-Corde-Cache", "HIT"); return r; }
     }
@@ -44,7 +47,7 @@ export default {
     }
     headers.set("X-Corde-Cache", "MISS");
     const res = new Response(obj.body, { headers });
-    if (request.method === "GET" && !key.endsWith(".json")) ctx.waitUntil(cache.put(cacheKey, res.clone())); // el chart siempre fresco
+    if (useCache && !key.endsWith(".json")) ctx.waitUntil(cache.put(cacheKey, res.clone())); // el chart siempre fresco
     return res;
   },
 };
