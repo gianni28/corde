@@ -115,7 +115,9 @@ export async function secretSongs(code) {
   return data || [];
 }
 /** A hidden song's leaderboard (the public board views can't see hidden songs). Same rows as topScores. */
-export async function secretBoard(code, songId, diff, lanes, limit = 10) {
+// Boards show everyone (up to this many rows, far more than ever play one song).
+export const BOARD_MAX = 1000;
+export async function secretBoard(code, songId, diff, lanes, limit = BOARD_MAX) {
   if (!supabase) return [];
   const { data, error } = await supabase.rpc("secret_board", { p_code: code.trim(), p_song_id: songId, p_diff: diff, p_lanes: lanes, p_limit: limit });
   if (error) throw rpcError(error);
@@ -130,19 +132,22 @@ export async function songById(id) {
 }
 
 /* ---------------- leaderboard ---------------- */
-export async function topScores(songId, diff, lanes, limit = 10) {
+/** period "all" (every run ever) or "week" (Monday to Sunday, Colombia time; it starts empty every Monday). */
+export async function topScores(songId, diff, lanes, limit = BOARD_MAX, period = "all") {
   if (!supabase) return [];
-  const { data, error } = await supabase.from("board_song").select("name, score, acc, max_combo").match({ song_id: songId, diff, lanes }).order("score", { ascending: false }).order("updated_at").limit(limit);
+  const view = period === "week" ? "board_week_song" : "board_song";
+  const { data, error } = await supabase.from(view).select("name, score, acc, max_combo").match({ song_id: songId, diff, lanes }).order("score", { ascending: false }).order("updated_at").limit(limit);
   if (error) throw new Error(error.message);
   return data;
 }
 
 /** Home screen boards, all string counts together: kind "total" (sum of best scores) or "best" (each player's best run). */
-export async function generalBoard(kind, limit = 10) {
+export async function generalBoard(kind, limit = BOARD_MAX, period = "all") {
   if (!supabase) return [];
+  const wk = period === "week";
   const q = kind === "total"
-    ? supabase.from("board_total_all").select("name, total, songs").order("total", { ascending: false })
-    : supabase.from("board_best_all").select("name, score, song, artist, diff").order("score", { ascending: false });
+    ? supabase.from(wk ? "board_week_total" : "board_total_all").select("name, total, songs").order("total", { ascending: false })
+    : supabase.from(wk ? "board_week_best" : "board_best_all").select("name, score, song, artist, diff").order("score", { ascending: false });
   const { data, error } = await q.limit(limit);
   if (error) throw new Error(error.message);
   return data;
@@ -168,15 +173,15 @@ export async function dailyToday() {
 }
 
 /**
- * The day's board for one song, difficulty and string count: the top 10, how many played, and where `me`
- * (a lowercased name) stands even outside the top 10 → { rows, total, mine: { score, rank } | null }.
+ * The day's board for one song, difficulty and string count: everyone, how many played, and where `me`
+ * (a lowercased name) stands → { rows, total, mine: { score, rank } | null }.
  */
 export async function dailyBoard({ day, songId, diff, lanes, me }) {
   if (!supabase) return { rows: [], total: 0, mine: null };
   const board = { day, song_id: songId, diff, lanes };
   const t = () => supabase.from("daily_scores");
   const [top, count, mine] = await Promise.all([
-    t().select("name, score, acc, stars").match(board).order("score", { ascending: false }).order("updated_at").limit(10),
+    t().select("name, score, acc, stars").match(board).order("score", { ascending: false }).order("updated_at").limit(BOARD_MAX),
     t().select("id", { count: "exact", head: true }).match(board),
     me ? t().select("score").match(board).eq("name_key", me).maybeSingle() : Promise.resolve({ data: null }),
   ]);

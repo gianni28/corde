@@ -302,6 +302,11 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .board-list .a { font: 500 14px var(--body); color: var(--muted); font-variant-numeric: tabular-nums; }
 .board-list .s { font: 700 19px var(--display); font-variant-numeric: tabular-nums; }
 .board-me { margin-top: -4px; }
+/* every player is listed: long boards scroll inside themselves */
+.board-list { max-height: min(46vh, 430px); overflow-y: auto; overscroll-behavior: contain; }
+.home-board .board-list { max-height: min(34vh, 330px); }
+.seg.period { flex: none; }
+.seg.period button { padding: 5px 10px; font-size: 13px; }
 .record { margin: 0; font: 400 34px/1 var(--rock); background: linear-gradient(180deg, #fff6c0, #ffd23a 40%, #ff7a1a 75%, #c4161c); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-stroke: 1px #2a0805; filter: drop-shadow(0 3px 0 #000) drop-shadow(0 0 16px rgba(255,110,20,.5)); }
 .name-ask { display: flex; flex-direction: column; gap: 8px; }
 
@@ -846,3 +851,16 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .ios-box { text-align: left; align-items: stretch; }
 .ios-steps { margin: 0; padding-left: 1.4em; display: grid; gap: 10px; font: 500 18px/1.35 var(--display); color: var(--ink); }
 .ios-steps li::marker { color: var(--gold); font-weight: 700; }
+
+/* ---------- logros ---------- */
+.logros-count { margin-left: auto; white-space: nowrap; }
+.logros { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px;
+  max-height: min(64vh, 620px); overflow-y: auto; overscroll-behavior: contain; }
+.logros li { display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: center; padding: 10px 12px; background: rgba(0,0,0,.35); box-shadow: inset 0 0 0 1px #000; }
+.logros svg { width: 36px; height: 36px; fill: #3a332e; }
+.logros li.on svg { fill: var(--gold); filter: drop-shadow(0 0 8px rgba(245,197,24,.45)); }
+.logros b { display: block; font: 600 18px/1.15 var(--display); letter-spacing: .02em; color: var(--muted); }
+.logros li.on b { color: var(--ink); }
+.logros small { display: block; color: var(--muted); font-size: 15px; line-height: 1.25; }
+.logros small i { display: block; font-style: normal; color: var(--gold); font-size: 13px; letter-spacing: .04em; margin-top: 2px; }
+.celebrate.cel-ach .cel-rays { background: repeating-conic-gradient(from 0deg, rgba(255,215,90,.5) 0 6deg, transparent 6deg 18deg); }

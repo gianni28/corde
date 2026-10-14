@@ -12,6 +12,7 @@ import { motionAvailable, motionNeedsPermission, motionReady, requestMotion, onL
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
 import { accountMe, accountClaim, accountLink, accountSync } from "./net.js";
 import { shareCard, retoUrl, readReto } from "./share.js";
+import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak } from "./achievements.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretSongs, secretBoard, songById } from "./net.js";
 import { VENUES, TO_ENCORE, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song } from "./admin.js";
@@ -76,7 +77,7 @@ const app = {
 /* ================= menu music ================= */
 // A random library song plays while the menus are up (title and artist top right on a wide screen, under the
 // menu on a phone). It stops when a song starts and picks up again back in the menus.
-const MENU_MUSIC = ["home", "library", "setup", "settings", "mp", "lobby", "admin", "tutorial", "duo", "daily", "tour"];
+const MENU_MUSIC = ["home", "library", "setup", "settings", "logros", "mp", "lobby", "admin", "tutorial", "duo", "daily", "tour"];
 const wideMQ = matchMedia("(min-width: 1000px)");
 const music = createMenuMusic({ onChange: () => renderNowPlaying() });
 // It starts as soon as the page opens: a random song is fetched right away and plays the moment the browser
@@ -118,7 +119,7 @@ document.addEventListener("visibilitychange", () => syncMenuMusic());
 music.setMuted(settings.menuMusic === false);
 
 /* ================= navigation ================= */
-const SCREENS = ["home", "library", "setup", "settings", "mp", "lobby", "pause", "results", "loading", "admin", "tutorial", "duo", "daily", "tour"];
+const SCREENS = ["home", "library", "setup", "settings", "logros", "mp", "lobby", "pause", "results", "loading", "admin", "tutorial", "duo", "daily", "tour"];
 let motionTest = null; // the movement test in Settings, while it runs
 function show(name, push = true) {
   const transient = ["pause", "loading", "play", "results"];
@@ -153,6 +154,7 @@ document.querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => {
   if (to === "library") openLibrary();
   else if (to === "settings") { renderSettings(); show("settings"); }
   else if (to === "tour") openTour();
+  else if (to === "logros") { renderLogros(); show("logros"); }
   else if (to === "mp") { $("mpName").value = settings.name || ""; $("mpErr").hidden = true; $("duoCard").hidden = $("duoOr").hidden = touch; show("mp"); }
 }));
 
@@ -197,7 +199,7 @@ $("iosModal").onclick = (e) => { if (e.target === e.currentTarget) $("iosModal")
 $("homeFoot").textContent = online ? "Biblioteca en línea" : "Modo local · conecta Supabase para la biblioteca y el multijugador";
 
 // General board, every string count together: "total" = sum of each player's best per song,
-// "best" = each player's best single run. Top 10 beside the menu, top 5 under it.
+// "best" = each player's best single run. Everyone, in a list that scrolls.
 let homeTab = "total", homeReq = 0;
 async function renderHomeBoard() {
   const el = $("homeBoard");
@@ -205,7 +207,7 @@ async function renderHomeBoard() {
   el.querySelectorAll("#homeTabs button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === homeTab)));
   const req = ++homeReq;
   let rows;
-  try { rows = await generalBoard(homeTab, innerWidth >= 1000 ? 10 : 5); }
+  try { rows = await generalBoard(homeTab, undefined, settings.boardPeriod); }
   catch (e) { console.warn("leaderboard:", e.message); return; }
   if (req !== homeReq) return;
   const me = (settings.name || "").trim().toLowerCase();
@@ -219,8 +221,11 @@ async function renderHomeBoard() {
     li.querySelector(".s").textContent = Number(homeTab === "total" ? r.total : r.score).toLocaleString("es-CO");
     ol.appendChild(li);
   });
-  el.querySelector(".board-empty").hidden = rows.length > 0;
+  const empty = el.querySelector(".board-empty");
+  empty.hidden = rows.length > 0;
+  empty.textContent = settings.boardPeriod === "week" ? "Nadie ha jugado esta semana. ¡Sé el primero!" : "Todavía nadie ha jugado.";
   el.hidden = false;
+  scrollToMe(ol);
 }
 $("homeTabs").onclick = (e) => { const b = e.target.closest("button"); if (!b || b.dataset.v === homeTab) return; homeTab = b.dataset.v; renderHomeBoard(); };
 renderHomeBoard();
@@ -567,7 +572,7 @@ function openSetup() {
   $("retoBox").hidden = !reto;
   if (reto) $("retoMsg").textContent = `${reto.name || "Alguien"} sacó ${reto.score.toLocaleString("es-CO")} en ${DIFFS.find((d) => d.key === reto.diff).name}. ¿Le ganas?`;
   app.boardLanes = lanes;
-  const draw = () => { renderDiffChips($("setupDiffs"), app.chart, lanes, app.diff, (k) => { app.diff = k; settings.lastDiff = k; save(); draw(); }); showBoard($("setupBoard"), 5); };
+  const draw = () => { renderDiffChips($("setupDiffs"), app.chart, lanes, app.diff, (k) => { app.diff = k; settings.lastDiff = k; save(); draw(); }); showBoard($("setupBoard")); };
   draw();
   const keys = settings.keys.slice(0, lanes).map(keyLabel).join(" ");
   const starHow = touch ? (liftOn() ? "Poder estrella: actívalo levantando o sacudiendo el celular, como una guitarra." : "Toca el multiplicador para activar el poder estrella.") : "Enter activa el poder estrella.";
@@ -892,7 +897,7 @@ function renderDaily() {
   tickDaily();
 }
 const boardKey = () => `${daily.diff}:${boardLanes(dailySong(), daily.diff)}`;
-// the board of the chosen difficulty: top 10, how many played, and your place even if you're not in the top 10
+// the board of the chosen difficulty: everyone, how many played, and your place
 async function refreshDailyBoard() {
   const s = dailySong(); if (!s || !daily.diff) return;
   const key = boardKey(), day = daily.day, [diff, lanes] = [daily.diff, boardLanes(s, daily.diff)];
@@ -930,7 +935,8 @@ function renderDailyBoard() {
   empty.hidden = b.rows.length > 0;
   empty.textContent = "Nadie ha tocado esta dificultad hoy. ¡Sé el primero!";
   $("dailyCount").textContent = `${b.total} ${b.total === 1 ? "jugador" : "jugadores"} hoy en ${name}${strings}`;
-  if (b.mine && b.mine.rank > 10) { $("dailyMe").textContent = `Tu puesto: #${b.mine.rank} con ${b.mine.score.toLocaleString("es-CO")}`; $("dailyMe").hidden = false; }
+  scrollToMe(ol);
+  if (b.mine && b.mine.rank > b.rows.length) { $("dailyMe").textContent = `Tu puesto: #${b.mine.rank} con ${b.mine.score.toLocaleString("es-CO")}`; $("dailyMe").hidden = false; }
 }
 $("dailyPlay").onclick = async () => {
   const s = dailySong(); if (!s || !daily.day) return;
@@ -1104,6 +1110,7 @@ function finishCtx(sum) {
   }
   // "Otra vez" stops being the main button when the tour has somewhere to go
   $("againBtn").classList.toggle("primary", !next);
+  app.tourEvent = counted ? (legend ? "legend" : venue ? "venue" : null) : null;
   if (legend) return () => { sfx.unlock(); R.pyro(); celebrate({ kicker: "Gira terminada", title: "¡Leyenda del rock!", sub: `Llenaste ${legend.venue.in || legend.venue.name}. ¿Te le mides a la gira en otra dificultad?`, ms: 4200, kind: "legend" }); };
   if (venue) return () => { sfx.unlock(); R.pyro(); celebrate({ kicker: "Nuevo escenario", title: venue.next.name, sub: venue.next.blurb, ms: 3600, kind: "venue" }); };
   if (encore) return () => { sfx.encore(); celebrate({ kicker: v.venue.name, title: "¡Otra! ¡Otra!", sub: "El público pide el bis.", ms: 2600, kind: "encore" }); };
@@ -1133,6 +1140,52 @@ function dropCelebration() {
   const el = $("celebrate"); el.classList.remove("show"); el.hidden = true;
 }
 $("celebrate").onclick = endCelebrate;
+
+/* ---------- logros ---------- */
+// distinct songs with a finished run (the personal bests only keep finished runs)
+const songsDone = () => Object.values(bests).filter((b) => b && Object.values(b).some((x) => x && x.score > 0)).length;
+// one after another, each a short gold card
+function celebrateAchievements(list) {
+  if (!list.length) return;
+  const [a, ...rest] = list;
+  sfx.unlock();
+  celebrate({ kicker: "Logro desbloqueado", title: a.name, sub: a.desc, ms: 2600, kind: "ach", then: rest.length ? () => celebrateAchievements(rest) : null });
+}
+// what your saved bests already prove (players from before the logros existed get theirs without replaying), silently
+function backfillAchievements() {
+  const ids = [], n = songsDone();
+  if (n >= 1) ids.push("primer-acorde");
+  if (n >= 10) ids.push("repertorio");
+  if (n >= 25) ids.push("setlist");
+  if (n >= 50) ids.push("enciclopedia");
+  for (const b of Object.values(bests)) for (const [d, x] of Object.entries(b || {})) {
+    if (!x || !(x.score > 0)) continue;
+    if (x.stars >= 5) ids.push("cinco-estrellas");
+    if (x.acc >= 1) ids.push("sin-fallar");
+    if (d === "hard" || d === "expert") ids.push("dificil");
+    if (d === "expert") ids.push("experto");
+    if (d === "expert" && x.stars >= 5) ids.push("virtuoso");
+  }
+  if (unlock(ids).length) syncSoon();
+}
+setTimeout(backfillAchievements, 0);
+function renderLogros() {
+  const ul = $("logrosList"); ul.innerHTML = "";
+  const won = achievementsWon();
+  const fmt = (d) => new Date(d + "T12:00:00").toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
+  // the ones you have first, in list order; then the rest
+  const list = [...ACHIEVEMENTS.filter((a) => won[a.id]), ...ACHIEVEMENTS.filter((a) => !won[a.id])];
+  for (const a of list) {
+    const li = document.createElement("li");
+    if (won[a.id]) li.className = "on";
+    li.innerHTML = `<svg aria-hidden="true"><use href="#trophy"/></svg><div><b></b><small></small></div>`;
+    li.querySelector("b").textContent = a.name;
+    li.querySelector("small").textContent = a.desc;
+    if (won[a.id]) { const i = document.createElement("i"); i.textContent = fmt(won[a.id]); li.querySelector("small").appendChild(i); }
+    ul.appendChild(li);
+  }
+  $("logrosCount").textContent = `${Object.keys(won).filter((id) => ACHIEVEMENTS.some((a) => a.id === id)).length} de ${ACHIEVEMENTS.length}`;
+}
 
 /* ---------- tutorial (first song) + lifting the phone ---------- */
 const liftOn = () => touch && motionAvailable() && settings.starMode !== "tap" && (!motionNeedsPermission() || settings.motion === "granted");
@@ -1399,12 +1452,14 @@ function finishGame() {
   if (!$("pbLine").textContent) $("pbLine").hidden = true;
   // the result as a story image: only for songs that were finished
   app.shareRecord = !!(pb.beat && pb.old);
+  app.retoWon = false;
   const reto = app.reto && app.song && app.reto.songId === app.song.id && app.reto.diff === app.diff ? app.reto : null;
   const who = reto?.name || "tu retador";
   $("retoLine").hidden = !reto;
   if (reto) {
     const gap = Math.abs(sum.score - reto.score).toLocaleString("es-CO");
     const won = !sum.failed && sum.score > reto.score;
+    app.retoWon = won;
     $("retoLine").classList.toggle("win", won);
     $("retoLine").textContent = won ? `¡Le ganaste a ${who} por ${gap}!` : `Te faltaron ${gap} para ganarle a ${who}.`;
   }
@@ -1420,10 +1475,22 @@ function finishGame() {
   $("newRecord").hidden = true; $("boardMe").hidden = true; $("nameAsk").hidden = true; $("resultsBoard").hidden = true;
   app.boardLanes = app.lanes;
   if (app.mode !== "mp" && hasBoard()) {
-    if (sum.failed) showBoard($("resultsBoard"), 10); // a failed song doesn't go on the board
+    if (sum.failed) showBoard($("resultsBoard")); // a failed song doesn't go on the board
     else if (settings.name || !(sum.score > 0)) sendScore(sum); else { $("nameAsk").hidden = false; $("boardName").value = ""; app.pendingScore = sum; }
   }
-  const celebration = finishCtx(sum);
+  app.tourEvent = null;
+  const ctxCel = finishCtx(sum);
+  // logros: lo que esta canción ganó (la práctica nunca llega aquí)
+  const ids = app.song?.id === "local" ? [] : forRun({ sum, diff: app.diff, songsDone: songsDone() });
+  if (app.ctx?.kind === "daily" && !sum.failed && sum.score > 0) ids.push(...forStreak(dailyStreak(app.ctx.day)));
+  if (app.tourEvent) ids.push("de-gira");
+  if (app.tourEvent === "legend") ids.push("leyenda");
+  if (app.mode === "mp") ids.push("en-banda");
+  if (app.retoWon) ids.push("reto-aceptado");
+  const fresh = unlock(ids);
+  const celebration = !fresh.length ? ctxCel
+    : !ctxCel ? () => celebrateAchievements(fresh)
+    : () => { ctxCel(); const prev = celThen; celThen = () => { prev && prev(); celebrateAchievements(fresh); }; };
   syncSoon(); // bests, the day's streak and the tour, to the other devices
   show("results");
   // after the final chord and the crowd, and only if the player is still looking at the results
@@ -1485,12 +1552,14 @@ function playerSecret() {
 const TOUR_KEY = "corde.tour.v1";
 let account = null; // { name, code, progress }
 const readJson = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || "null") ?? d; } catch { return d; } };
-const localProgress = () => ({ days: [...new Set([...readDailyLog(), ...dailyLog.days])].sort(), bests, tour: readJson(TOUR_KEY, {}) });
+const localProgress = () => ({ days: [...new Set([...readDailyLog(), ...dailyLog.days])].sort(), bests, tour: readJson(TOUR_KEY, {}), ach: achievementsWon() });
 function applyProgress(p) {
   if (!p || typeof p !== "object") return;
   if (p.bests && typeof p.bests === "object") { bests = p.bests; try { localStorage.setItem(BEST_KEY, JSON.stringify(bests)); } catch {} }
   if (Array.isArray(p.days)) { dailyLog.days = [...new Set([...p.days, ...dailyLog.days])].sort().slice(-400); try { localStorage.setItem(DAILY_KEY, JSON.stringify({ days: dailyLog.days })); } catch {} }
   if (p.tour && typeof p.tour === "object") { try { localStorage.setItem(TOUR_KEY, JSON.stringify(p.tour)); } catch {} }
+  if (p.ach && typeof p.ach === "object") mergeAchievements(p.ach);
+  try { backfillAchievements(); } catch {}
   try { renderDailyCard(); } catch {}
   if (app.screen === "library") try { renderSongs(); } catch {}
 }
@@ -1582,14 +1651,13 @@ async function ensureAccount() {
 }
 
 async function sendScore(sum) {
-  if (!(sum.score > 0)) { showBoard($("resultsBoard"), 10); return; } // empty runs stay off the board
+  if (!(sum.score > 0)) { showBoard($("resultsBoard")); return; } // empty runs stay off the board
   try {
     const r = await submitScore({ song_id: app.song.id, diff: app.diff, lanes: app.lanes, secret: playerSecret(), name: settings.name,
       score: sum.score, acc: sum.acc, max_combo: sum.maxCombo, stars: sum.stars });
     $("newRecord").hidden = !r.newRecord;
-    if (r.rank) { $("boardMe").textContent = `Tu mejor puesto: #${r.rank}`; $("boardMe").hidden = false; }
-    showBoard($("resultsBoard"), 10, r.rank);
-  } catch (e) { console.warn("leaderboard:", e.message); showBoard($("resultsBoard"), 10); }
+    showBoard($("resultsBoard"));
+  } catch (e) { console.warn("leaderboard:", e.message); showBoard($("resultsBoard")); }
 }
 $("nameAsk").onsubmit = (e) => {
   e.preventDefault();
@@ -1604,29 +1672,56 @@ let boardReq = 0;
 // The game picks the board by itself, never shown to the player: the strings really used.
 // A difficulty whose chart never touches the 5th string is the same on 4 or 5, so it counts for 4
 // (same rule as the server); difficulty/expert played with 5 strings count for 5.
-async function showBoard(el, limit, myRank) {
+async function showBoard(el) {
   if (!hasBoard()) { el.hidden = true; return; }
   el.hidden = false;
+  // a secret song has no weekly board
+  const per = el.querySelector(".period"); if (per) per.hidden = !!app.song.secret;
+  const period = app.song.secret ? "all" : settings.boardPeriod;
   const fifth = (app.song.diffs?.[app.diff]?.lanes || [4]).includes(4);
   const lanes = (app.boardLanes || deviceLanes()) === 5 && fifth ? 5 : 4;
   const req = ++boardReq;
   let rows = [];
   try {
     // a secret song's board needs the code (a friend who joined a room without it sees none)
-    if (app.song.secret) rows = secretCode() ? await secretBoard(secretCode(), app.song.id, app.diff, lanes, limit) : [];
-    else rows = await topScores(app.song.id, app.diff, lanes, limit);
+    if (app.song.secret) rows = secretCode() ? await secretBoard(secretCode(), app.song.id, app.diff, lanes) : [];
+    else rows = await topScores(app.song.id, app.diff, lanes, undefined, period);
   } catch (e) { console.warn("leaderboard:", e.message); }
   if (req !== boardReq) return;
   const ol = el.querySelector(".board-list"); ol.innerHTML = "";
+  const me = (settings.name || "").trim().toLowerCase();
   rows.forEach((r, i) => {
     const li = document.createElement("li");
-    if (myRank && i + 1 === myRank) li.className = "me";
+    if (me && r.name.trim().toLowerCase() === me) li.className = "me";
     li.innerHTML = `<span class="pos">${i + 1}</span><span class="n"></span><span class="a">${Math.round((r.acc || 0) * 100)}%</span><span class="s">${r.score.toLocaleString("es-CO")}</span>`;
     li.querySelector(".n").textContent = r.name;
     ol.appendChild(li);
   });
-  el.querySelector(".board-empty").hidden = rows.length > 0;
+  const empty = el.querySelector(".board-empty");
+  empty.hidden = rows.length > 0;
+  empty.textContent = period === "week" ? "Nadie ha tocado esta dificultad esta semana." : "Nadie ha tocado esta dificultad todavía.";
+  scrollToMe(ol);
+  // after a run: your place on the board you're looking at
+  if (el.id === "resultsBoard") {
+    const pos = me ? rows.findIndex((r) => r.name.trim().toLowerCase() === me) + 1 : 0;
+    $("boardMe").hidden = !pos;
+    if (pos) $("boardMe").textContent = period === "week" ? `Tu puesto esta semana: #${pos}` : `Tu mejor puesto: #${pos}`;
+  }
 }
+// your own row in view (a long board scrolls inside itself)
+function scrollToMe(ol) {
+  const mine = ol.querySelector("li.me");
+  ol.scrollTop = mine ? Math.max(0, mine.offsetTop - ol.offsetTop - ol.clientHeight / 2 + mine.offsetHeight / 2) : 0;
+}
+// "Semana" / "Siempre" on every board: one choice for all of them, remembered
+function paintPeriods() { document.querySelectorAll(".seg.period button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.p === settings.boardPeriod))); }
+document.querySelectorAll(".seg.period").forEach((seg) => seg.addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b || b.dataset.p === settings.boardPeriod) return;
+  settings.boardPeriod = b.dataset.p; save(); paintPeriods();
+  const board = seg.closest(".board");
+  if (board.id === "homeBoard") renderHomeBoard(); else showBoard(board);
+}));
+paintPeriods();
 $("shareBtn").onclick = async () => {
   const sum = app.lastSummary, s = app.song;
   if (!sum || !s) return;
@@ -1644,6 +1739,7 @@ $("shareBtn").onclick = async () => {
       player: settings.name || "", record: app.shareRecord, cover: s.id && s.id !== "local" ? coverOf(s) : "",
     }, text);
     if (how !== "cancelled" && copied && (await copied)) toast("Link del reto copiado: pégalo en el sticker de link de tu historia.", 4500);
+    if (how !== "cancelled") { const f = unlock(["al-escenario"]); if (f.length) { celebrateAchievements(f); syncSoon(); } }
   } catch (e) { toast("No se pudo crear la imagen."); }
   b.disabled = false;
 };
