@@ -130,6 +130,7 @@
         <button data-go="library" data-mode="solo">Jugar</button>
         <button data-go="tour">Gira</button>
         <button data-go="mp">Multijugador</button>
+        <button data-go="tienda">Tienda<span class="menu-picks" id="homePicks" hidden><svg aria-hidden="true"><use href="#pick"/></svg><b></b></span></button>
         <button data-go="logros">Logros</button>
         <button data-go="settings">Ajustes</button>
       </nav>
@@ -217,6 +218,21 @@
       <header class="bar"><button class="back" data-back>Volver</button><h2>Logros</h2><span class="hint logros-count" id="logrosCount"></span></header>
       <ul class="logros" id="logrosList"></ul>
     </div>
+  </section>
+
+  <!-- ===== SHOP ===== -->
+  <section class="screen panel-screen shop-screen" id="s-tienda" hidden>
+    <div class="panel shop-panel">
+      <header class="bar"><button class="back" data-back>Volver</button><h2>Tienda</h2><span class="wallet-chip" id="shopPicks" title="Tus púas"><svg aria-hidden="true"><use href="#pick"/></svg><b></b></span></header>
+      <div class="shop-cats" id="shopCats" role="tablist" aria-label="Qué quieres cambiar"></div>
+      <div class="shop-note" id="shopNote" hidden><p class="hint" id="shopNoteMsg"></p><button class="btn" id="shopAccount" hidden>Crear mi cuenta</button></div>
+      <div class="shop-grid" id="shopGrid" role="listbox"></div>
+      <div class="shop-detail" id="shopDetail">
+        <div class="sd-text"><b id="sdName"></b><small id="sdInfo"></small></div>
+        <button class="primary shop-act" id="shopAct"></button>
+      </div>
+    </div>
+    <div class="streak shop-streak" id="shopStreak" aria-hidden="true"></div>
   </section>
 
   <!-- ===== SETTINGS ===== -->
@@ -489,10 +505,14 @@
       </div>
       <p class="pb-line" id="pbLine" hidden></p>
       <p class="pb-line reto-line" id="retoLine" hidden></p>
+      <div class="ctx-res picks-res" id="picksRes" hidden>
+        <svg aria-hidden="true"><use href="#pick"/></svg>
+        <div><span class="label">Púas<span id="picksBal"></span></span><b id="picksMsg"></b><small id="picksSub"></small></div>
+      </div>
       <button class="btn share-btn" id="shareBtn" aria-label="Compartir" title="Compartir" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#share"/></svg></button>
       <div class="ctx-res daily-res" id="dailyRes" hidden>
         <svg aria-hidden="true"><use href="#flame"/></svg>
-        <div><span class="label">Canción del día</span><b id="dailyRank"></b><small id="dailyResStreak"></small></div>
+        <div><span class="label">Canción del día</span><b id="dailyRank"></b><small id="dailyResStreak"></small><small class="daily-picks" id="dailyPicks" hidden><svg aria-hidden="true"><use href="#pick"/></svg><span></span></small></div>
       </div>
       <div class="ctx-res tour-res" id="tourRes" hidden>
         <div><span class="label" id="tourResVenue"></span><b id="tourResMsg"></b></div>
