@@ -298,6 +298,11 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .auto-list button:hover { color: #fff; background: linear-gradient(180deg, #c4161c, #6e0808); }
 .uploads .bar2 { grid-column: 2 / -1; height: 3px; background: #0a0808; overflow: hidden; }
 .uploads .bar2 i { display: block; height: 100%; width: 100%; transform: scaleX(0); transform-origin: left; background: linear-gradient(90deg, #7a0a0a, var(--red-hi), var(--fire)); transition: transform .2s; }
+/* the songs having their guitar separated: no checkbox, so the name gets the whole first line and the status goes under it */
+#splitList li { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+#splitList .n { white-space: normal; }
+#splitList .st { white-space: normal; text-align: left; }
+#splitList .bar2 { grid-column: 1 / -1; }
 #openAdmin { align-self: flex-start; }
 
 /* random song */
