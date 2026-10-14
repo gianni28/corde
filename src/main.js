@@ -1427,7 +1427,12 @@ function startGame({ lanes, diff, practice = null, duo = null, ctx = null }) {
   R.setPlayers(duo ? 2 : 1);
   app.practice = practice ? { ...practice, loopAt: Math.min(practice.to + 1.2, player.duration - (app.songOffsetMs || 0) / 1000 - 0.2) } : null;
   app.failing = false;
-  if (!energyCache.has(app.decoded)) energyCache.set(app.decoded, energyCurve(app.decoded.map((s) => s.buffer)));
+  // the chart's busiest difficulty tells the crowd where the song gets intense
+  if (!energyCache.has(app.decoded)) {
+    const dk = ["expert", "hard", "medium", "easy"].find((d) => app.chart?.diffs?.[d]?.notes?.length);
+    const times = dk ? notesFor(app.chart, dk, 5).map((x) => x.t + (app.songOffsetMs || 0) / 1000) : null;
+    energyCache.set(app.decoded, energyCurve(app.decoded.map((s) => s.buffer), times));
+  }
   app.energy = energyCache.get(app.decoded);
   hideStarTip();
   $("practiceTag").hidden = !practice;
@@ -2278,8 +2283,8 @@ function neckState(g, t, beats, from = g.next) {
 function renderGames(gs, t, dt, from) {
   const beats = visibleBeats(gs[0].beats, t, gs[0].look);
   const necks = gs.map((g) => neckState(g, t, beats, from ?? g.next));
-  if (gs.length === 1) R.render({ ...necks[0], dt, energy: en.e, punch: en.p });
-  else R.render({ players: necks, dt, energy: en.e, punch: en.p });
+  if (gs.length === 1) R.render({ ...necks[0], dt, energy: en.e, punch: en.p, calm: en.c });
+  else R.render({ players: necks, dt, energy: en.e, punch: en.p, calm: en.c });
 }
 function onGameEvent(g, ev, now) {
   const p = g.ui.p, h = g.ui.hud;
@@ -2353,8 +2358,8 @@ function frame(now) {
   } else {
     // attract mode behind the menus: the menu song's own notes, in time with it (or a demo pattern when it's silent)
     const m = music.show();
-    let t, notes, beats, energy = 0.55, punch = 0;
-    if (m) { t = m.t; notes = m.notes; beats = m.beats; energy = m.energy; punch = m.punch; }
+    let t, notes, beats, energy = 0.55, punch = 0, calm = 0;
+    if (m) { t = m.t; notes = m.notes; beats = m.beats; energy = m.energy; punch = m.punch; calm = m.calm; }
     else { t = now / 1000 % (demo.notes[demo.notes.length - 1].t - 2); notes = demo.notes; beats = demo.beats; }
     if (attract.notes !== notes) { attract.notes = notes; demoNext = 0; notes.forEach((n) => (n.state = 0)); while (demoNext < notes.length && notes[demoNext].t < t - 0.05) notes[demoNext++].state = 1; }
     if (demoNext > 0 && notes[demoNext - 1].t > t + 0.05) { demoNext = 0; notes.forEach((n) => (n.state = 0)); while (demoNext < notes.length && notes[demoNext].t < t - 0.05) notes[demoNext++].state = 1; }
@@ -2365,7 +2370,7 @@ function frame(now) {
     const from = Math.max(0, demoNext - 12);
     for (let i = from; i < demoNext; i++) { const n = notes[i]; n.holding = !!(n.dur && t < n.t + n.dur); if (n.holding) { pressed[n.lane] = true; R.holdSpark(n.lane); } }
     R.setHype(0.6);
-    R.render({ t, look: 1.6, notes, from, pressed, beats: visibleBeats(beats, t, 1.6), dt, energy, punch });
+    R.render({ t, look: 1.6, notes, from, pressed, beats: visibleBeats(beats, t, 1.6), dt, energy, punch, calm });
   }
 }
 requestAnimationFrame(frame);

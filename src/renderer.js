@@ -1294,7 +1294,7 @@ export function createRenderer(canvas) {
     // two players: { dt, energy, punch, players: [{ t, look, notes, from, pressed, beats, star, starReady }, …] }
     render(state) {
       const P = state.players || [state];
-      const { dt = 0.016, energy = 0.55, punch = 0 } = state;
+      const { dt = 0.016, energy = 0.55, punch = 0, calm = null } = state;
       const { t, beats = [] } = P[0];
       const now = performance.now() / 1000;
       const E = energy;
@@ -1347,7 +1347,7 @@ export function createRenderer(canvas) {
         if (starGlow > 0.01) rimCol.lerp(sk.starRim, starGlow * 0.75);
         const fdt = Math.min(0.1, peopleDt); peopleDt = 0;
         camera.updateMatrixWorld();
-        const f = { bpos, ph: phase, bar: beatTrack.bar, E: Math.min(1, E + starGlow * 0.12), P: punch, hype: hypeS, star: starGlow, dt: fdt, now, rim: rimCol };
+        const f = { bpos, ph: phase, bar: beatTrack.bar, E: Math.min(1, E + starGlow * 0.12), P: punch, C: calm, hype: hypeS, star: starGlow, dt: fdt, now, rim: rimCol };
         crowd.update(f, camera);
         band.update(f);
       }
