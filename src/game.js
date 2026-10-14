@@ -1,7 +1,7 @@
 // Gameplay: timing, hits, sustains, scoring. No rendering or DOM here.
 import { notesFor, starPhrasesFor } from "./chart.js";
 
-export const WINDOW = 0.1; // ±100 ms to hit a note
+export const WINDOW = 0.1; // ±100 ms to hit a note (a touch screen gets a bit more: see window)
 export const PERFECT = 0.045;
 export const STAR_READY = 0.5; // star meter needed to activate (half)
 // Points per note by difficulty: harder charts have more notes AND each one is worth more, so playing the
@@ -13,7 +13,8 @@ export class Game {
   // offsetMs: the player's latency compensation (learned/adjustable). songOffsetMs: how much later the song's audio
   // runs than its chart (MP3 encoder padding, song.ini "delay"); fixed per song.
   // practice: {from, to} plays only that part (chart seconds). canFail: the rock meter can end the song.
-  constructor({ chart, diff, lanes, player, offsetMs = 0, songOffsetMs = 0, look = 1.5, autoSync = true, practice = null, canFail = false }) {
+  constructor({ chart, diff, lanes, player, offsetMs = 0, songOffsetMs = 0, look = 1.5, autoSync = true, practice = null, canFail = false, window = WINDOW }) {
+    this.window = window;
     this.chart = chart;
     this.diff = diff;
     this.lanes = lanes;
@@ -127,8 +128,8 @@ export class Game {
     let best = null;
     for (let i = this.next; i < this.notes.length; i++) {
       const n = this.notes[i];
-      if (n.t > t + WINDOW) break;
-      if (n.state === 0 && n.lane === lane && Math.abs(n.t - t) <= WINDOW) { best = n; break; }
+      if (n.t > t + this.window) break;
+      if (n.state === 0 && n.lane === lane && Math.abs(n.t - t) <= this.window) { best = n; break; }
     }
     if (best) {
       best.state = 1;
@@ -202,7 +203,7 @@ export class Game {
     for (let i = this.next; i < N.length; i++) {
       const n = N[i];
       if (n.t > t) break;
-      if (n.state === 0 && t - n.t > WINDOW) {
+      if (n.state === 0 && t - n.t > this.window) {
         n.state = 2; this.missed++; this.breakCombo(); this.player.missSound();
         this.rockBy(-0.03);
         // a missed note breaks its star phrase: the rest of the phrase turns into normal notes
