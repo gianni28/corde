@@ -122,16 +122,31 @@ function setNameClass(el, st) {
   for (const c of [...el.classList]) if (c.startsWith("nm-")) el.classList.remove(c);
   if (st && st !== "normal") el.classList.add("nm-" + st);
 }
-function styledName(el, name) { el.dataset.nk = nameKey(name); setNameClass(el, styleOfKey(el.dataset.nk)); }
-const restyleNames = () => document.querySelectorAll("[data-nk]").forEach((el) => setNameClass(el, styleOfKey(el.dataset.nk)));
+// and their level, a small badge before the name (players with an account)
+const nameLevel = new Map(); // name key → level
+function levelOfKey(k) {
+  if (app.wallet && k && k === nameKey(settings.name)) return app.wallet.level;
+  return nameLevel.get(k) || 0;
+}
+function setNameLevel(el, lv) {
+  let b = el.querySelector(":scope > .lv");
+  if (!(lv > 0)) { b?.remove(); return; }
+  if (!b) { b = document.createElement("span"); b.className = "lv"; el.prepend(b); }
+  b.textContent = lv; b.title = `Nivel ${lv}`;
+}
+function styledName(el, name) { el.dataset.nk = nameKey(name); setNameClass(el, styleOfKey(el.dataset.nk)); setNameLevel(el, levelOfKey(el.dataset.nk)); }
+const restyleNames = () => document.querySelectorAll("[data-nk]").forEach((el) => { setNameClass(el, styleOfKey(el.dataset.nk)); setNameLevel(el, levelOfKey(el.dataset.nk)); });
 // refreshed with the home board, at most once a minute
 async function loadNameStyles(force = false) {
   if (!online || (!force && Date.now() - nameStylesAt < 60000)) return;
   nameStylesAt = Date.now();
   let rows;
   try { rows = await nameStyles(); } catch (e) { console.warn("name styles:", e.message); nameStylesAt = 0; return; }
-  nameStyle.clear();
-  for (const r of rows) if (r?.name_key && r.style) nameStyle.set(r.name_key, r.style);
+  nameStyle.clear(); nameLevel.clear();
+  for (const r of rows) {
+    if (r?.name_key && r.style) nameStyle.set(r.name_key, r.style);
+    if (r?.name_key && r.level > 0) nameLevel.set(r.name_key, Math.floor(r.level));
+  }
   restyleNames();
 }
 // the shop screen: the category open, the item picked (shown on the stage behind), a purchase waiting for "¿Seguro?"
@@ -2159,7 +2174,7 @@ $("shareBtn").onclick = async () => {
     const how = await shareCard({
       song: s.name, artist: s.artist, diff: DIFFS.find((d) => d.key === app.diff)?.name || "", lanes: app.lanes,
       score: sum.score, stars: sum.stars, acc: sum.acc, maxCombo: sum.maxCombo, hits: sum.hits, total: sum.total,
-      player: settings.name || "", record: app.shareRecord, cover: s.id && s.id !== "local" ? coverOf(s) : "",
+      player: settings.name || "", nameStyle: app.wallet ? equipped.name : "normal", level: app.wallet?.level || 0, record: app.shareRecord, cover: s.id && s.id !== "local" ? coverOf(s) : "",
     }, text);
     if (how !== "cancelled" && copied && (await copied)) toast("Link del reto copiado: pégalo en el sticker de link de tu historia.", 4500);
     if (how !== "cancelled") { const f = unlock(["al-escenario"]); if (f.length) { celebrateAchievements(f); syncSoon(); } }

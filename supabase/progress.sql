@@ -193,3 +193,12 @@ end $$;
 revoke all on function public.level_of(int), public.challenges_for(date), public.wallet_bonus(uuid, int, text, text),
   public.wallet_levelup(uuid), public.wallet_award(text, text, text, int, boolean, boolean, real, int) from public, anon, authenticated;
 grant execute on function public.wallet_award(text, text, text, int, boolean, boolean, real, int) to service_role;
+
+-- names on the boards: their style and, for every account, its level (the same formula as level_of, written out so
+-- the players reading the view don't need to run that function)
+create or replace view public.name_styles with (security_invoker = false) as
+select a.name_key, nullif(w.equipped ->> 'name', 'normal') as style,
+  least(99, 1 + floor((sqrt(5625 + 100.0 * greatest(0, w.xp)) - 75) / 50)::int) as level
+from public.wallets w join public.accounts a on a.id = w.account_id;
+revoke all on public.name_styles from public, anon, authenticated;
+grant select on public.name_styles to anon, authenticated;
