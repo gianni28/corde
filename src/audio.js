@@ -137,9 +137,9 @@ export class Player {
     this.guitarGain.gain.setTargetAtTime(on ? 1 : 0, c.currentTime, on ? 0.01 : 0.03);
   }
   /** Passed note: a short, quiet muted-string "chk" (well under the song), rate-limited. */
-  missSound() { this._sfx(missBuffer, 2400, 0.12, "_lastMiss"); }
+  missSound() { this._sfx(missBuffer, 4200, 0.38, "_lastMiss"); }
   /** Wrong press: a soft out-of-tune twang, so it doesn't sound like a passed note. */
-  wrongSound() { this._sfx(wrongBuffer, 1800, 0.09, "_lastWrong"); }
+  wrongSound() { this._sfx(wrongBuffer, 3600, 0.3, "_lastWrong"); }
   _sfx(make, cutoff, gain, key) {
     const c = audioCtx();
     if (c.currentTime - (this[key] || 0) < 0.12) return;
@@ -164,20 +164,19 @@ export class Player {
   }
 }
 
-/* ---------- miss sound: muted string scrape + soft body thump ---------- */
+/* ---------- miss sound: a muted string "chk" (mid-range, so phone speakers play it too) ---------- */
 let _miss = null;
 function missBuffer(c) {
   if (_miss && _miss.sampleRate === c.sampleRate) return _miss;
-  const rate = c.sampleRate, len = Math.floor(rate * 0.12);
+  const rate = c.sampleRate, len = Math.floor(rate * 0.11);
   const out = new Float32Array(len);
-  let lp = 0, peak = 0;
+  let lp = 0, lp2 = 0, peak = 0;
   for (let i = 0; i < len; i++) {
-    const t = i / rate;
-    lp += (Math.random() * 2 - 1 - lp) * 0.35; // softened noise
-    const scrape = lp * Math.exp(-t / 0.016);
-    const f = 70 + 50 * Math.exp(-t / 0.02);
-    const thump = Math.sin(2 * Math.PI * f * t) * Math.exp(-t / 0.03) * 0.8;
-    out[i] = (scrape + thump) * Math.min(1, i / (rate * 0.0015));
+    const t = i / rate, n = Math.random() * 2 - 1;
+    lp += (n - lp) * 0.5; lp2 += (lp - lp2) * 0.08; // a band of noise around 1-2 kHz: the scrape
+    const scrape = (lp - lp2) * Math.exp(-t / 0.018) * 1.6;
+    const body = (Math.sin(2 * Math.PI * 196 * t) + 0.6 * Math.sin(2 * Math.PI * 392 * t) + 0.35 * Math.sin(2 * Math.PI * 588 * t)) * Math.exp(-t / 0.028) * 0.55;
+    out[i] = (scrape + body) * Math.min(1, i / (rate * 0.001));
     peak = Math.max(peak, Math.abs(out[i]));
   }
   for (let i = 0; i < len; i++) out[i] /= peak || 1;
@@ -196,8 +195,8 @@ function wrongBuffer(c) {
   for (let i = 0; i < len; i++) {
     const t = i / rate;
     let v = 0;
-    for (const f of [147, 156]) for (let h = 1; h <= 5; h++) v += Math.sin(2 * Math.PI * f * h * t) / h;
-    out[i] = v * Math.exp(-t / 0.045) * Math.min(1, i / (rate * 0.002));
+    for (const f of [233, 247]) for (let h = 1; h <= 6; h++) v += Math.sin(2 * Math.PI * f * h * t) / h; // a semitone apart: sour
+    out[i] = v * Math.exp(-t / 0.05) * Math.min(1, i / (rate * 0.002));
     peak = Math.max(peak, Math.abs(out[i]));
   }
   for (let i = 0; i < len; i++) out[i] /= peak || 1;

@@ -1419,7 +1419,8 @@ function startGame({ lanes, diff, practice = null, duo = null, ctx = null }) {
   stopGame();
   picksRun++; // a late answer about the last run no longer touches the results
   const player = new Player(app.decoded);
-  const common = { chart: app.chart, lanes, offsetMs: settings.offsetMs, songOffsetMs: app.songOffsetMs || 0, look: +settings.speed, autoSync: settings.autoSync };
+  const common = { chart: app.chart, lanes, offsetMs: settings.offsetMs, songOffsetMs: app.songOffsetMs || 0, look: +settings.speed, autoSync: settings.autoSync,
+    window: touch ? 0.13 : 0.1 }; // a finger on glass is less exact than a key: ±130 ms on a touch screen
   if (duo) {
     // same song, each with their own difficulty; nobody gets booed off the stage
     const flags = [true, true];
