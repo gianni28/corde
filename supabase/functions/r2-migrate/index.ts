@@ -64,5 +64,12 @@ Deno.serve(async (req) => {
     }
     return json({ results: out });
   }
+  // signed URLs like the ones admin-upload hands out, for a throwaway file: tests uploads from the browser (CORS)
+  if (b.action === "testsign") {
+    const u = `${base}/_test/chart.json`;
+    const put = await r2.sign(`${u}?X-Amz-Expires=600`, { method: "PUT", aws: { signQuery: true } });
+    const del = await r2.sign(`${u}?X-Amz-Expires=600`, { method: "DELETE", aws: { signQuery: true } });
+    return json({ put: put.url, del: del.url });
+  }
   return json({ error: "action" }, 400);
 });
