@@ -2169,7 +2169,7 @@ $("shareBtn").onclick = async () => {
   // copied right away, while the tap still counts: Instagram doesn't take the link, it goes in the link sticker
   let copied = null;
   if (link) copied = navigator.clipboard?.writeText(link).then(() => true, () => false);
-  const text = link ? `¿Me ganas en ${s.name}? Saqué ${sum.score.toLocaleString("es-CO")} en ${diffName} 🎸 ${link}` : "";
+  const text = link ? `Saqué ${sum.score.toLocaleString("es-CO")} en ${s.name} (${diffName}) 🎸 ${link}` : "";
   try {
     const how = await shareCard({
       song: s.name, artist: s.artist, diff: DIFFS.find((d) => d.key === app.diff)?.name || "", lanes: app.lanes,

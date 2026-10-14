@@ -197,12 +197,10 @@ export async function drawCard(r) {
     ctx.fillStyle = "#f2e8d8"; ctx.font = `700 56px ${DISPLAY}`; ctx.fillText(val, x, 1494);
   });
 
-  // call to action
+  // where to play
   ctx.save();
-  ctx.font = `700 84px ${DISPLAY}`;
   ctx.shadowColor = "rgba(0,0,0,.9)"; ctx.shadowBlur = 20;
-  ctx.fillStyle = "#f5c518"; ctx.fillText("¿ME GANAS?", W / 2, 1610);
-  ctx.fillStyle = "#f2e8d8"; ctx.font = `600 40px ${BODY}`; ctx.fillText(SHARE_URL, W / 2, 1662);
+  ctx.fillStyle = "#f2e8d8"; ctx.font = `600 44px ${BODY}`; ctx.fillText(SHARE_URL, W / 2, 1620);
   ctx.restore();
 
   return new Promise((res) => cv.toBlob(res, "image/png"));
