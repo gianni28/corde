@@ -6,6 +6,10 @@
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
+    # the separation's threads load their script from here: inside /admin (cross-origin isolated) a worker whose
+    # script doesn't say this never gets its shared memory, and the separation waits forever. The game (not isolated)
+    # ignores it on scripts and loads nothing cross-origin from here.
+    Cross-Origin-Embedder-Policy = "credentialless"
 
 # The admin's own address: cross-origin isolated, so the guitar separation (src/separate.js) runs on every core.
 # Only this path: the game itself keeps its usual headers. "credentialless" still loads the covers from R2.
