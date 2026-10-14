@@ -13,7 +13,9 @@ const SKIP_AUDIO = /^(preview|crowd)\./i;
 
 export const slug = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
 const stripTags = (s = "") => String(s).replace(/<[^>]+>/g, "").trim();
-const tick = () => new Promise((r) => setTimeout(r, 0));
+// a breath for the page between chunks of work. Not setTimeout: in a tab in the background Chrome holds timers back
+// (up to a minute each after a while), and converting a song breathes hundreds of times. A message isn't held back.
+const tick = () => new Promise((r) => { const ch = new MessageChannel(); ch.port1.onmessage = () => r(); ch.port2.postMessage(0); });
 // the MP3 encoder adds ~25 ms of silence at the start (no gapless header): every encode moves the audio that much later
 const ENC_DELAY_MS = 25;
 
