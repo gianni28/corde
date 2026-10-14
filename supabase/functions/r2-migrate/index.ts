@@ -49,9 +49,14 @@ Deno.serve(async (req) => {
         const ext = p.split(".").pop()!;
         const put = await r2.fetch(`${base}/${p}`, { method: "PUT", body: buf, headers: { "Content-Type": TYPES[ext] || "application/octet-stream", "Cache-Control": cacheFor(p) } });
         if (!put.ok) throw new Error(`R2 ${put.status} ${(await put.text()).slice(0, 200)}`);
+        // check: what R2 holds has the same size (small files are read back whole: their HEAD may carry no length)
+        let size = -1, status = 0;
         const head = await r2.fetch(`${base}/${p}`, { method: "HEAD" });
-        const size = Number(head.headers.get("content-length"));
-        if (!head.ok || size !== buf.length) throw new Error(`verificación: ${head.status} ${size} != ${buf.length}`);
+        status = head.status; size = Number(head.headers.get("content-length") || -1);
+        if (head.ok && size !== buf.length && buf.length < 2_000_000) {
+          const back = await r2.fetch(`${base}/${p}`); status = back.status; size = (await back.arrayBuffer()).byteLength;
+        }
+        if (status !== 200 || size !== buf.length) throw new Error(`verificación: ${status} ${size} != ${buf.length}`);
         row = { ...row, ok: true, size };
       } catch (e) { row.err = String((e as Error).message || e).slice(0, 300); }
       await db.from("r2_migration").upsert(row);
