@@ -167,7 +167,8 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
     layer.matrix.copy(cam.matrixWorld); layer.matrixWorldNeedsUpdate = true;
     const { bpos, ph, E, hype, star, dt, now } = f;
     const lvl = clamp01(E * (0.62 + 0.38 * hype) + star * 0.25);  // how into it the crowd is
-    const calm = 1 - smooth(0.22, 0.5, E);
+    // a really calm part (energy.js: soft for real, few notes): sway with the lights up; without that measure, quiet = calm
+    const calm = f.C == null ? 1 - smooth(0.22, 0.5, E) : clamp01(f.C * (1 - star));
     liftFor = Math.max(-1, liftFor - dt);
     const up = Math.max(calm, smooth(0, 0.6, liftFor)); // lights up: the quiet parts, or showLights
     uni.uRim.value.copy(f.rim);
@@ -178,7 +179,7 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
       const into = smooth(p.th - 0.12, p.th + 0.12, lvl);        // 0 = just watching, 1 = going wild
       const lp = frac(ph + p.ph);
       const beat = kick(lp);
-      const jumpT = p.jumpy ? into * smooth(0.55, 0.85, lvl) : 0;
+      const jumpT = p.jumpy ? into * smooth(0.48, 0.78, lvl) * (1 - calm) : 0;
       const j = jumpT * 0.42 * Math.sin(Math.PI * lp);
       p.j += (j - p.j) * Math.min(1, dt * 30);
       const roll = Math.sin((bpos / 4) * Math.PI * 2 + p.sway) * 0.07 * calm + p.lean;

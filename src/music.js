@@ -109,7 +109,7 @@ async function loadPiece(song, ctx) {
     notes = [];
     beats.forEach(([t], i) => { const nb = beats[i + 1]; const half = nb ? (nb[0] - t) / 2 : 0.25; notes.push({ t, lane: pat[(i * 2) % 16], dur: 0, state: 0, holding: false }, { t: t + half, lane: pat[(i * 2 + 1) % 16], dur: 0, state: 0, holding: false }); });
   }
-  return { song, stems, kMin, fdur, len, base, beats, notes, energy: energyCurve(stems.map((s) => s.buffer)) };
+  return { song, stems, kMin, fdur, len, base, beats, notes, energy: energyCurve(stems.map((s) => s.buffer), synced && notes.length ? notes.map((x) => x.t - base) : null) };
 }
 
 /**
@@ -227,7 +227,7 @@ export function createMenuMusic({ onChange }) {
       if (!playing || !cur || !audible()) return null;
       const tau = time();
       energyAt(cur.energy, tau, ev);
-      return { key: cur, t: cur.base + tau, notes: cur.notes, beats: cur.beats, energy: ev.e, punch: ev.p };
+      return { key: cur, t: cur.base + tau, notes: cur.notes, beats: cur.beats, energy: ev.e, punch: ev.p, calm: ev.c };
     },
     // blocked: a song is on, but the browser hasn't allowed sound yet (it starts on the first touch, click or key)
     info() { return { song: cur?.song || null, playing: playing && audible(), muted, blocked: playing && !audible() }; },
