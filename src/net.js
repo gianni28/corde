@@ -160,7 +160,8 @@ export async function submitScore(body) {
     try { const j = await error.context.json(); msg = j.error || msg; } catch {}
     throw new Error(msg);
   }
-  return data; // { best, rank, newRecord }
+  // picks: what the run earned → { earned, balance, base, first, record, reason: "ok" | "cooldown" | "cap" } | null (no account)
+  return data; // { best, rank, newRecord, lanes, picks }
 }
 
 /* ---------------- song of the day ---------------- */
@@ -195,7 +196,7 @@ export async function dailyBoard({ day, songId, diff, lanes, me }) {
   return { rows: top.data, total: count.count || 0, mine: mine.data ? { score: mine.data.score, rank } : null };
 }
 
-/** A run of the day's song → { best, rank, players, newRecord }. */
+/** A run of the day's song → { best, rank, players, newRecord, picks: { earned, balance } | null } (picks: the day's bonus, once a day). */
 export async function submitDaily(r) {
   const { data, error } = await supabase.rpc("submit_daily", {
     p_day: r.day, p_song_id: r.song_id, p_diff: r.diff, p_lanes: r.lanes, p_name: r.name, p_secret: r.secret,
@@ -238,11 +239,26 @@ async function rpcJson(fn, args) {
   if (error) throw new Error(error.message);
   return data;
 }
-/** This browser's account → { name, code, progress } | null */
+// Every account payload also brings its wallet (the shop): { picks, owned: ["slot:id", …], equipped: { slot: id } }.
+/** This browser's account → { name, code, progress, wallet } | null */
 export const accountMe = (secret) => rpcJson("account_me", { p_secret: secret });
-/** Takes a name → { name, code, progress } | { error: "name_taken" } */
+/** Takes a name → { name, code, progress, wallet } | { error: "name_taken" } */
 export const accountClaim = (name, secret) => rpcJson("account_claim", { p_name: name, p_secret: secret });
-/** Joins the account with that name using its code → { name, code, progress } | { error: "bad_code" } */
+/** Joins the account with that name using its code → { name, code, progress, wallet } | { error: "bad_code" } */
 export const accountLink = (name, code, secret) => rpcJson("account_link", { p_name: name, p_code: code, p_secret: secret });
 /** Merges this browser's progress into the account → merged progress | null */
 export const accountSync = (secret, progress) => rpcJson("account_sync", { p_secret: secret, p_progress: progress });
+
+/* ---------------- shop ---------------- */
+// Prices and what each account owns live on the server (shop.sql); the browser only asks.
+/** Buys an item (or claims a logro's prize) and puts it on → wallet | { error: "no_account" | "unknown" | "owned" | "locked" | "not_enough" } */
+export const shopBuy = (secret, slot, item) => rpcJson("shop_buy", { p_secret: secret, p_slot: slot, p_item: item });
+/** Puts on an item you own (or a slot's default) → wallet | { error: "not_owned" | "no_account" } */
+export const shopEquip = (secret, slot, item) => rpcJson("shop_equip", { p_secret: secret, p_slot: slot, p_item: item });
+/** The players whose name has a style on the boards → [{ name_key, style }] (name_key: lowercase, no accents). */
+export async function nameStyles() {
+  if (!supabase) return [];
+  const { data, error } = await supabase.from("name_styles").select("name_key, style");
+  if (error) throw new Error(error.message);
+  return data || [];
+}
