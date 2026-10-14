@@ -664,10 +664,10 @@ function openSetup() {
   const draw = () => { renderDiffChips($("setupDiffs"), app.chart, lanes, app.diff, (k) => { app.diff = k; settings.lastDiff = k; save(); draw(); }); showBoard($("setupBoard")); };
   draw();
   const keys = settings.keys.slice(0, lanes).map(keyLabel).join(" ");
-  const starHow = touch ? (liftOn() ? "Poder estrella: actívalo levantando o sacudiendo el celular, como una guitarra." : "Toca el multiplicador para activar el poder estrella.") : "Enter activa el poder estrella.";
+  const starHow = touch ? (liftOn() ? "Poder estrella: actívalo levantando o sacudiendo el celular, como una guitarra." : "Toca el multiplicador para activar el poder estrella.") : `${keyLabel(settings.starKey)} activa el poder estrella.`;
   $("setupHint").textContent = touch
     ? `Juegas con ${lanes} cuerdas. Toca la columna de cada color cuando la nota llegue a los botones y mantén el dedo en las notas largas. ${starHow}`
-    : `Juegas con ${lanes} cuerdas: ${keys}. Presiona cuando la nota llegue a los botones y mantén en las largas. Espacio o Esc para pausar. ${starHow}`;
+    : `Juegas con ${lanes} cuerdas: ${keys}. Presiona cuando la nota llegue a los botones y mantén en las largas. ${keyLabel(settings.pauseKey)} o Esc para pausar. ${starHow}`;
   $("practiceBox").hidden = true; $("practiceBtn").setAttribute("aria-expanded", "false");
   show("setup");
 }
@@ -1328,7 +1328,7 @@ function starGain(g) {
 // "star power ready" reminder (top left) if the player doesn't use it within a couple of seconds; shown only once per device
 const tip = { at: 0, hideAt: 0 };
 function starTipHow() {
-  return touch ? (liftOn() ? "Levanta o sacude el celular" : "Toca el multiplicador") : "Pulsa Enter";
+  return touch ? (liftOn() ? "Levanta o sacude el celular" : "Toca el multiplicador") : `Pulsa ${keyLabel(settings.starKey)}`;
 }
 function hideStarTip() { tip.at = 0; tip.hideAt = 0; $("spTip").hidden = true; }
 if (liftOn()) onLift(liftStar);
@@ -1354,7 +1354,7 @@ function openTutorial({ done = null, fromSettings = false } = {}) {
   $("tutNotes").textContent = touch
     ? "Toca la columna de cada color cuando la nota llegue a los botones. Mantén el dedo en las notas largas."
     : "Presiona la tecla de cada color cuando la nota llegue a los botones. Mantén en las notas largas.";
-  $("tutStarHow").textContent = touch && motionAvailable() && settings.starMode !== "tap" ? "Actívalo levantando o sacudiendo el celular, como una guitarra." : touch ? "Toca el multiplicador." : "Actívalo con Enter.";
+  $("tutStarHow").textContent = touch && motionAvailable() && settings.starMode !== "tap" ? "Actívalo levantando o sacudiendo el celular, como una guitarra." : touch ? "Toca el multiplicador." : `Actívalo con ${keyLabel(settings.starKey)}.`;
   $("motionBtn").hidden = !(touch && motionNeedsPermission() && settings.motion !== "granted");
   $("motionNote").hidden = !(touch && settings.motion === "denied");
   $("tutAlert").hidden = true;
@@ -2203,19 +2203,22 @@ function laneForKey(k) {
   if (!app.game) return -1;
   const i = settings.keys.slice(0, app.lanes).indexOf(k);
   if (i >= 0) return i;
-  const n = "12345".indexOf(k);
-  return n >= 0 && n < app.lanes ? n : -1;
+  const n = "12345".indexOf(k); // the number keys play too, unless star power or pause took one of them
+  return n >= 0 && n < app.lanes && k !== settings.starKey && k !== settings.pauseKey ? n : -1;
 }
 const evTime = (e, g = app.game) => g.time() - Math.max(0, (performance.now() - e.timeStamp) / 1000);
-let rebinding = -1;
+// the key being changed in Settings: a string's index (0-4), "star" or "pause"; null when none
+let rebinding = null;
+const bindKey = (b) => (b === "star" ? settings.starKey : b === "pause" ? settings.pauseKey : settings.keys[b]);
+function setBindKey(b, k) { if (b === "star") settings.starKey = k; else if (b === "pause") settings.pauseKey = k; else settings.keys[b] = k; }
 addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   if (calib.on) { e.preventDefault(); if (!e.repeat) calibTap(); return; }
-  if (rebinding >= 0) { e.preventDefault(); finishRebind(k === "escape" ? null : k); return; }
+  if (rebinding !== null) { e.preventDefault(); finishRebind(k === "escape" ? null : k); return; }
   if (duoRebind && app.screen === "duo") { e.preventDefault(); finishDuoRebind(e); return; }
   if (!app.game) return;
-  const spaceUsed = app.duo ? !!duoKey("Space") : settings.keys.slice(0, app.lanes).includes(" ");
-  const pauseKey = k === "escape" || (k === " " && !spaceUsed);
+  // Esc always pauses; the pause key too (two players: Space, unless one of them plays with it)
+  const pauseKey = k === "escape" || (app.duo ? k === " " && !duoKey("Space") : k === settings.pauseKey);
   if (pauseKey) {
     e.preventDefault();
     if (app.screen === "settings" && app.settingsFromPause) { backToPause(); return; }
@@ -2231,7 +2234,7 @@ addEventListener("keydown", (e) => {
   }
   const lane = laneForKey(k);
   if (lane >= 0) { e.preventDefault(); app.game.press(lane, evTime(e)); }
-  else if (k === "enter") { e.preventDefault(); activateStar(); }
+  else if (k === settings.starKey) { e.preventDefault(); activateStar(); }
 });
 addEventListener("keyup", (e) => {
   if (app.duo) { const hit = duoKey(e.code), g = hit && app.duoGames?.[hit.p]; if (g && hit.i < STAR_SLOT) g.release(hit.i); return; }
@@ -2470,6 +2473,13 @@ function renderSettings() {
     b.onclick = () => { rebinding = i; renderSettings(); $("keysHint").textContent = "Presiona una tecla (Esc para cancelar)."; };
     box.appendChild(b);
   });
+  for (const [id, b, what] of [["keyStar", "star", "activar el poder estrella"], ["keyPause", "pause", "pausar"]]) {
+    const el = $(id), k = bindKey(b);
+    el.className = "keychip" + (rebinding === b ? " listening" : "");
+    el.textContent = rebinding === b ? "…" : keyLabel(k);
+    el.setAttribute("aria-label", `Tecla para ${what}: ${keyLabel(k)}`);
+    el.onclick = () => { rebinding = b; renderSettings(); $("keysHint").textContent = "Presiona una tecla (Esc para cancelar)."; };
+  }
   $("keysField").hidden = touch;
   $("motionField").hidden = !(touch && motionAvailable());
   document.querySelectorAll("#starSeg button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === settings.starMode)));
@@ -2532,11 +2542,12 @@ $("motionTest").onclick = async () => {
 };
 
 function finishRebind(k) {
-  const i = rebinding; rebinding = -1;
-  if (k && !["escape"].includes(k)) {
-    const j = settings.keys.indexOf(k);
-    if (j >= 0 && j !== i) settings.keys[j] = settings.keys[i]; // swap if already used
-    settings.keys[i] = k; save();
+  const i = rebinding; rebinding = null;
+  if (k && k !== "escape") {
+    // a key already in use (a string, star power or pause) swaps with this one
+    const other = [0, 1, 2, 3, 4, "star", "pause"].find((b) => b !== i && bindKey(b) === k);
+    if (other !== undefined) setBindKey(other, bindKey(i));
+    setBindKey(i, k); save();
   }
   $("keysHint").textContent = "Haz clic en un botón y presiona la tecla que quieras.";
   renderSettings();

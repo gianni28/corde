@@ -3,6 +3,8 @@ const KEY = "corde.settings.v1";
 
 export const DEFAULTS = {
   keys: ["a", "s", "d", "f", "g"], // green, red, yellow, blue, orange
+  starKey: "enter", // star power on a keyboard
+  pauseKey: " ", // pause (Esc always pauses too)
   laneMode: "auto", // "auto" | "5" | "4"
   speed: 1.5, // seconds of highway visible
   offsetMs: 0, // + = notes later
@@ -47,7 +49,7 @@ export function save() {
   try { localStorage.setItem(KEY, JSON.stringify(settings)); } catch {}
 }
 
-export function resetKeys() { settings.keys = [...DEFAULTS.keys]; save(); }
+export function resetKeys() { settings.keys = [...DEFAULTS.keys]; settings.starKey = DEFAULTS.starKey; settings.pauseKey = DEFAULTS.pauseKey; save(); }
 
 /** Lane count this device plays with: 5 on PC, 4 on touch screens (unless overridden). */
 export function deviceLanes() {
