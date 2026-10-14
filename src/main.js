@@ -10,7 +10,7 @@ import { decodeStems, Player, audioCtx, unlockAudio } from "./audio.js";
 import { Game, STAR_READY } from "./game.js";
 import { motionAvailable, motionNeedsPermission, motionReady, requestMotion, onLift, watchMotion, seen as motionSeen } from "./motion.js";
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
-import { accountMe, accountClaim, accountLink, accountSync } from "./net.js";
+import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, nameStyles } from "./net.js";
 import { shareCard, retoUrl, readReto } from "./share.js";
 import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak } from "./achievements.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretSongs, secretBoard, songById } from "./net.js";
@@ -20,6 +20,8 @@ import { fillDifficulties } from "./reduce.js";
 import * as sfx from "./sfx.js";
 import { energyCurve, energyAt } from "./energy.js";
 import { createMenuMusic } from "./music.js";
+import { SLOTS, STAGE_SLOTS, ITEMS, DEFAULTS as LOOK_DEFAULTS, itemOf, ownedKey, isDefault, resolveEquipped } from "./shop.js";
+import { cssVars } from "./skins.js";
 
 const $ = (id) => document.getElementById(id);
 const LANE_CSS = ["--g", "--r", "--y", "--b", "--o"];
@@ -72,12 +74,73 @@ const app = {
   songs: [], song: null, chart: null, decoded: null, diff: null,
   game: null, paused: false,
   room: null, me: null, peers: [], rivals: {}, finals: {}, roomConfig: null, loadedSongId: null,
+  wallet: null, // the account's púas and looks: { picks, owned: Set of "slot:id", equipped: { slot: id } } (null: no account)
 };
+
+/* ================= your look (bought in the shop) ================= */
+// What this player has on: the neck, the gems, the flames… kept in this browser too, so the stage looks right from
+// the very first frame (offline, or before the account answers). The account's wallet replaces it when it arrives.
+const EQUIP_KEY = "corde.equipped.v1";
+let equipped = (() => { try { return resolveEquipped(JSON.parse(localStorage.getItem(EQUIP_KEY) || "null")); } catch { return resolveEquipped(null); } })();
+const DEFAULT_STAR = "#3fbfff";
+let starHex = DEFAULT_STAR; // star power's colour in the HUD (the multiplier's ring)
+const stageLook = (eq) => Object.fromEntries(STAGE_SLOTS.map((s) => [s, eq[s]]));
+const hexRgb = (h) => { const n = parseInt(String(h).slice(1, 7), 16); return Number.isFinite(n) ? [(n >> 16) & 255, (n >> 8) & 255, n & 255] : [63, 191, 255]; };
+// Puts a look on: the 3D stage, the lane and star colours of the HUD, and the streak pop-up's style.
+function applyLook(eq = equipped) {
+  R.setSkin?.(stageLook(eq));
+  const root = document.documentElement.style, vars = cssVars(eq) || {};
+  for (const [k, v] of Object.entries(vars)) root.setProperty(k, v);
+  starHex = /^#[0-9a-f]{6}$/i.test(vars["--star"] || "") ? vars["--star"] : DEFAULT_STAR;
+  // the star meter's glows: see-through and light versions of that colour (unset = today's blue, exactly)
+  if (starHex.toLowerCase() === DEFAULT_STAR) for (const k of ["--star-rgb", "--star-hi", "--star-fill"]) root.removeProperty(k);
+  else {
+    const [r, g, b] = hexRgb(starHex), hi = [r, g, b].map((c) => Math.round(c + (255 - c) * 0.55));
+    root.setProperty("--star-rgb", `${r}, ${g}, ${b}`);
+    root.setProperty("--star-hi", `rgb(${hi.join(", ")})`);
+    root.setProperty("--star-fill", starHex);
+  }
+  const body = document.body.classList;
+  for (const c of [...body]) if (c.startsWith("streak-")) body.remove(c);
+  if (eq.streak !== LOOK_DEFAULTS.streak) body.add("streak-" + eq.streak);
+}
+applyLook(); // before the first frame and before any network
+
+/* ---------- styled names on the boards ---------- */
+// A name style bought in the shop is seen by everyone: every board, list and room shows that name with its class
+// (nm-<style>). The names themselves are always plain text.
+const nameStyle = new Map(); // name key → style
+let nameStylesAt = 0;
+// the server's key for a name: lowercase, no accents, single spaces
+const nameKey = (s) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, " ").toLowerCase();
+function styleOfKey(k) {
+  if (app.wallet && k && k === nameKey(settings.name)) return equipped.name; // yours changes the moment you put it on
+  const st = nameStyle.get(k);
+  return st && itemOf("name", st) ? st : "normal";
+}
+function setNameClass(el, st) {
+  for (const c of [...el.classList]) if (c.startsWith("nm-")) el.classList.remove(c);
+  if (st && st !== "normal") el.classList.add("nm-" + st);
+}
+function styledName(el, name) { el.dataset.nk = nameKey(name); setNameClass(el, styleOfKey(el.dataset.nk)); }
+const restyleNames = () => document.querySelectorAll("[data-nk]").forEach((el) => setNameClass(el, styleOfKey(el.dataset.nk)));
+// refreshed with the home board, at most once a minute
+async function loadNameStyles(force = false) {
+  if (!online || (!force && Date.now() - nameStylesAt < 60000)) return;
+  nameStylesAt = Date.now();
+  let rows;
+  try { rows = await nameStyles(); } catch (e) { console.warn("name styles:", e.message); nameStylesAt = 0; return; }
+  nameStyle.clear();
+  for (const r of rows) if (r?.name_key && r.style) nameStyle.set(r.name_key, r.style);
+  restyleNames();
+}
+// the shop screen: the category open, the item picked (shown on the stage behind), a purchase waiting for "¿Seguro?"
+const shop = { cat: "neck", sel: null, armed: null, armT: 0, streakT: 0, busy: false, preview: false, seq: 0 };
 
 /* ================= menu music ================= */
 // A random library song plays while the menus are up (title and artist top right on a wide screen, under the
 // menu on a phone). It stops when a song starts and picks up again back in the menus.
-const MENU_MUSIC = ["home", "library", "setup", "settings", "logros", "mp", "lobby", "admin", "tutorial", "duo", "daily", "tour"];
+const MENU_MUSIC = ["home", "library", "setup", "settings", "logros", "mp", "lobby", "admin", "tutorial", "duo", "daily", "tour", "tienda"];
 const wideMQ = matchMedia("(min-width: 1000px)");
 const music = createMenuMusic({ onChange: () => renderNowPlaying() });
 // It starts as soon as the page opens: a random song is fetched right away and plays the moment the browser
@@ -119,7 +182,7 @@ document.addEventListener("visibilitychange", () => syncMenuMusic());
 music.setMuted(settings.menuMusic === false);
 
 /* ================= navigation ================= */
-const SCREENS = ["home", "library", "setup", "settings", "logros", "mp", "lobby", "pause", "results", "loading", "admin", "tutorial", "duo", "daily", "tour"];
+const SCREENS = ["home", "library", "setup", "settings", "logros", "mp", "lobby", "pause", "results", "loading", "admin", "tutorial", "duo", "daily", "tour", "tienda"];
 let motionTest = null; // the movement test in Settings, while it runs
 function show(name, push = true) {
   const transient = ["pause", "loading", "play", "results"];
@@ -134,6 +197,7 @@ function show(name, push = true) {
   if (name === "play") $("hud").hidden = false;
   if (name === "home") { renderHomeBoard(); renderDailyCard(); if (online && !daily.day) loadDaily(); }
   if (name !== "settings") stopMotionTest();
+  if (name !== "tienda") endShopPreview(); // leaving the shop any way at all puts back what you have on
   // the stage behind: the tour's venues in the tour and its songs, the usual bar everywhere else
   const look = name === "tour" ? tourLook
     : ["play", "pause", "results"].includes(name) || app.game ? (app.ctx?.kind === "tour" ? app.ctx.stage : "bar")
@@ -155,6 +219,7 @@ document.querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => {
   else if (to === "settings") { renderSettings(); show("settings"); }
   else if (to === "tour") openTour();
   else if (to === "logros") { renderLogros(); show("logros"); }
+  else if (to === "tienda") openShop();
   else if (to === "mp") { $("mpName").value = settings.name || ""; $("mpErr").hidden = true; $("duoCard").hidden = $("duoOr").hidden = touch; show("mp"); }
 }));
 
@@ -210,6 +275,7 @@ async function renderHomeBoard() {
   try { rows = await generalBoard(homeTab, undefined, settings.boardPeriod); }
   catch (e) { console.warn("leaderboard:", e.message); return; }
   if (req !== homeReq) return;
+  loadNameStyles();
   const me = (settings.name || "").trim().toLowerCase();
   const ol = el.querySelector(".board-list"); ol.innerHTML = "";
   rows.forEach((r, i) => {
@@ -217,6 +283,7 @@ async function renderHomeBoard() {
     if (me && r.name.trim().toLowerCase() === me) li.className = "me";
     li.innerHTML = `<span class="pos">${i + 1}</span><span class="n"><span class="nm"></span>${homeTab === "best" ? "<small></small>" : ""}</span><span class="s"></span>`;
     li.querySelector(".nm").textContent = r.name;
+    styledName(li.querySelector(".nm"), r.name);
     if (homeTab === "best") li.querySelector("small").textContent = r.song;
     li.querySelector(".s").textContent = Number(homeTab === "total" ? r.total : r.score).toLocaleString("es-CO");
     ol.appendChild(li);
@@ -732,7 +799,7 @@ function finishDuo() {
   sfx.finale(Math.max(...sums.map((x) => x.stars)));
   $("resFail").hidden = true; $("soloRes").hidden = true; $("duoRes").hidden = false;
   $("shareBtn").hidden = true;
-  $("retoLine").hidden = true;
+  $("retoLine").hidden = true; $("picksRes").hidden = true; picksRun++;
   $("againBtn").hidden = false; $("againBtn").classList.add("primary"); $("otherSongBtn").hidden = false; $("menuBtn").textContent = "Menú";
   $("resRandomBox").hidden = true;
   show("results");
@@ -930,6 +997,7 @@ function renderDailyBoard() {
     const acc = Math.round(Math.min(1, Math.max(0, +r.acc || 0)) * 100);
     li.innerHTML = `<span class="pos">${i + 1}</span><span class="n"></span><span class="a">${acc}%</span><span class="s">${r.score.toLocaleString("es-CO")}</span>`;
     li.querySelector(".n").textContent = r.name;
+    styledName(li.querySelector(".n"), r.name);
     ol.appendChild(li);
   });
   empty.hidden = b.rows.length > 0;
@@ -948,11 +1016,17 @@ $("dailyPlay").onclick = async () => {
   withTutorial(() => startGame({ lanes, diff, ctx }));
 };
 async function sendDaily(sum, ctx, diff, lanes) {
-  const el = $("dailyRank");
+  const el = $("dailyRank"), run = picksRun;
   el.textContent = "Guardando en la clasificación del día…";
   try {
     const r = await submitDaily({ day: ctx.day, song_id: ctx.songId, diff, lanes, name: settings.name, secret: playerSecret(),
       score: sum.score, acc: sum.acc, max_combo: sum.maxCombo, stars: sum.stars });
+    // the day's bonus (once a day): next to the place on the day's board
+    if (r.picks) gotPicks(r.picks, run, false);
+    if (run !== picksRun) return;
+    const bonus = +r.picks?.earned || 0;
+    $("dailyPicks").hidden = !(bonus > 0);
+    if (bonus > 0) $("dailyPicks").querySelector("span").textContent = `+${fmtPicks(bonus)} púas por tocar la canción del día`;
     const s = app.songs.find((x) => x.id === ctx.songId);
     const dn = DIFFS.find((d) => d.key === diff).name + (usesFifth(s, diff) ? ` (${r.lanes} cuerdas)` : "");
     el.textContent = `Puesto #${r.rank} de ${r.players} hoy en ${dn}` + (r.newRecord ? "" : ` · tu mejor de hoy: ${r.best.toLocaleString("es-CO")}`);
@@ -1073,6 +1147,7 @@ function finishCtx(sum) {
   $("againBtn").classList.add("primary");
   $("dailyRes").hidden = ctx?.kind !== "daily";
   $("tourRes").hidden = ctx?.kind !== "tour";
+  $("dailyPicks").hidden = true;
   if (ctx?.kind === "daily") {
     // only a finished run counts for the streak (getting booed off doesn't)
     const counts = !sum.failed && sum.score > 0;
@@ -1326,6 +1401,7 @@ function seatOn(player, flags, k) {
 function startGame({ lanes, diff, practice = null, duo = null, ctx = null }) {
   dropCelebration();
   stopGame();
+  picksRun++; // a late answer about the last run no longer touches the results
   const player = new Player(app.decoded);
   player.missSfx = settings.missSfx;
   const common = { chart: app.chart, lanes, offsetMs: settings.offsetMs, songOffsetMs: app.songOffsetMs || 0, look: +settings.speed, autoSync: settings.autoSync };
@@ -1473,6 +1549,7 @@ function finishGame() {
   app.game = null;
   R.setLanes(5);
   $("newRecord").hidden = true; $("boardMe").hidden = true; $("nameAsk").hidden = true; $("resultsBoard").hidden = true;
+  $("picksRes").hidden = true; picksRun++; // filled when the server says what the run earned
   app.boardLanes = app.lanes;
   if (app.mode !== "mp" && hasBoard()) {
     if (sum.failed) showBoard($("resultsBoard")); // a failed song doesn't go on the board
@@ -1578,6 +1655,8 @@ function adoptAccount(acc) {
   if (settings.name !== acc.name) { settings.name = acc.name; save(); }
   closeWelcome();
   renderAccountField();
+  setWallet(acc.wallet); // its púas and its look (another device may have changed it)
+  if (app.screen === "tienda") renderShop();
   syncNow(); // uploads what this browser had and brings what the other devices have
 }
 function renderAccountField() {
@@ -1650,11 +1729,291 @@ async function ensureAccount() {
   } catch (e) { console.warn("account:", e.message); }
 }
 
+/* ================= shop ================= */
+// Púas are earned by finishing songs (the server pays them, see sendScore) and spent here on looks. Picking an item
+// shows it on the stage behind the panel right away; leaving the shop, any way at all, puts back what you have on.
+// Prices and what you own live on the server: this only shows them and asks.
+const fmtPicks = (n) => Math.max(0, Math.floor(+n || 0)).toLocaleString("es-CO");
+const owns = (it) => isDefault(it) || !!app.wallet?.owned.has(ownedKey(it.slot, it.id));
+const achName = (id) => ACHIEVEMENTS.find((a) => a.id === id)?.name || id;
+const shopOffline = () => !online || navigator.onLine === false;
+const SHOP_ERRORS = {
+  not_enough: "Te faltan púas para eso.", locked: "Todavía no tienes ese logro.", owned: "Eso ya es tuyo.",
+  unknown: "Eso ya no está en la tienda.", no_account: "Necesitas tu cuenta para comprar.", not_owned: "Primero tienes que comprarlo.",
+};
+// the account's wallet → app.wallet, and its look goes on (and is remembered in this browser)
+function setWallet(w) {
+  if (!w || typeof w !== "object") { app.wallet = null; renderPicks(); return; }
+  setEquipped(w.equipped);
+  app.wallet = { picks: Math.max(0, Math.floor(+w.picks || 0)), owned: new Set(Array.isArray(w.owned) ? w.owned : []), equipped };
+  renderPicks();
+  restyleNames();
+}
+function setEquipped(eq) {
+  equipped = resolveEquipped(eq);
+  try { localStorage.setItem(EQUIP_KEY, JSON.stringify(equipped)); } catch {}
+  if (shop.preview) previewShop(); else applyLook();
+}
+// the balance: on the home menu's Tienda, in the shop's header and on the results
+function renderPicks() {
+  for (const id of ["homePicks", "shopPicks"]) {
+    const el = $(id); el.hidden = !app.wallet;
+    if (app.wallet) el.querySelector("b").textContent = fmtPicks(app.wallet.picks);
+  }
+  $("picksBal").textContent = app.wallet ? ` · tienes ${fmtPicks(app.wallet.picks)}` : "";
+}
+// the balance may have changed on another device: ask again quietly when the shop opens
+async function refreshWallet() {
+  if (!account || shopOffline()) return;
+  const seq = ++shop.seq; // a purchase answered meanwhile is newer than this
+  try {
+    const me = await accountMe(playerSecret());
+    if (me?.wallet && seq === shop.seq) { setWallet(me.wallet); if (app.screen === "tienda") renderShop(); }
+  } catch (e) { console.warn("wallet:", e.message); }
+}
+
+function openShop() {
+  if (app.game) return; // never mid-song
+  shop.armed = null; shop.sel = equipped[shop.cat];
+  show("tienda");
+  shop.preview = true;
+  renderShop();
+  previewShop();
+  refreshWallet();
+}
+// the stage behind the panel shows the picked item with everything else you have on
+function previewShop() {
+  if (app.screen !== "tienda") return;
+  const look = { ...equipped, [shop.cat]: shop.sel || equipped[shop.cat] };
+  applyLook(look);
+  R.previewStar?.(shop.cat === "star");
+  R.previewCrowd?.(shop.cat === "crowd"); // the crowd only lights up in quiet parts: hold the lights up while you look
+  if (shop.cat === "streak") streakSample(look.streak);
+  else $("shopStreak").classList.remove("show");
+}
+function endShopPreview() {
+  if (!shop.preview) return;
+  shop.preview = false; shop.armed = null; clearTimeout(shop.armT); clearTimeout(shop.streakT);
+  R.previewStar?.(false); R.previewCrowd?.(false);
+  $("shopStreak").classList.remove("show");
+  applyLook();
+}
+// the streak pop-up as it would come out in a song, again and again while you look at the streaks
+function streakSample(id) {
+  const el = $("shopStreak");
+  el.className = `streak shop-streak st-${id}`;
+  el.textContent = "¡Racha de 50!";
+  void el.offsetWidth; el.classList.add("show");
+}
+$("shopStreak").addEventListener("animationend", (e) => {
+  if (e.animationName !== "streak") return;
+  clearTimeout(shop.streakT);
+  shop.streakT = setTimeout(() => { if (app.screen === "tienda" && shop.cat === "streak") streakSample(shop.sel || equipped.streak); }, 600);
+});
+
+function renderShop() {
+  const w = app.wallet;
+  renderPicks();
+  const cats = $("shopCats");
+  if (!cats.children.length) for (const s of SLOTS) {
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.c = s.id; b.setAttribute("role", "tab"); b.textContent = s.name;
+    cats.appendChild(b);
+  }
+  cats.querySelectorAll("button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.c === shop.cat)));
+  // without a connection or an account you can look at everything, but not buy
+  const off = shopOffline(), noAcc = !off && !account;
+  $("shopNote").hidden = !(off || noAcc || !w);
+  $("shopNoteMsg").textContent = off ? "Sin conexión: puedes mirar, pero para comprar y ganar púas necesitas internet."
+    : noAcc ? "Puedes mirar todo. Para ganar púas y comprar necesitas tu cuenta (tu nombre en las clasificaciones)."
+    : "No pude cargar tus púas. Revisa tu conexión y vuelve a entrar.";
+  $("shopAccount").hidden = !noAcc;
+  const grid = $("shopGrid"); grid.innerHTML = "";
+  for (const it of ITEMS) if (it.slot === shop.cat) grid.appendChild(shopCard(it));
+  renderShopDetail();
+  revealShopSel();
+}
+// the picked card in view (the list scrolls down on a PC, sideways on a phone)
+function revealShopSel() {
+  const grid = $("shopGrid"), el = grid.querySelector('.shop-item[aria-selected="true"]');
+  if (!el) return;
+  const g = grid.getBoundingClientRect(), r = el.getBoundingClientRect();
+  if (r.right > g.right) grid.scrollLeft += r.right - g.right + 12; else if (r.left < g.left) grid.scrollLeft -= g.left - r.left + 12;
+  if (r.bottom > g.bottom) grid.scrollTop += r.bottom - g.bottom + 4; else if (r.top < g.top) grid.scrollTop -= g.top - r.top + 4;
+}
+function shopCard(it) {
+  const b = document.createElement("button");
+  const on = equipped[it.slot] === it.id, mine = owns(it), won = !!it.req && !!achievementsWon()[it.req];
+  b.type = "button"; b.dataset.id = it.id;
+  b.className = "shop-item" + (on ? " on" : "") + (it.req ? " excl" : "") + (!mine && it.req && !won ? " locked" : "");
+  b.setAttribute("role", "option"); b.setAttribute("aria-selected", String(shop.sel === it.id));
+  b.innerHTML = `<span class="sw"></span><span class="si-name"></span><span class="si-state"></span>`;
+  fillSwatch(b.querySelector(".sw"), it);
+  b.querySelector(".si-name").textContent = it.name;
+  const st = b.querySelector(".si-state");
+  if (on) { st.textContent = "Equipado"; st.className += " is-on"; }
+  else if (mine) st.textContent = "Usar";
+  else if (it.req) {
+    st.innerHTML = won ? "" : `<svg aria-hidden="true"><use href="#lock"/></svg>`;
+    st.append(won ? "¡Reclámalo!" : `Logro: ${achName(it.req)}`);
+    st.className += won ? " is-claim" : " is-lock";
+  } else {
+    st.innerHTML = `<svg aria-hidden="true"><use href="#pick"/></svg>`;
+    st.append(fmtPicks(it.price));
+    st.className += " is-price" + (app.wallet && app.wallet.picks < it.price ? " short" : "");
+  }
+  b.onclick = () => selectShopItem(it.id);
+  return b;
+}
+// the card's little picture: the catalog's CSS, plus gems, flames, a name or a streak drawn with elements
+function fillSwatch(el, it) {
+  el.className = `sw sw-${it.slot}`;
+  if (it.sw) el.style.background = it.sw;
+  if (it.slot === "gems") {
+    el.classList.add("g-" + (it.shape || "round"));
+    if (it.ring) el.style.setProperty("--ring", it.ring);
+    el.innerHTML = it.cols.map((c) => `<i style="--c:${c}"></i>`).join("");
+  } else if (it.slot === "flames") {
+    el.classList.toggle("rainbow", !!it.rainbow);
+    if (it.glow) el.style.setProperty("--glow", it.glow);
+    el.innerHTML = it.cols.map((c) => `<svg aria-hidden="true" style="--c:${c}"><use href="#flame"/></svg>`).join("");
+  } else if (it.slot === "star") {
+    el.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg>`;
+  } else if (it.slot === "name") {
+    const n = document.createElement("span");
+    n.className = it.id === "normal" ? "sw-nm" : `sw-nm nm-${it.id}`;
+    n.textContent = settings.name || "Tu nombre";
+    el.appendChild(n);
+  } else if (it.slot === "streak") {
+    const s = document.createElement("span");
+    s.className = `st-${it.id}`; s.textContent = "¡Racha!";
+    el.appendChild(s);
+  }
+}
+function selectShopItem(id) {
+  if (shop.sel === id) return;
+  shop.sel = id;
+  if (shop.armed && shop.armed !== ownedKey(shop.cat, id)) shop.armed = null;
+  $("shopGrid").querySelectorAll(".shop-item").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.id === id)));
+  renderShopDetail();
+  revealShopSel();
+  previewShop();
+}
+// the picked item: its name, where it stands, and the button (Comprar → ¿Seguro?, Usar, Reclamar, Equipado)
+function renderShopDetail() {
+  const it = itemOf(shop.cat, shop.sel) || itemOf(shop.cat, equipped[shop.cat]);
+  const w = app.wallet, can = !!w && !!account && !shopOffline();
+  const on = equipped[it.slot] === it.id, mine = owns(it), won = !!it.req && !!achievementsWon()[it.req];
+  const key = ownedKey(it.slot, it.id), btn = $("shopAct"), info = $("sdInfo");
+  $("sdName").textContent = it.name;
+  info.textContent = on ? "Lo tienes puesto." : mine ? (isDefault(it) ? "El de siempre." : "Es tuyo.")
+    : it.req ? (won ? `Ganaste el logro «${achName(it.req)}»: es tuyo gratis.` : it.desc || `Se gana con el logro «${achName(it.req)}».`)
+    : w && w.picks < it.price ? `Te faltan ${fmtPicks(it.price - w.picks)} púas. Las ganas terminando canciones.`
+    : it.desc || "";
+  // your name, as everyone will see it on the boards
+  if (it.slot === "name") {
+    const n = document.createElement("span");
+    n.className = it.id === "normal" ? "sd-me" : `sd-me nm-${it.id}`;
+    n.textContent = settings.name || "Tu nombre";
+    info.textContent = "Así te verán todos: "; info.appendChild(n);
+  }
+  const armed = shop.armed === key;
+  btn.classList.toggle("armed", armed);
+  btn.classList.toggle("primary", !on);
+  btn.classList.toggle("is-on", on);
+  btn.textContent = on ? "Equipado" : mine ? "Usar" : it.req ? (won ? "Reclamar" : "Bloqueado")
+    : armed ? `¿Seguro? ${fmtPicks(it.price)} púas` : `Comprar · ${fmtPicks(it.price)}`;
+  btn.disabled = on || shop.busy || !can || (!mine && (it.req ? !won : w.picks < it.price));
+}
+$("shopCats").onclick = (e) => {
+  const b = e.target.closest("button[data-c]");
+  if (!b || b.dataset.c === shop.cat) return;
+  shop.cat = b.dataset.c; shop.sel = equipped[shop.cat]; shop.armed = null;
+  $("shopGrid").scrollTop = 0; $("shopGrid").scrollLeft = 0;
+  renderShop();
+  // the chip in view too (on a phone the categories scroll sideways)
+  const cats = $("shopCats"), cr = cats.getBoundingClientRect(), br = b.getBoundingClientRect();
+  if (br.right > cr.right) cats.scrollLeft += br.right - cr.right + 12; else if (br.left < cr.left) cats.scrollLeft -= cr.left - br.left + 12;
+  previewShop();
+};
+$("shopAct").onclick = () => {
+  const it = itemOf(shop.cat, shop.sel);
+  if (!it || shop.busy || equipped[it.slot] === it.id) return;
+  if (owns(it)) return shopDo("equip", it);
+  if (it.req) return shopDo("buy", it); // a logro's prize: claimed, nothing to confirm
+  // buying asks twice: "Comprar · 300" → "¿Seguro? 300 púas"
+  const key = ownedKey(it.slot, it.id);
+  if (shop.armed !== key) {
+    shop.armed = key; renderShopDetail();
+    clearTimeout(shop.armT);
+    shop.armT = setTimeout(() => { if (shop.armed === key) { shop.armed = null; if (app.screen === "tienda") renderShopDetail(); } }, 5000);
+    return;
+  }
+  shop.armed = null;
+  shopDo("buy", it);
+};
+$("shopAccount").onclick = () => openWelcome(settings.name || "");
+async function shopDo(kind, it) {
+  if (!account || shopOffline()) return;
+  shop.busy = true; shop.seq++; renderShopDetail();
+  let r = null;
+  try {
+    r = await (kind === "buy" ? shopBuy : shopEquip)(playerSecret(), it.slot, it.id);
+    // a logro won on this device that the account hasn't heard of yet: send it, then ask again
+    if (r?.error === "locked" && it.req && achievementsWon()[it.req]) { await syncNow(); r = await shopBuy(playerSecret(), it.slot, it.id); }
+  } catch (e) { console.warn("shop:", e.message); toast("No se pudo conectar con la tienda. Revisa tu conexión."); }
+  shop.busy = false;
+  if (r && !r.error) {
+    setWallet(r);
+    if (kind === "buy") {
+      sfx.unlock();
+      const slot = SLOTS.find((s) => s.id === it.slot).name;
+      celebrate({ kicker: it.req ? "Premio reclamado" : "¡Es tuyo!", title: it.name, kind: "shop", ms: 2600,
+        sub: it.req ? `${slot}: ya lo tienes puesto. Premio del logro «${achName(it.req)}».` : `${slot}: ya lo tienes puesto. Te quedan ${fmtPicks(app.wallet.picks)} púas.` });
+    }
+  } else if (r?.error) {
+    toast(SHOP_ERRORS[r.error] || "No se pudo.");
+    refreshWallet(); // whatever happened, show what the server has
+  }
+  if (app.screen === "tienda") renderShop();
+}
+addEventListener("online", () => { if (app.screen === "tienda") renderShop(); });
+addEventListener("offline", () => { if (app.screen === "tienda") renderShop(); });
+
+/* ---------- what a run earned (results) ---------- */
+let picksRun = 0; // the run the "+N púas" row is about: a late answer about an older one only updates the balance
+let picksTop = { run: -1, v: 0 };
+function gotPicks(p, run, row = true) {
+  if (!p || typeof p !== "object") return;
+  let bal = Math.floor(+p.balance);
+  if (app.wallet && Number.isFinite(bal) && bal >= 0) {
+    // a song of the day sends two answers (the run and the day's bonus) that can arrive in either order: the bigger is the newer
+    if (picksTop.run === run) bal = Math.max(bal, picksTop.v);
+    picksTop = { run, v: bal };
+    app.wallet.picks = bal; renderPicks();
+  }
+  if (!row || run !== picksRun) return;
+  const earned = Math.max(0, Math.floor(+p.earned || 0));
+  const parts = [];
+  if (+p.base > 0) parts.push(`${fmtPicks(p.base)} por la canción`);
+  if (p.first) parts.push(`primera vez +${typeof p.first === "number" ? p.first : 15}`);
+  if (p.record) parts.push(`récord +${typeof p.record === "number" ? p.record : 10}`);
+  $("picksMsg").textContent = earned > 0 ? `+${fmtPicks(earned)} púas` : "Sin púas esta vez";
+  $("picksSub").textContent = p.reason === "cooldown" ? "Terminaste canciones muy seguidas: la próxima sí cuenta."
+    : p.reason === "cap" ? (earned > 0 ? "Llegaste al máximo de púas de hoy. Mañana ganas más." : "Ya ganaste el máximo de púas de hoy. Mañana ganas más.")
+    : parts.join(" · ");
+  $("picksRes").classList.toggle("none", !(earned > 0));
+  $("picksRes").hidden = false;
+}
+
 async function sendScore(sum) {
   if (!(sum.score > 0)) { showBoard($("resultsBoard")); return; } // empty runs stay off the board
+  const run = picksRun;
   try {
     const r = await submitScore({ song_id: app.song.id, diff: app.diff, lanes: app.lanes, secret: playerSecret(), name: settings.name,
       score: sum.score, acc: sum.acc, max_combo: sum.maxCombo, stars: sum.stars });
+    if (r.picks) gotPicks(r.picks, run);
+    if (run !== picksRun) return; // the player already started another song
     $("newRecord").hidden = !r.newRecord;
     showBoard($("resultsBoard"));
   } catch (e) { console.warn("leaderboard:", e.message); showBoard($("resultsBoard")); }
@@ -1695,6 +2054,7 @@ async function showBoard(el) {
     if (me && r.name.trim().toLowerCase() === me) li.className = "me";
     li.innerHTML = `<span class="pos">${i + 1}</span><span class="n"></span><span class="a">${Math.round((r.acc || 0) * 100)}%</span><span class="s">${r.score.toLocaleString("es-CO")}</span>`;
     li.querySelector(".n").textContent = r.name;
+    styledName(li.querySelector(".n"), r.name);
     ol.appendChild(li);
   });
   const empty = el.querySelector(".board-empty");
@@ -1869,7 +2229,7 @@ function updatePlayerHud(g) {
   set("mult", shown + starState, () => { h.multText.textContent = "×" + shown; const gain = h.mult.classList.contains("gain"); h.mult.className = "mult x" + m + starState + (gain ? " gain" : ""); });
   const fill = g.levelFill;
   set("ring", m * 100 + fill + (g.starOn ? 1000 : 0), () => {
-    const col = g.starOn ? "#3fbfff" : ["#f2e8d8", "#f5c518", "#1fd14a", "#ff7a1a"][m - 1];
+    const col = g.starOn ? starHex : ["#f2e8d8", "#f5c518", "#1fd14a", "#ff7a1a"][m - 1];
     h.ringSegs.forEach((sg, i) => sg.setAttribute("stroke", i < fill ? col : "rgba(255,255,255,.1)"));
   });
   if (g.ui.starShown) set("star", Math.round(g.starMeter * 100), (v) => h.starFill.setAttribute("stroke-dasharray", `${v} 100`));
@@ -2297,6 +2657,7 @@ function renderLobby() {
     const ready = cfg && p.ready && p.songId === cfg.songId;
     li.innerHTML = `<span class="n"></span>${i === 0 ? `<span class="tag host">Anfitrión</span>` : ""}<span class="tag">${p.device === "cel" ? "Celular" : "PC"}</span><span class="${ready ? "ok" : "wait"}">${cfg ? (ready ? "listo" : "cargando") : ""}</span>`;
     li.querySelector(".n").textContent = p.name + (p.id === app.me.id ? " (tú)" : "");
+    styledName(li.querySelector(".n"), p.name);
     ul.appendChild(li);
   });
   const isHost = amHost();
@@ -2351,6 +2712,7 @@ function renderRivals() {
     if (id === app.me?.id) li.className = "me";
     li.innerHTML = `<span class="n"></span><span class="s">${r.score.toLocaleString("es-CO")}</span><span class="m">${Math.round((r.acc || 0) * 100)}% · racha ${r.combo}</span>`;
     li.querySelector(".n").textContent = r.name;
+    styledName(li.querySelector(".n"), r.name);
     ol.appendChild(li);
   }
 }
@@ -2365,6 +2727,7 @@ function renderRanking() {
     if (id === app.me?.id) li.className = "me";
     li.innerHTML = `<span class="n"></span><span class="a">${Math.round(r.acc * 100)}%</span><span class="s">${r.score.toLocaleString("es-CO")}</span>`;
     li.querySelector(".n").textContent = r.name;
+    styledName(li.querySelector(".n"), r.name);
     ol.appendChild(li);
   }
   const waiting = app.peers.length - list.length;

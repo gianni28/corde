@@ -2,9 +2,11 @@
 // One entry per NAME (case-insensitive) on each song + difficulty + string count, keeping the best score,
 // so the same person on another browser or phone joins their existing entry. Rejects impossible scores
 // and answers with the best and position. player_key (hash of a secret kept in the browser) only lets a
-// browser that changes its name move its entry. Only a browser linked to the name's account can send (accounts.sql).
+// browser that changes its name move its entry. A name with an account only comes from that account's browsers
+// (accounts.sql); a browser without an account yet can still send with a name nobody has claimed.
 // The string count is the one really played: a 5-string run of a difficulty whose chart never uses the
 // 5th string is a 4-string run (same notes), so it goes to the 4-string board.
+// A run that gets here also pays púas to the browser's account (shop.sql): { …, picks: { earned, balance, … } | null }.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -87,7 +89,15 @@ Deno.serve(async (req) => {
   });
   if (wErr) console.warn("weekly:", wErr.message);
 
+  // púas for the run (shop.sql): null for a browser without an account; they never block the score either
+  const { data: picks, error: pErr } = await db.rpc("wallet_award", {
+    p_secret: b.secret, p_song_id: b.song_id, p_diff: b.diff,
+    p_stars: Math.min(5, Math.max(1, Math.round(Number(b.stars) || 1))),
+    p_first: !prev, p_record: newRecord && !!prev,
+  });
+  if (pErr) console.warn("picks:", pErr.message);
+
   const best = newRecord ? score : prev!.score;
   const { count } = await db.from("board_song").select("name", { count: "exact", head: true }).match({ ...board, lanes }).gt("score", best);
-  return json({ best, rank: (count || 0) + 1, newRecord, lanes });
+  return json({ best, rank: (count || 0) + 1, newRecord, lanes, picks: picks ?? null });
 });
