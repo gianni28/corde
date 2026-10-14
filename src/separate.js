@@ -10,6 +10,9 @@ import separate from "@audio/neural-separate";
  * L, R: the song at 44.1 kHz. onProgress(fraction). device: "wasm" | "webgpu" | undefined (SCNet's default: wasm).
  * Returns { guitar: { L, R }, rest: { L, R } }.
  */
+/** How many threads onnxruntime gets on this page (1 unless the page is cross-origin isolated: /admin). */
+export const separationThreads = () => (self.crossOriginIsolated ? Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1)) : 1);
+
 export async function splitGuitar(L, R, onProgress = () => {}, device) {
   onProgress(0);
   // every core but one when the page may use threads (cross-origin isolated); otherwise onnxruntime runs on one.
@@ -18,13 +21,14 @@ export async function splitGuitar(L, R, onProgress = () => {}, device) {
   // module @audio/neural-runtime loads (vite.config.js), so the setting reaches it.
   if (self.crossOriginIsolated) {
     const ort = await import("onnxruntime-web/wasm");
-    ort.env.wasm.numThreads = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1));
+    ort.env.wasm.numThreads = separationThreads();
   }
   const opts = {
     sampleRate: 44100, model: "scnet", targets: ["other"],
     // each sample heard in two 11 s windows instead of four: half the time, the same guitar (measured: 3.17 vs 3.18 dB)
     step: 0.5,
-    progress: (p) => { if (p && p.totalChunks) onProgress(p.chunk / p.totalChunks); },
+    // p.chunk is the part starting now: (chunk - 1) of them are done
+    progress: (p) => { if (p && p.totalChunks) onProgress((p.chunk - 1) / p.totalChunks, p); },
   };
   if (device) opts.device = device;
   const { stems } = await separate([L, R], opts);

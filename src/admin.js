@@ -22,9 +22,11 @@ const ENC_DELAY_MS = 25;
 /** The guitar apart from the rest ({ guitar, rest }, each { L, R }), or null when this browser can't (it says why). */
 async function guitarApart(L, R, onStatus, from, span) {
   try {
-    const { splitGuitar } = await import("./separate.js"); // only the admin page loads the model
-    onStatus("Separando la guitarra (la primera vez descarga 13 MB)", from);
-    return await splitGuitar(L, R, (p) => onStatus("Separando la guitarra", from + span * p));
+    const { splitGuitar, separationThreads } = await import("./separate.js"); // only the admin page loads the model
+    const t0 = Date.now(), cores = separationThreads();
+    const mmss = () => { const s = Math.round((Date.now() - t0) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+    onStatus(`Preparando la separación (la primera vez descarga 13 MB) · ${cores} ${cores > 1 ? "núcleos" : "núcleo"}`, from);
+    return await splitGuitar(L, R, (p, c) => onStatus(c ? `Separando la guitarra · parte ${c.chunk} de ${c.totalChunks} · ${mmss()}` : "Separando la guitarra", from + span * p));
   } catch (e) {
     console.warn("separación:", e);
     return null;
