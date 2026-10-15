@@ -10,7 +10,7 @@ import { decodeStems, Player, audioCtx, unlockAudio } from "./audio.js";
 import { Game, STAR_READY } from "./game.js";
 import { motionAvailable, motionNeedsPermission, motionReady, requestMotion, onLift, watchMotion, seen as motionSeen } from "./motion.js";
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
-import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, nameStyles } from "./net.js";
+import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, nameStyles, songRequest, myNotices, noticeSeen, noticeReply } from "./net.js";
 import { shareCard, retoUrl, readReto } from "./share.js";
 import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak } from "./achievements.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretSongs, secretBoard, songById } from "./net.js";
@@ -161,6 +161,7 @@ const wideMQ = matchMedia("(min-width: 1000px)");
 // admin uploads (declared up here: the menu music and the frame loop ask about them from the first moment)
 const adm = { songs: [], busy: false };
 const split = { on: false, stop: false, rows: [] }; // the library's songs whose guitar is being separated
+const notices = { queue: [], current: null, asked: false }; // the admin's messages waiting for this player (see checkNotices)
 // while the admin uploads or separates songs, the stage and the menu music rest (they'd take the processor from it)
 function adminWorking() { return adm.busy || split.on; }
 function adminWorkChanged() { syncMenuMusic(); }
@@ -219,6 +220,7 @@ function show(name, push = true) {
   if (name === "play") $("hud").hidden = false;
   if (name === "home") { renderHomeBoard(); renderDailyCard(); if (online && !daily.day) loadDaily(); }
   if (name !== "settings") stopMotionTest();
+  if (notices.queue.length && !notices.current) setTimeout(showNextNotice, 400);
   if (name !== "tienda") endShopPreview(); // leaving the shop any way at all puts back what you have on
   // the stage behind: the tour's venues in the tour and its songs, the usual bar everywhere else
   const look = name === "tour" ? tourLook
@@ -1684,6 +1686,7 @@ function adoptAccount(acc) {
   setWallet(acc.wallet); // its púas and its look (another device may have changed it)
   if (app.screen === "tienda") renderShop();
   syncNow(); // uploads what this browser had and brings what the other devices have
+  checkNotices();
 }
 function renderAccountField() {
   const f = $("accountField"); if (!f) return;
@@ -1741,6 +1744,70 @@ $("welcomeLink").onclick = async () => {
 $("welcomeName").addEventListener("input", () => { if (welcome.taken) setWelcomeTaken(false); });
 // nothing behind the card reacts to the keyboard while it's open
 addEventListener("keydown", (e) => { if (welcome.open && !e.target.closest?.("#welcomeModal")) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+/* ---------------- song requests ---------------- */
+$("openRequest").onclick = () => {
+  $("requestMsg").textContent = ""; $("requestModal").hidden = false;
+  setTimeout(() => $("requestText").focus(), 60);
+};
+const closeRequest = () => { $("requestModal").hidden = true; };
+$("requestClose").onclick = closeRequest;
+$("requestModal").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closeRequest(); } });
+$("requestForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const body = $("requestText").value.trim(), msg = $("requestMsg");
+  if (!body) { $("requestText").focus(); return; }
+  if (!account || !online) { msg.textContent = "Necesitas conexión y tu nombre en el juego para enviarlo."; return; }
+  $("requestSend").disabled = true;
+  try {
+    const r = await songRequest(playerSecret(), body);
+    if (r?.ok) { msg.textContent = "¡Listo! Tu pedido llegó."; $("requestText").value = ""; }
+    else msg.textContent = r?.error === "limit" ? "Ya enviaste muchos pedidos hoy. Mañana puedes enviar más." : "No se pudo enviar. Intenta otra vez.";
+  } catch { msg.textContent = "No se pudo enviar. Revisa tu conexión."; }
+  $("requestSend").disabled = false;
+};
+
+/* ---------------- notices from the admin ---------------- */
+// Each one shows once, in the menus (never mid-song, never over the welcome card that asks for the name),
+// with a quiet box to answer if the player wants to.
+async function checkNotices() {
+  if (!account || !online || notices.asked) return;
+  notices.asked = true;
+  try {
+    const list = await myNotices(playerSecret());
+    if (Array.isArray(list)) notices.queue.push(...list.filter((n) => n && n.id && n.body));
+  } catch (e) { console.warn("notices:", e.message); notices.asked = false; return; }
+  showNextNotice();
+}
+const NOTICE_SCREENS = new Set(["home", "library", "setup", "logros", "tienda", "tour", "daily", "mp", "settings"]);
+function showNextNotice() {
+  if (notices.current || !notices.queue.length) return;
+  if (welcome.open || app.game || !NOTICE_SCREENS.has(app.screen)) return; // later, back in the menus
+  const n = notices.current = notices.queue.shift();
+  $("noticeBody").textContent = n.body;
+  $("noticeReply").value = ""; $("noticeSend").hidden = true; $("noticeMsg").textContent = "";
+  $("noticeModal").hidden = false;
+  noticeSeen(playerSecret(), n.id).catch(() => {}); // shown: it won't come again
+}
+function closeNotice() {
+  $("noticeModal").hidden = true; notices.current = null;
+  setTimeout(showNextNotice, 300);
+}
+$("noticeClose").onclick = closeNotice;
+$("noticeModal").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closeNotice(); } });
+$("noticeReply").addEventListener("input", () => { $("noticeSend").hidden = !$("noticeReply").value.trim(); });
+$("noticeForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const n = notices.current, body = $("noticeReply").value.trim();
+  if (!n || !body) return;
+  $("noticeSend").disabled = true;
+  try {
+    const r = await noticeReply(playerSecret(), n.id, body);
+    if (r?.ok) { $("noticeMsg").textContent = "Enviado. ¡Gracias!"; $("noticeReply").value = ""; $("noticeSend").hidden = true; }
+    else $("noticeMsg").textContent = r?.error === "limit" ? "Ya respondiste varias veces a este mensaje." : "No se pudo enviar.";
+  } catch { $("noticeMsg").textContent = "No se pudo enviar. Revisa tu conexión."; }
+  $("noticeSend").disabled = false;
+};
+
 async function ensureAccount() {
   if (!settings.name) openWelcome(); // right away: no waiting for the network to ask the name
   if (!online) return;
@@ -2839,10 +2906,142 @@ const ADMIN_KEY = "corde.adminCode";
 // The upload screen is hidden for everyone; the admin opens it once with /#admin and it stays visible in that browser.
 function isAdminBrowser() { try { return !!localStorage.getItem(ADMIN_KEY); } catch { return false; } }
 try { $("adminCode").value = localStorage.getItem(ADMIN_KEY) || ""; } catch {}
-$("openAdmin").onclick = () => { if (app.game) return; show("admin"); loadAutoList(); };
+$("openAdmin").onclick = () => { if (app.game) return; openAdminScreen(); };
 // /admin is the same page served cross-origin isolated (netlify.toml): there the guitar separation uses every core
 const adminPath = location.pathname.replace(/\/+$/, "") === "/admin";
-if (location.hash === "#admin" || adminPath) setTimeout(() => { show("admin"); loadAutoList(); }, 0);
+if (location.hash === "#admin" || adminPath) setTimeout(openAdminScreen, 0);
+
+// The panel shows nothing but the code field until the server says the code is right (anyone can open /admin)
+let adminOk = false;
+function openAdminScreen() {
+  show("admin");
+  if (adminOk) { loadAutoList(); loadInbox(); }
+  else if ($("adminCode").value.trim()) adminEnter(true); // this browser's saved code: straight in if it still works
+}
+async function adminEnter(quiet = false) {
+  const code = $("adminCode").value.trim(), msg = $("adminGateMsg");
+  if (!code) { msg.textContent = "Escribe el código."; return; }
+  $("adminEnter").disabled = true; msg.textContent = quiet ? "" : "Revisando…";
+  try {
+    await adminCall({ code, action: "check" });
+    adminOk = true;
+    try { localStorage.setItem(ADMIN_KEY, code); } catch {}
+    msg.textContent = ""; $("adminGate").hidden = true; $("adminBody").hidden = false;
+    loadAutoList(); loadInbox();
+  } catch (e) {
+    adminOk = false; $("adminBody").hidden = true;
+    msg.textContent = /incorrecto/i.test(e.message) ? "Ese código no es." : "No se pudo revisar el código. Revisa tu conexión.";
+    if (/incorrecto/i.test(e.message)) { try { localStorage.removeItem(ADMIN_KEY); } catch {} $("adminCode").value = ""; }
+  }
+  $("adminEnter").disabled = false;
+}
+$("adminGate").onsubmit = (e) => { e.preventDefault(); adminEnter(); };
+
+/* --- what the players asked for and what the admin tells them (inbox.sql) --- */
+const inbox = { who: "all", names: [], players: null };
+const shortDate = (iso) => { try { return new Date(iso).toLocaleString("es-CO", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }); } catch { return ""; } };
+async function loadInbox() {
+  const code = $("adminCode").value.trim();
+  if (!adminOk || !code) return;
+  let r;
+  try { r = await adminCall({ code, action: "inbox" }); } catch (e) { $("reqEmpty").textContent = e.message; return; }
+  renderRequests(r.requests || []); renderNotices(r.notices || []);
+  if (!inbox.players) {
+    try {
+      inbox.players = (await adminCall({ code, action: "players" })).names || [];
+      const dl = $("ntPlayers"); dl.innerHTML = "";
+      for (const n of inbox.players) { const o = document.createElement("option"); o.value = n; dl.appendChild(o); }
+    } catch {}
+  }
+}
+// everything the players wrote goes in as text, never as HTML
+function renderRequests(list) {
+  const ul = $("reqList"); ul.innerHTML = "";
+  $("reqEmpty").textContent = list.length ? `${list.filter((x) => !x.done).length} sin atender de ${list.length}.` : "Todavía nadie ha pedido canciones.";
+  for (const x of list) {
+    const li = document.createElement("li"); li.className = x.done ? "done" : "";
+    li.innerHTML = `<span class="n"><b></b><small></small><span class="req-body"></span></span><span class="req-act"><button type="button"></button><button type="button">Borrar</button></span>`;
+    li.querySelector("b").textContent = x.name; li.querySelector("small").textContent = ` · ${shortDate(x.at)}`;
+    li.querySelector(".req-body").textContent = x.body;
+    const [bDone, bDel] = li.querySelectorAll("button");
+    bDone.textContent = x.done ? "Pendiente" : "Hecho";
+    bDone.onclick = async () => { bDone.disabled = true; try { await adminCall({ code: $("adminCode").value.trim(), action: "request_done", id: x.id, done: !x.done }); } catch {} loadInbox(); };
+    bDel.onclick = async () => { if (!confirm("¿Borrar este pedido?")) return; bDel.disabled = true; try { await adminCall({ code: $("adminCode").value.trim(), action: "request_delete", id: x.id }); } catch {} loadInbox(); };
+    ul.appendChild(li);
+  }
+}
+function renderNotices(list) {
+  const ul = $("ntList"); ul.innerHTML = "";
+  $("ntEmpty").textContent = list.length ? "" : "Todavía no has enviado avisos.";
+  for (const x of list) {
+    const li = document.createElement("li"); li.className = x.active ? "" : "done";
+    li.innerHTML = `<span class="n"><small class="nt-meta"></small><span class="req-body"></span><span class="nt-replies"></span></span><span class="req-act"><button type="button"></button></span>`;
+    const to = x.all ? "A todos" : `A ${x.to.join(", ") || "nadie"}`;
+    li.querySelector(".nt-meta").textContent = `${shortDate(x.at)} · ${to} · lo ${x.seen === 1 ? "vio 1 persona" : `vieron ${x.seen} personas`}`;
+    li.querySelector(".req-body").textContent = x.body;
+    const rep = li.querySelector(".nt-replies");
+    for (const r of x.replies || []) {
+      const d = document.createElement("span"); d.className = "nt-reply";
+      const b = document.createElement("b"); b.textContent = `${r.name}: `;
+      d.append(b, document.createTextNode(r.body)); rep.appendChild(d);
+    }
+    const bOff = li.querySelector("button");
+    bOff.textContent = x.active ? "Quitar" : "Quitado"; bOff.disabled = !x.active;
+    bOff.title = "Deja de salirle a quien todavía no lo ha visto";
+    bOff.onclick = async () => { bOff.disabled = true; try { await adminCall({ code: $("adminCode").value.trim(), action: "notice_off", id: x.id }); } catch {} loadInbox(); };
+    ul.appendChild(li);
+  }
+}
+function renderWho() {
+  document.querySelectorAll("#ntWho button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === inbox.who)));
+  $("ntSome").hidden = inbox.who !== "some";
+  const box = $("ntChips"); box.innerHTML = "";
+  for (const n of inbox.names) {
+    const c = document.createElement("button"); c.type = "button"; c.className = "nt-chip"; c.textContent = `${n} ×`;
+    c.title = "Quitar"; c.onclick = () => { inbox.names = inbox.names.filter((x) => x !== n); renderWho(); };
+    box.appendChild(c);
+  }
+}
+document.querySelectorAll("#ntWho button").forEach((b) => (b.onclick = () => { inbox.who = b.dataset.v; renderWho(); }));
+function addTarget() {
+  const n = $("ntName").value.trim().slice(0, 16);
+  if (n && !inbox.names.some((x) => x.toLowerCase() === n.toLowerCase())) inbox.names.push(n);
+  $("ntName").value = ""; renderWho(); $("ntName").focus();
+}
+$("ntAdd").onclick = addTarget;
+$("ntName").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addTarget(); } });
+$("ntSend").onclick = async () => {
+  const body = $("ntText").value.trim(), st = $("ntStatus");
+  if (!body) { st.textContent = "Escribe el aviso."; return; }
+  if (inbox.who === "some" && !inbox.names.length) { st.textContent = "Agrega al menos un nombre."; return; }
+  $("ntSend").disabled = true;
+  try {
+    const r = await adminCall({ code: $("adminCode").value.trim(), action: "notice", body, all: inbox.who === "all", names: inbox.names });
+    const missing = r.missing || [];
+    st.textContent = missing.length ? `Enviado, pero no encontré a: ${missing.join(", ")}.` : "Enviado. Les sale la próxima vez que entren.";
+    $("ntText").value = ""; inbox.names = []; renderWho();
+    loadInbox();
+  } catch (e) { st.textContent = e.message; }
+  $("ntSend").disabled = false;
+};
+renderWho();
+
+// the old copies in Supabase Storage (from before R2): the function deletes each file once R2 has it
+$("storageGo").onclick = async () => {
+  if (!confirm("¿Borrar las copias viejas de Supabase? Solo se borra lo que ya está en Cloudflare.")) return;
+  const st = $("storageStatus"), b = $("storageGo"); b.disabled = true;
+  let total = 0, kept = [];
+  try {
+    for (let round = 0; round < 40; round++) {
+      st.textContent = `Borrando… ${total} archivos hasta ahora.`;
+      const r = await adminCall({ code: $("adminCode").value.trim(), action: "storage_cleanup" });
+      total += r.deleted || 0; kept = r.kept || [];
+      if (r.done || !r.deleted) break;
+    }
+    st.textContent = `Listo: ${total} archivos borrados de Supabase.` + (kept.length ? ` Quedaron ${kept.length} que no están en Cloudflare (no los toqué).` : "");
+  } catch (e) { st.textContent = `${total} borrados; luego falló: ${e.message}`; }
+  b.disabled = false;
+};
 
 // Songs made from a bare MP3. Uploading the same song as a Clone Hero folder replaces them (even with only
 // Expert: the easier levels are built from it), and they can be deleted from here.
@@ -3036,7 +3235,6 @@ function renderSecretAdmin() {
   }
 }
 $("secretFind").oninput = renderSecretAdmin;
-$("adminCode").addEventListener("change", () => loadAutoList());
 $("secretSave").onclick = async () => {
   const code = $("adminCode").value.trim(), next = $("secretNew").value.trim();
   if (!code) { $("secretStatus").textContent = "Escribe el código de administrador."; return; }
