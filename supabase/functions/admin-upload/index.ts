@@ -118,6 +118,72 @@ Deno.serve(async (req) => {
     return json({ ok: true });
   }
 
+  // the players' song requests and the notices with their answers (inbox.sql)
+  if (body.action === "inbox") {
+    const { data, error } = await admin.rpc("admin_inbox");
+    if (error) return json({ error: error.message }, 500);
+    return json(data);
+  }
+  // the players' names, to pick who gets a notice
+  if (body.action === "players") {
+    const { data, error } = await admin.from("accounts").select("name").order("created_at", { ascending: false }).limit(2000);
+    if (error) return json({ error: error.message }, 500);
+    return json({ names: (data || []).map((a: { name: string }) => a.name) });
+  }
+  // a notice for everyone, or for the players named → { id, missing: [names nobody has] }
+  if (body.action === "notice") {
+    const text = typeof body.body === "string" ? body.body.trim() : "";
+    const names = Array.isArray(body.names) ? body.names.filter((n: unknown) => typeof n === "string" && n.trim()).map((n: string) => n.trim().slice(0, 16)).slice(0, 500) : [];
+    if (!text || text.length > 1000) return json({ error: "Escribe el aviso (máximo 1000 letras)" }, 400);
+    if (!body.all && !names.length) return json({ error: "Elige a quién le llega" }, 400);
+    const { data, error } = await admin.rpc("notice_create", { p_body: text, p_all: !!body.all, p_names: names });
+    if (error) return json({ error: error.message }, 500);
+    return json(data);
+  }
+  // a notice stops showing (the ones who saw it, saw it)
+  if (body.action === "notice_off") {
+    if (!Number.isInteger(body.id)) return json({ error: "Datos inválidos" }, 400);
+    const { error } = await admin.from("notices").update({ active: false }).eq("id", body.id);
+    if (error) return json({ error: error.message }, 500);
+    return json({ ok: true });
+  }
+  // a request marked as done (or not), or gone
+  if (body.action === "request_done") {
+    if (!Number.isInteger(body.id) || typeof body.done !== "boolean") return json({ error: "Datos inválidos" }, 400);
+    const { error } = await admin.from("song_requests").update({ done: body.done }).eq("id", body.id);
+    if (error) return json({ error: error.message }, 500);
+    return json({ ok: true });
+  }
+  if (body.action === "request_delete") {
+    if (!Number.isInteger(body.id)) return json({ error: "Datos inválidos" }, 400);
+    const { error } = await admin.from("song_requests").delete().eq("id", body.id);
+    if (error) return json({ error: error.message }, 500);
+    return json({ ok: true });
+  }
+
+  // the song files that were in Supabase Storage before R2: each one deleted only once R2 answers that it has it.
+  // A call works for at most ~100 s (the function's limit is 150); the panel calls again while it deletes something.
+  if (body.action === "storage_cleanup") {
+    const bucket = admin.storage.from("songs"), client = r2(), started = Date.now();
+    const { data: dirs, error } = await bucket.list("", { limit: 1000 });
+    if (error) return json({ error: error.message }, 500);
+    const folders = (dirs || []).filter((d) => !d.id).map((d) => d.name);
+    let deleted = 0, done = true;
+    const kept: string[] = [];
+    for (const f of folders) {
+      if (Date.now() - started > 100000) { done = false; break; }
+      const { data: files } = await bucket.list(f, { limit: 100 });
+      const ok: string[] = [];
+      for (const x of (files || []).filter((x) => x.id)) {
+        const p = `${f}/${x.name}`;
+        const r = await client.fetch(r2Url(p), { method: "HEAD" }).catch(() => null);
+        if (r?.ok) ok.push(p); else kept.push(p);
+      }
+      if (ok.length) { const { error: e } = await bucket.remove(ok); if (!e) deleted += ok.length; }
+    }
+    return json({ deleted, kept, done, folders: folders.length });
+  }
+
   // the code that unlocks the secret songs (stored as the sha-256 of its lowercased text, like the database checks it)
   if (body.action === "secret") {
     const secret = typeof body.secret === "string" ? body.secret.trim().toLowerCase() : "";

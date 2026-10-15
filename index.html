@@ -111,6 +111,24 @@
       <div class="row"><button type="button" id="secretCancel">Cancelar</button><button type="submit" class="primary" id="secretGo">Entrar</button></div>
     </form>
   </div>
+  <div class="secret-modal" id="requestModal" hidden>
+    <form class="panel narrow secret-box request-box" id="requestForm" autocomplete="off">
+      <h2>Pedir canciones</h2>
+      <p class="hint">¿Qué canción te gustaría tocar? Escribe la que quieras, con el nombre del artista.</p>
+      <textarea id="requestText" rows="4" maxlength="500" placeholder="Ej. Thunderstruck · AC/DC" aria-label="Tu pedido"></textarea>
+      <p class="hint" id="requestMsg" aria-live="polite"></p>
+      <div class="row"><button type="button" id="requestClose">Cerrar</button><button type="submit" class="primary" id="requestSend">Enviar</button></div>
+    </form>
+  </div>
+  <div class="secret-modal" id="noticeModal" hidden>
+    <form class="panel narrow secret-box notice-box" id="noticeForm" autocomplete="off">
+      <span class="notice-kicker">Mensaje</span>
+      <p class="notice-body" id="noticeBody"></p>
+      <div class="notice-reply"><input type="text" id="noticeReply" maxlength="500" placeholder="Responder" aria-label="Responder"><button type="submit" id="noticeSend" hidden>Enviar</button></div>
+      <p class="hint" id="noticeMsg" aria-live="polite"></p>
+      <button type="button" class="primary" id="noticeClose">Cerrar</button>
+    </form>
+  </div>
   <div class="celebrate" id="celebrate" hidden>
     <div class="cel-rays" aria-hidden="true"></div>
     <div class="cel-box">
@@ -132,6 +150,7 @@
         <button data-go="mp">Multijugador</button>
         <button data-go="tienda">Tienda<span class="menu-picks" id="homePicks" hidden><svg aria-hidden="true"><use href="#pick"/></svg><b></b></span></button>
         <button data-go="logros">Logros</button>
+        <button id="openRequest">Pedir canciones</button>
         <button data-go="settings">Ajustes</button>
       </nav>
       <button class="daily-card" id="dailyCard" hidden>
@@ -445,12 +464,37 @@
   <!-- ===== ADMIN UPLOAD ===== -->
   <section class="screen panel-screen" id="s-admin" hidden>
     <div class="panel wide">
-      <header class="bar"><button class="back" data-back>Volver</button><h2>Subir canciones</h2></header>
-      <p class="hint">Elige una carpeta con canciones de Clone Hero (puede tener muchas subcarpetas). Tu navegador convierte cada una y la sube a la biblioteca; no hace falta instalar nada.</p>
-      <div class="field">
+      <header class="bar"><button class="back" data-back>Volver</button><h2>Administrar</h2></header>
+      <form class="field admin-gate" id="adminGate" autocomplete="off">
         <label class="label" for="adminCode">Código de administrador</label>
-        <input type="text" id="adminCode" autocomplete="off" spellcheck="false" placeholder="rock-xxxxxxxx">
+        <div class="row"><input type="password" id="adminCode" autocomplete="off" spellcheck="false" aria-label="Código de administrador"><button type="submit" class="primary" id="adminEnter">Entrar</button></div>
+        <p class="hint" id="adminGateMsg" aria-live="polite"></p>
+      </form>
+      <!-- nothing below shows until the code is checked by the server -->
+      <div id="adminBody" hidden>
+      <div class="field inbox-admin">
+        <span class="label">Pedidos de canciones</span>
+        <p class="hint" id="reqEmpty"></p>
+        <ul class="uploads auto-list req-list" id="reqList"></ul>
       </div>
+      <div class="field inbox-admin">
+        <span class="label">Enviar un aviso</span>
+        <p class="hint">Les sale una sola vez, la próxima vez que entren al juego, con un espacio para responderte si quieren.</p>
+        <textarea id="ntText" rows="3" maxlength="1000" placeholder="Escribe el aviso"></textarea>
+        <div class="seg" id="ntWho"><button type="button" data-v="all">A todos</button><button type="button" data-v="some">A algunos</button></div>
+        <div class="nt-some" id="ntSome" hidden>
+          <div class="row"><input type="text" id="ntName" list="ntPlayers" placeholder="Nombre de un jugador" autocomplete="off" aria-label="Nombre de un jugador"><button type="button" id="ntAdd">Agregar</button></div>
+          <datalist id="ntPlayers"></datalist>
+          <div class="nt-chips" id="ntChips"></div>
+        </div>
+        <div class="row"><button class="primary" id="ntSend">Enviar aviso</button></div>
+        <p class="hint" id="ntStatus" aria-live="polite"></p>
+        <span class="label">Avisos enviados</span>
+        <p class="hint" id="ntEmpty"></p>
+        <ul class="uploads auto-list nt-list" id="ntList"></ul>
+      </div>
+      <span class="label">Subir canciones</span>
+      <p class="hint">Elige una carpeta con canciones de Clone Hero (puede tener muchas subcarpetas). Tu navegador convierte cada una y la sube a la biblioteca; no hace falta instalar nada.</p>
       <div class="row">
         <label class="btn">Elegir carpeta<input type="file" id="adminFolder" webkitdirectory multiple></label>
         <label class="btn">Elegir MP3<input type="file" id="adminMp3" multiple accept=".mp3,.m4a,.ogg,.opus,.wav,.flac,audio/*,image/*"></label>
@@ -472,6 +516,12 @@
         <ul class="uploads" id="splitList"></ul>
         <p class="hint" id="splitStatus" aria-live="polite"></p>
       </div>
+      <div class="field">
+        <span class="label">Copias viejas en Supabase</span>
+        <p class="hint">Antes de Cloudflare las canciones se guardaban en Supabase, donde el espacio gratis es de 1 GB. El juego ya no las usa: esto borra cada archivo solo después de comprobar que está en Cloudflare.</p>
+        <div class="row"><button id="storageGo">Liberar Supabase</button></div>
+        <p class="hint" id="storageStatus" aria-live="polite"></p>
+      </div>
       <div class="field secret-admin">
         <span class="label">Canciones secretas</span>
         <p class="hint">Solo las ve quien toque 5 veces la púa escondida al final de la lista de canciones y escriba el código. No salen en la canción del día, la gira, la música del menú ni las tablas generales.</p>
@@ -483,6 +533,7 @@
         <p class="hint" id="secretEmpty"></p>
         <ul class="uploads auto-list secret-list" id="secretList"></ul>
         <p class="hint" id="secretStatus" aria-live="polite"></p>
+      </div>
       </div>
     </div>
   </section>

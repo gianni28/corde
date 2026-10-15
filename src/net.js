@@ -241,6 +241,15 @@ async function putFiles(code, id, files, onProgress) {
   }
 }
 
+/* ---------------- song requests and notices (inbox.sql) ---------------- */
+/** A song request from this browser's account → { ok } | { error: "no_account" | "empty" | "limit" } */
+export const songRequest = (secret, body) => rpcJson("song_request", { p_secret: secret, p_body: body });
+/** The notices this account hasn't seen → [{ id, body, at }] */
+export const myNotices = (secret) => rpcJson("my_notices", { p_secret: secret });
+export const noticeSeen = (secret, id) => rpcJson("notice_seen_by", { p_secret: secret, p_id: id });
+/** An answer to a notice → { ok } | { error } */
+export const noticeReply = (secret, id, body) => rpcJson("notice_reply", { p_secret: secret, p_id: id, p_body: body });
+
 /* ---------------- accounts ---------------- */
 // One name = one account (accounts.sql). The browser's secret ("corde.player") is its key to the account.
 async function rpcJson(fn, args) {
