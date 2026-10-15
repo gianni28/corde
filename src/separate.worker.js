@@ -53,8 +53,10 @@ async function splitGuitar(L, R, onProgress = () => {}, device) {
   }
   const opts = {
     sampleRate: 44100, model: "scnet", targets: ["other"],
-    // each sample heard in two 11 s windows instead of four: half the time, the same guitar (measured: 3.17 vs 3.18 dB)
-    step: 0.5,
+    // each 11 s window heard once (the package's default hears every sample in four): a quarter of the time for the
+    // same guitar (measured on a minute of Dio: 4.59 dB against 4.62 with two windows, 0.39 s per second of music
+    // against 0.86), and no seams: at the joins neither the loudness dips nor the signal jumps more than anywhere else
+    step: 1,
     progress: (p) => { if (p && p.totalChunks) onProgress((p.chunk - 1) / p.totalChunks, { stage: "part", chunk: p.chunk, totalChunks: p.totalChunks }); },
   };
   if (device) opts.device = device;
