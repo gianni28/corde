@@ -82,7 +82,7 @@
     <form class="panel narrow secret-box welcome-box" id="welcomeForm" autocomplete="off">
       <h2>¿Cómo te llamas?</h2>
       <p class="hint">Así aparecerás en las clasificaciones.</p>
-      <input type="text" id="welcomeName" maxlength="16" placeholder="Ej. Gianni" autocomplete="nickname" autocapitalize="words" aria-label="Tu nombre" enterkeyhint="go">
+      <input type="text" id="welcomeName" maxlength="16" placeholder="Tu nombre" autocomplete="nickname" autocapitalize="words" aria-label="Tu nombre" enterkeyhint="go">
       <p class="hint welcome-msg" id="welcomeMsg" aria-live="polite"></p>
       <input type="text" class="welcome-code" id="welcomeCode" maxlength="4" placeholder="ABCD" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" aria-label="Código" hidden>
       <div class="row"><button type="button" id="welcomeLink" hidden>Vincular</button><button type="submit" class="primary" id="welcomeGo">Empezar</button></div>
@@ -115,7 +115,7 @@
     <form class="panel narrow secret-box request-box" id="requestForm" autocomplete="off">
       <h2>Pedir canciones</h2>
       <p class="hint">¿Qué canción te gustaría tocar? Escribe la que quieras, con el nombre del artista.</p>
-      <textarea id="requestText" rows="4" maxlength="500" placeholder="Ej. Thunderstruck · AC/DC" aria-label="Tu pedido"></textarea>
+      <textarea id="requestText" rows="4" maxlength="500" placeholder="Canción y artista" aria-label="Tu pedido"></textarea>
       <p class="hint" id="requestMsg" aria-live="polite"></p>
       <div class="row"><button type="button" id="requestClose">Cerrar</button><button type="submit" class="primary" id="requestSend">Enviar</button></div>
     </form>
@@ -349,7 +349,7 @@
       <div class="or" id="duoOr" hidden><span>o en línea, cada uno en su dispositivo</span></div>
       <div class="field">
         <label class="label" for="mpName">Tu nombre</label>
-        <input type="text" id="mpName" maxlength="16" placeholder="Ej. Gianni" autocomplete="nickname">
+        <input type="text" id="mpName" maxlength="16" placeholder="Tu nombre" autocomplete="nickname">
       </div>
       <button class="primary" id="createRoom">Crear sala</button>
       <div class="or"><span>o únete con un código</span></div>
