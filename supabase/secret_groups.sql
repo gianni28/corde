@@ -22,12 +22,13 @@ update public.songs set secret_group = 1 where hidden and secret_group is null;
 -- the songs that count for the kittens (the notes that are cats: src/achievements.js "coro-gatitos")
 alter table public.songs add column if not exists miau boolean not null default false;
 
--- the group a code opens (null: none; a wrong guess waits a little, so guessing is slow)
+-- the group a code opens (null: none; a wrong guess waits a little, so guessing is slow). A phone writes the
+-- apostrophe curly (’): the codes read the same either way
 create or replace function public.secret_group_of(p_code text) returns int
 language plpgsql security definer set search_path = public as $$
-declare g int;
+declare g int; c text := lower(btrim(translate(coalesce(p_code, ''), chr(8217) || chr(8216) || chr(96) || chr(180) || chr(8220) || chr(8221), repeat(chr(39), 4) || repeat(chr(34), 2))));
 begin
-  select id into g from secret_groups where code_hash = encode(sha256(convert_to(lower(btrim(coalesce(p_code, ''))), 'UTF8')), 'hex');
+  select id into g from secret_groups where code_hash = encode(sha256(convert_to(c, 'UTF8')), 'hex');
   if g is null then perform pg_sleep(0.6); end if;
   return g;
 end $$;
@@ -88,3 +89,7 @@ end $$;
 revoke all on function public.songs_miau_flag() from public, anon, authenticated;
 drop trigger if exists songs_miau_flag on public.songs;
 create trigger songs_miau_flag before insert or update on public.songs for each row execute function public.songs_miau_flag();
+
+-- the kittens' songs have their own code (created 2026-10-16): "(cat's version)"
+insert into public.secret_groups (name, code_hash) values ('(cat''s version)', encode(sha256(convert_to('(cat''s version)', 'UTF8')), 'hex'))
+on conflict (code_hash) do nothing;

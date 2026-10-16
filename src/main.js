@@ -3376,6 +3376,8 @@ $("splitGo").onclick = async () => {
 };
 
 /* --- secret songs, from the admin's side: the codes (groups) and where each song is --- */
+// the database reads a curly apostrophe (a phone's) as a straight one: the codes are saved straight
+const plainCode = (c) => c.replace(/[’‘`´]/g, "'").replace(/[“”]/g, '"');
 const groupLabel = (x) => (!x.hidden ? "Biblioteca" : adm.groups.find((g) => g.id === x.secret_group)?.name || "Escondida");
 function adminCodeOr(el) {
   const code = $("adminCode").value.trim();
@@ -3404,7 +3406,7 @@ function renderSecretAdmin() {
           await adminCall({ code, action: "group_save", id: g.id, name });
           $("secretStatus").textContent = `Listo: ahora se llama «${name}».`;
         } else {
-          const next = prompt(`Nuevo código para «${g.name}» (quien tenía el anterior tendrá que escribir este):`)?.trim();
+          const next = plainCode(prompt(`Nuevo código para «${g.name}» (quien tenía el anterior tendrá que escribir este):`)?.trim() || "");
           if (!next) return;
           if (next.length < 3) { $("secretStatus").textContent = "El código necesita al menos 3 letras."; return; }
           await adminCall({ code, action: "group_save", id: g.id, secret: next });
@@ -3459,7 +3461,7 @@ function renderSecretAdmin() {
 $("secretFind").oninput = renderSecretAdmin;
 $("groupAdd").onclick = async () => {
   const code = adminCodeOr("secretStatus"); if (!code) return;
-  const name = $("groupName").value.trim(), next = $("groupCode").value.trim();
+  const name = $("groupName").value.trim(), next = plainCode($("groupCode").value.trim());
   if (!name || next.length < 3) { $("secretStatus").textContent = "Escribe el nombre y un código de al menos 3 letras."; return; }
   $("groupAdd").disabled = true;
   try {
