@@ -147,10 +147,13 @@ Deno.serve(async (req) => {
     if (error) return json({ error: error.message }, 500);
     return json({ ok: true });
   }
-  // a request marked as done (or not), or gone
+  // a request marked as done (or not), or gone. Done with a song of the library (song_id): its player gets
+  // "¡Ya está tu canción!" the next time they open the game (inbox.sql my_fulfilled)
   if (body.action === "request_done") {
     if (!Number.isInteger(body.id) || typeof body.done !== "boolean") return json({ error: "Datos inválidos" }, 400);
-    const { error } = await admin.from("song_requests").update({ done: body.done }).eq("id", body.id);
+    if (body.song_id != null && !validId(body.song_id)) return json({ error: "Datos inválidos" }, 400);
+    const patch = { done: body.done, song_id: body.done && body.song_id ? body.song_id : null, announced: false };
+    const { error } = await admin.from("song_requests").update(patch).eq("id", body.id);
     if (error) return json({ error: error.message }, 500);
     return json({ ok: true });
   }

@@ -129,6 +129,15 @@
       <button type="button" class="primary" id="noticeClose">Cerrar</button>
     </form>
   </div>
+  <div class="secret-modal" id="songReadyModal" hidden>
+    <div class="panel narrow secret-box song-ready" role="dialog" aria-labelledby="srTitle">
+      <span class="notice-kicker">¡Ya está la canción que pediste!</span>
+      <div class="sr-art"><svg aria-hidden="true"><use href="#flame"/></svg><img id="srCover" alt=""></div>
+      <h2 id="srTitle"></h2>
+      <p class="sr-artist" id="srArtist"></p>
+      <div class="row"><button type="button" id="srLater">Después</button><button type="button" class="primary" id="srPlay">Jugar ahora</button></div>
+    </div>
+  </div>
   <div class="celebrate" id="celebrate" hidden>
     <div class="cel-rays" aria-hidden="true"></div>
     <div class="cel-box">

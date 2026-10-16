@@ -249,6 +249,9 @@ export const myNotices = (secret) => rpcJson("my_notices", { p_secret: secret })
 export const noticeSeen = (secret, id) => rpcJson("notice_seen_by", { p_secret: secret, p_id: id });
 /** An answer to a notice → { ok } | { error } */
 export const noticeReply = (secret, id, body) => rpcJson("notice_reply", { p_secret: secret, p_id: id, p_body: body });
+/** This account's requests that now have their song → [{ id, body, song: { id, name, artist, has_cover } }] */
+export const myFulfilled = (secret) => rpcJson("my_fulfilled", { p_secret: secret });
+export const fulfilledSeen = (secret, id) => rpcJson("fulfilled_seen", { p_secret: secret, p_id: id });
 
 /* ---------------- accounts ---------------- */
 // One name = one account (accounts.sql). The browser's secret ("corde.player") is its key to the account.

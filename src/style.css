@@ -1137,3 +1137,21 @@ body.streak-platino #hud .streak, .streak.st-platino, .sw-streak .st-platino { b
 .req-list li.done, .nt-list li.done { opacity: .55; }
 .nt-replies { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
 .nt-reply { font: 500 14px/1.35 var(--body); color: #e8dccd; padding-left: 8px; border-left: 2px solid var(--gold); overflow-wrap: anywhere; }
+
+/* "¡Ya está la canción que pediste!" */
+.song-ready { gap: 10px; }
+.sr-art { position: relative; width: 168px; height: 168px; margin: 6px auto 2px; display: grid; place-items: center; overflow: hidden;
+  background: radial-gradient(circle at 50% 70%, #6a1a08, #1a0906 70%); box-shadow: 0 0 0 1px #000, 0 0 0 3px rgba(245,197,24,.55), 0 0 40px rgba(245,197,24,.35);
+  animation: srIn .6s cubic-bezier(.2, 1.4, .4, 1) both; }
+.sr-art svg { width: 55%; height: 55%; fill: #ff8a1a; filter: drop-shadow(0 0 10px rgba(255,120,20,.9)); }
+.sr-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sr-art img[hidden] { display: none; }
+@keyframes srIn { from { transform: scale(.6) rotate(-6deg); opacity: 0; } }
+.song-ready h2 { margin: 0; font: 700 30px/1.05 var(--display); text-transform: uppercase; letter-spacing: .03em; }
+.sr-artist { margin: 0; color: var(--muted); font-size: 17px; }
+.req-song { color: var(--gold) !important; }
+.req-pick { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.req-pick input[type=search] { padding: 8px 10px; font-size: 15px; }
+.req-hits { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 14px; }
+.req-hits button, .req-pick .req-none { text-align: left; text-transform: none !important; letter-spacing: 0 !important; font: 500 15px var(--body) !important; }
+.req-pick .req-none { align-self: flex-start; opacity: .8; }

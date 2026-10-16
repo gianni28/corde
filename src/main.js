@@ -10,7 +10,7 @@ import { decodeStems, Player, audioCtx, unlockAudio } from "./audio.js";
 import { Game, STAR_READY } from "./game.js";
 import { motionAvailable, motionNeedsPermission, motionReady, requestMotion, onLift, watchMotion, seen as motionSeen } from "./motion.js";
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
-import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, nameStyles, songRequest, myNotices, noticeSeen, noticeReply } from "./net.js";
+import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, nameStyles, songRequest, myNotices, noticeSeen, noticeReply, myFulfilled, fulfilledSeen } from "./net.js";
 import { shareCard, retoUrl, readReto } from "./share.js";
 import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak } from "./achievements.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretSongs, secretBoard, songById } from "./net.js";
@@ -1773,7 +1773,9 @@ async function checkNotices() {
   if (!account || !online || notices.asked) return;
   notices.asked = true;
   try {
-    const list = await myNotices(playerSecret());
+    // the songs they asked for that are in now go first, then the admin's messages
+    const [songs, list] = await Promise.all([myFulfilled(playerSecret()).catch(() => []), myNotices(playerSecret())]);
+    if (Array.isArray(songs)) notices.queue.push(...songs.filter((r) => r && r.id && r.song?.id).map((r) => ({ ...r, kind: "song" })));
     if (Array.isArray(list)) notices.queue.push(...list.filter((n) => n && n.id && n.body));
   } catch (e) { console.warn("notices:", e.message); notices.asked = false; return; }
   showNextNotice();
@@ -1783,11 +1785,32 @@ function showNextNotice() {
   if (notices.current || !notices.queue.length) return;
   if (welcome.open || app.game || !NOTICE_SCREENS.has(app.screen)) return; // later, back in the menus
   const n = notices.current = notices.queue.shift();
+  if (n.kind === "song") return showSongReady(n);
   $("noticeBody").textContent = n.body;
   $("noticeReply").value = ""; $("noticeSend").hidden = true; $("noticeMsg").textContent = "";
   $("noticeModal").hidden = false;
   noticeSeen(playerSecret(), n.id).catch(() => {}); // shown: it won't come again
 }
+// "¡Ya está la canción que pediste!": its cover, its name, and a button straight to it
+function showSongReady(r) {
+  const s = r.song, cov = coverOf(s);
+  $("srTitle").textContent = s.name; $("srArtist").textContent = s.artist || "";
+  const img = $("srCover"); img.hidden = !cov; img.src = cov || "";
+  $("songReadyModal").hidden = false;
+  fulfilledSeen(playerSecret(), r.id).catch(() => {}); // shown: it won't come again
+  try { sfx.unlock(); } catch {}
+}
+function closeSongReady() { $("songReadyModal").hidden = true; notices.current = null; setTimeout(showNextNotice, 300); }
+$("srLater").onclick = closeSongReady;
+$("songReadyModal").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closeSongReady(); } });
+$("srPlay").onclick = async () => {
+  const r = notices.current;
+  $("songReadyModal").hidden = true; notices.current = null; notices.queue = notices.queue.filter((x) => x.kind !== "song" || x.id !== r?.id);
+  const s = r && (await findSong(r.song.id));
+  if (!s) return toast("No se pudo abrir la canción. Búscala en Jugar.");
+  app.mode = "solo";
+  try { await loadLibrarySong(s); openSetup(); } catch (e) { toast(e.message); show("home", false); }
+};
 function closeNotice() {
   $("noticeModal").hidden = true; notices.current = null;
   setTimeout(showNextNotice, 300);
@@ -2958,15 +2981,47 @@ async function loadInbox() {
 function renderRequests(list) {
   const ul = $("reqList"); ul.innerHTML = "";
   $("reqEmpty").textContent = list.length ? `${list.filter((x) => !x.done).length} sin atender de ${list.length}.` : "Todavía nadie ha pedido canciones.";
+  const code = () => $("adminCode").value.trim();
+  const markDone = async (x, songId, btn) => {
+    if (btn) btn.disabled = true;
+    try { await adminCall({ code: code(), action: "request_done", id: x.id, done: true, song_id: songId || null }); } catch (e) { toast(e.message); }
+    loadInbox();
+  };
   for (const x of list) {
     const li = document.createElement("li"); li.className = x.done ? "done" : "";
-    li.innerHTML = `<span class="n"><b></b><small></small><span class="req-body"></span></span><span class="req-act"><button type="button"></button><button type="button">Borrar</button></span>`;
+    li.innerHTML = `<span class="n"><b></b><small></small><span class="req-body"></span><small class="req-song"></small><span class="req-pick" hidden></span></span><span class="req-act"><button type="button"></button><button type="button">Borrar</button></span>`;
     li.querySelector("b").textContent = x.name; li.querySelector("small").textContent = ` · ${shortDate(x.at)}`;
     li.querySelector(".req-body").textContent = x.body;
-    const [bDone, bDel] = li.querySelectorAll("button");
+    if (x.done && x.song) li.querySelector(".req-song").textContent = `→ ${x.song.name}${x.song.artist ? ` · ${x.song.artist}` : ""} · ${x.announced ? "ya le salió el anuncio" : "le saldrá el anuncio al entrar"}`;
+    const [bDone, bDel] = li.querySelectorAll(".req-act button");
     bDone.textContent = x.done ? "Pendiente" : "Hecho";
-    bDone.onclick = async () => { bDone.disabled = true; try { await adminCall({ code: $("adminCode").value.trim(), action: "request_done", id: x.id, done: !x.done }); } catch {} loadInbox(); };
-    bDel.onclick = async () => { if (!confirm("¿Borrar este pedido?")) return; bDel.disabled = true; try { await adminCall({ code: $("adminCode").value.trim(), action: "request_delete", id: x.id }); } catch {} loadInbox(); };
+    // done: which song of the library answers it (its player gets "¡Ya está tu canción!"), or none
+    const pick = li.querySelector(".req-pick");
+    bDone.onclick = async () => {
+      if (x.done) {
+        bDone.disabled = true;
+        try { await adminCall({ code: code(), action: "request_done", id: x.id, done: false }); } catch {}
+        return loadInbox();
+      }
+      if (!pick.hidden) { pick.hidden = true; return; }
+      pick.hidden = false;
+      pick.innerHTML = `<input type="search" placeholder="Busca la canción que subiste" aria-label="Busca la canción"><span class="req-hits"></span><button type="button" class="req-none">Hecho sin elegir canción</button>`;
+      const q = pick.querySelector("input"), hits = pick.querySelector(".req-hits");
+      const find = () => {
+        const t = songKey(q.value); hits.innerHTML = "";
+        if (!t) return;
+        for (const song of (adm.lib || []).filter((y) => songKey(`${y.name} ${y.artist || ""}`).includes(t)).slice(0, 8)) {
+          const b = document.createElement("button"); b.type = "button";
+          b.textContent = `${song.name}${song.artist ? ` · ${song.artist}` : ""}`;
+          b.onclick = () => markDone(x, song.id, b);
+          hits.appendChild(b);
+        }
+        if (!hits.children.length) hits.textContent = "Ninguna canción coincide.";
+      };
+      q.oninput = find; q.focus();
+      pick.querySelector(".req-none").onclick = (e) => markDone(x, null, e.target);
+    };
+    bDel.onclick = async () => { if (!confirm("¿Borrar este pedido?")) return; bDel.disabled = true; try { await adminCall({ code: code(), action: "request_delete", id: x.id }); } catch {} loadInbox(); };
     ul.appendChild(li);
   }
 }
