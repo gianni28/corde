@@ -548,6 +548,39 @@ export function createRenderer(canvas) {
         base: flat(at(new THREE.CylinderGeometry(0.4, 0.42, 0.09, 8), 0)), body: flat(at(new THREE.CylinderGeometry(0.36, 0.39, 0.12, 8), 0.08)),
         dome: flat(at(new THREE.CylinderGeometry(0.17, 0.36, 0.13, 8), 0.205, Math.PI / 8)), ring: null,
       };
+    } else if (key === "cat") {
+      // a kitten's head: round, two ears, a pale muzzle (dome) and the face (the band's part, dark: eyes, nose and
+      // whiskers). Flat it would be seen almost edge-on, so it sits up, tilted toward the player, its chin on the neck.
+      const rad = (d) => (d * Math.PI) / 180;
+      const head = (r) => {
+        const s = new THREE.Shape(), p = (d, k = 1) => [Math.cos(rad(d)) * r * k, Math.sin(rad(d)) * r * k * 0.9];
+        const pts = [];
+        for (let d = 0; d < 360; d += 6) {
+          if ((d > 36 && d < 72) || (d > 108 && d < 144)) continue;
+          pts.push(p(d));
+          if (d === 36) pts.push(p(58, 1.42));
+          if (d === 108) pts.push(p(122, 1.42));
+        }
+        pts.forEach(([x, y], i) => (i ? s.lineTo(x, y) : s.moveTo(x, y)));
+        return s;
+      };
+      const ellipse = (x, y, rx, ry) => { const s = new THREE.Shape(); s.absellipse(x, y, rx, ry, 0, Math.PI * 2, false, 0); return s; };
+      const poly = (pts) => { const s = new THREE.Shape(); pts.forEach(([x, y], i) => (i ? s.lineTo(x, y) : s.moveTo(x, y))); return s; };
+      const slab = (shape, depth, y, bevel = 0) => {
+        const g = new THREE.ExtrudeGeometry(shape, { depth, curveSegments: 10, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel * 0.8, bevelSegments: 3 });
+        g.rotateX(-Math.PI / 2); g.translate(0, y, 0);
+        g.rotateX(0.95); g.translate(0, 0.25, 0.04); return g;
+      };
+      const whisker = (x0, y0, x1, y1) => {
+        const dx = x1 - x0, dy = y1 - y0, l = Math.hypot(dx, dy), nx = (-dy / l) * 0.009, ny = (dx / l) * 0.009;
+        return poly([[x0 + nx, y0 + ny], [x1 + nx, y1 + ny], [x1 - nx, y1 - ny], [x0 - nx, y0 - ny]]);
+      };
+      const face = [
+        slab(ellipse(-0.13, 0.04, 0.062, 0.078), 0.03, 0.15), slab(ellipse(0.13, 0.04, 0.062, 0.078), 0.03, 0.15),
+        slab(poly([[-0.05, -0.055], [0.05, -0.055], [0, -0.11]]), 0.025, 0.2),
+        ...[-1, 1].flatMap((k) => [whisker(k * 0.15, -0.1, k * 0.42, -0.05), whisker(k * 0.15, -0.12, k * 0.43, -0.13), whisker(k * 0.15, -0.14, k * 0.4, -0.21)].map((w) => slab(w, 0.02, 0.135))),
+      ];
+      G = { base: slab(head(0.37), 0.09, -0.045), body: slab(head(0.33), 0.12, 0.02, 0.02), dome: slab(ellipse(0, -0.11, 0.16, 0.09), 0.02, 0.14, 0.03), ring: mergeGeometries(face) };
     } else {
       // diamond: a white girdle and crown, the lane colour in the table and through it
       G = {

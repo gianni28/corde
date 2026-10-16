@@ -30,7 +30,8 @@ const crowd = (a, b = a) => `radial-gradient(ellipse 9% 30% at 8% 100%, #050303 
   + ` radial-gradient(circle, ${a} 0 1.6px, transparent 2.6px) 3px 4px / 17px 13px, radial-gradient(circle, ${b} 0 1.4px, transparent 2.4px) 11px 9px / 23px 15px, linear-gradient(180deg, #120c14, #241418)`;
 const glow = (c) => `radial-gradient(circle at 50% 50%, #fff 0 7%, ${c} 20%, transparent 58%), radial-gradient(circle at 50% 50%, ${c}55, transparent 75%), #06080d`;
 
-/** Every item: { slot, id, name, price, req?, lvl? (a level's prize, claimed like a logro's), desc?, sw?, cols? } — req: the logro that gives it (it's claimed, not bought);
+/** Every item: { slot, id, name, price, req?, lvl? (a level's prize, claimed like a logro's), secret? (only shown to
+ *  who can win it: see main.js), desc?, sw?, cols? } — req: the logro that gives it (it's claimed, not bought);
  *  sw: the card's CSS background; cols: the colours of the card's little gems / flames / name / streak. */
 export const ITEMS = [
   // mástiles (the neck the notes come down)
@@ -59,6 +60,7 @@ export const ITEMS = [
   { slot: "gems", id: "pixel", name: "Píxel", price: 450, cols: ["#2fdc4f", "#f2333c", "#ffd23a", "#3a7bf0", "#ff8c1a"], shape: "pixel" },
   { slot: "gems", id: "cristal", name: "Cristal", price: 600, cols: LANES, shape: "crystal" },
   { slot: "gems", id: "oro", name: "Doradas", price: 1500, cols: LANES, ring: "#f5c518", shape: "gold" },
+  { slot: "gems", id: "gatitos", name: "Gatitos", price: 0, req: "coro-gatitos", secret: true, cols: LANES, shape: "cat", desc: "Las notas se vuelven caritas de gato. Premio del logro «Coro de gatitos»." },
   { slot: "gems", id: "diamante", name: "Diamante", price: 0, req: "virtuoso", cols: LANES, shape: "diamond", desc: "Brillan como diamantes. Premio por sacar 5 estrellas en Experto." },
   // llamas (when a note is hit)
   { slot: "flames", id: "fuego", name: "Fuego", price: 0, cols: ["#ff8a1a", "#ffb020", "#ff5a10"] },

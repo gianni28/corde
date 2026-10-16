@@ -107,12 +107,13 @@ export function joinRoom(code, me, h) {
 /* ---------------- secret songs ---------------- */
 // Songs the admin hid: the public library never includes them; the database hands them out only with the secret code.
 const rpcError = (error) => { const e = new Error(error.message); e.wrongCode = error.code === "28000"; return e; };
-/** The hidden songs (all columns, like listSongs). Throws an error with wrongCode = true when the code is wrong. */
-export async function secretSongs(code) {
-  if (!supabase) return [];
-  const { data, error } = await supabase.rpc("secret_songs", { p_code: code.trim() });
+/** A secret code's group: { id, name, songs } (songs: all columns, like listSongs). Throws an error with
+ *  wrongCode = true when the code is wrong. */
+export async function secretOpen(code) {
+  if (!supabase) return { id: 0, name: "", songs: [] };
+  const { data, error } = await supabase.rpc("secret_open", { p_code: code.trim() });
   if (error) throw rpcError(error);
-  return data || [];
+  return { id: data.id, name: data.name, songs: data.songs || [] };
 }
 /** A hidden song's leaderboard (the public board views can't see hidden songs). Same rows as topScores. */
 // Boards show everyone (up to this many rows, far more than ever play one song).

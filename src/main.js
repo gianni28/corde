@@ -12,8 +12,8 @@ import { motionAvailable, motionNeedsPermission, motionReady, requestMotion, onL
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
 import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, nameStyles, songRequest, myNotices, noticeSeen, noticeReply, myFulfilled, fulfilledSeen } from "./net.js";
 import { shareCard, retoUrl, readReto } from "./share.js";
-import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak } from "./achievements.js";
-import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretSongs, secretBoard, songById } from "./net.js";
+import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau } from "./achievements.js";
+import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretOpen, secretBoard, songById } from "./net.js";
 import { VENUES, TO_ENCORE, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song, separateExisting } from "./admin.js";
 import { fillDifficulties } from "./reduce.js";
@@ -159,7 +159,7 @@ const shop = { cat: "neck", sel: null, armed: null, armT: 0, streakT: 0, busy: f
 const MENU_MUSIC = ["home", "library", "setup", "settings", "logros", "mp", "lobby", "admin", "tutorial", "duo", "daily", "tour", "tienda"];
 const wideMQ = matchMedia("(min-width: 1000px)");
 // admin uploads (declared up here: the menu music and the frame loop ask about them from the first moment)
-const adm = { songs: [], busy: false };
+const adm = { songs: [], busy: false, groups: [] };
 const split = { on: false, stop: false, rows: [] }; // the library's songs whose guitar is being separated
 const notices = { queue: [], current: null, asked: false }; // the admin's messages waiting for this player (see checkNotices)
 // while the admin uploads or separates songs, the stage and the menu music rest (they'd take the processor from it)
@@ -321,12 +321,12 @@ async function renderHomeBoard() {
 $("homeTabs").onclick = (e) => { const b = e.target.closest("button"); if (!b || b.dataset.v === homeTab) return; homeTab = b.dataset.v; renderHomeBoard(); };
 renderHomeBoard();
 // the library list is needed for the menu music right away (it's small).
-// It starts on the next microtask, once this whole file has run: loadLibrary() reads secretCode() and other
+// It starts on the next microtask, once this whole file has run: loadLibrary() reads secretList() and other
 // constants declared further down, and calling it right here threw silently (no songs, no menu music).
 Promise.resolve().then(() => {
   if (!online) return;
   loadLibrary()
-    .then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); })
+    .then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); backfillAchievements(); queueMiauIntro(); })
     .catch((e) => console.warn("library:", e.message))
     .finally(() => loadDaily());
 });
@@ -350,6 +350,11 @@ function recordBest(songId, diff, sum) {
   return { old, beat };
 }
 // what the song list shows: your stars on the hardest difficulty you've played
+// the best accuracy on a song, any difficulty (0: never finished)
+const bestAcc = (songId) => Math.max(0, ...Object.values(bests[songId] || {}).map((x) => (x && x.score > 0 ? x.acc || 0 : 0)));
+// the miau songs this browser has (they come with a secret code): the kittens' logro and prize are only for them
+const miauIds = () => app.songs.filter((s) => s.miau).map((s) => s.id);
+const knowsMiau = () => app.songs.some((s) => s.miau) || !!achievementsWon()["coro-gatitos"];
 function songBest(songId) {
   const b = bests[songId]; if (!b) return null;
   let top = null;
@@ -363,32 +368,56 @@ const fmtLen = (ms) => { if (!ms) return ""; const s = Math.round(ms / 1000); re
 const coverOf = (s) => (s.has_cover ? fileUrl(s.id, "cover.jpg") : "");
 
 /* ---------------- secret songs ---------------- */
-// Songs the admin hid: five taps on the little pick at the bottom of the song list ask for the code, and with it the
-// database hands them out (it never sends them otherwise). The code stays in this browser until "Esconderlas".
-// They live in their own tab and never join the tour, the song of the day, the menu music or the home boards.
-const SECRET_KEY = "corde.secret.v1";
-const secretCode = () => { try { return localStorage.getItem(SECRET_KEY) || ""; } catch { return ""; } };
-const publicSongs = () => app.songs.filter((s) => !s.secret);
-app.libTab = "all"; // "all" | "secret"
-// The library: the public songs, plus the secret ones (marked secret: true) when this browser knows the code
-async function loadLibrary() {
-  const code = secretCode();
-  const [pub, sec] = await Promise.all([
-    listSongs(),
-    code ? secretSongs(code).catch((e) => { if (e.wrongCode) lockSecret(); return null; }) : [],
-  ]);
-  // the code is fine but the secret songs didn't come (connection): keep the ones we had
-  const secret = sec ? sec.map((x) => ({ ...x, secret: true })) : app.songs.filter((x) => x.secret);
-  return [...pub, ...secret];
+// Songs the admin hid, in groups: each secret code opens its own group, and only that one. Five taps on the little
+// pick at the bottom of the song list ask for a code, and with it the database hands out that group's songs (it never
+// sends them otherwise). Each group gets its own tab (named by the admin); the codes stay in this browser until
+// "Esconder estas canciones". They never join the tour, the song of the day, the menu music or the home boards.
+// A song's `secret` is its group's id (false for the library).
+const SECRET_KEY = "corde.secret.v1"; // before the groups: one code
+const SECRETS_KEY = "corde.secrets.v2"; // [{ code, id, name }] (id 0: a code from v1, its group not asked yet)
+function secretList() {
+  try {
+    const v = JSON.parse(localStorage.getItem(SECRETS_KEY) || "null");
+    if (Array.isArray(v)) return v.filter((x) => x && typeof x.code === "string" && x.code);
+    const old = localStorage.getItem(SECRET_KEY);
+    return old ? [{ code: old, id: 0, name: "Secretas" }] : [];
+  } catch { return []; }
 }
-// the admin changed the code, or the player hid them again
-function lockSecret() {
-  try { localStorage.removeItem(SECRET_KEY); } catch {}
-  app.songs = app.songs.filter((x) => !x.secret);
+function saveSecrets(list) { try { localStorage.setItem(SECRETS_KEY, JSON.stringify(list)); localStorage.removeItem(SECRET_KEY); } catch {} }
+const secretGroups = () => secretList().filter((x) => x.id > 0);
+const codeOfGroup = (id) => secretList().find((x) => x.id === id)?.code || "";
+const publicSongs = () => app.songs.filter((s) => !s.secret);
+const inTab = (s, tab = app.libTab) => (tab === "all" ? !s.secret : s.secret === tab);
+app.libTab = "all"; // "all" | a group's id
+// The library: the public songs, plus each group this browser has the code of
+async function loadLibrary() {
+  const keys = secretList();
+  const [pub, ...groups] = await Promise.all([
+    listSongs(),
+    ...keys.map((k) => secretOpen(k.code).catch((e) => (e.wrongCode ? { wrong: true } : null))),
+  ]);
+  const next = [], out = [...pub];
+  keys.forEach((k, i) => {
+    const g = groups[i];
+    if (g?.wrong) return; // the admin changed that code: it's forgotten
+    // the code is fine but its songs didn't come (connection): keep the ones we had
+    if (!g) { next.push(k); out.push(...app.songs.filter((x) => x.secret && x.secret === k.id)); return; }
+    if (next.some((x) => x.id === g.id)) return; // two codes of the same group (one was changed)
+    next.push({ code: k.code, id: g.id, name: g.name });
+    out.push(...g.songs.map((x) => ({ ...x, secret: g.id })));
+  });
+  let v1 = false; try { v1 = !!localStorage.getItem(SECRET_KEY); } catch {}
+  if (v1 || JSON.stringify(next) !== JSON.stringify(keys)) saveSecrets(next);
+  if (app.libTab !== "all" && !next.some((x) => x.id === app.libTab)) app.libTab = "all";
+  return out;
+}
+// the player hid a group again
+function lockSecret(id) {
+  saveSecrets(secretList().filter((x) => x.id !== id));
+  app.songs = app.songs.filter((x) => x.secret !== id);
   app.libTab = "all";
 }
 function openSecret() {
-  if (secretCode()) { app.libTab = "secret"; renderSongs(); $("songList").scrollTop = 0; return; }
   $("secretInput").value = ""; $("secretMsg").textContent = "";
   $("secretModal").hidden = false;
   setTimeout(() => $("secretInput").focus(), 60);
@@ -414,15 +443,18 @@ $("secretForm").onsubmit = async (e) => {
   const go = $("secretGo"), form = $("secretForm");
   go.disabled = true; $("secretMsg").textContent = "Revisando…";
   try {
-    const list = await secretSongs(code);
-    try { localStorage.setItem(SECRET_KEY, code); } catch {}
-    app.songs = [...publicSongs(), ...list.map((x) => ({ ...x, secret: true }))];
+    const g = await secretOpen(code);
+    const known = secretGroups().some((x) => x.id === g.id);
+    saveSecrets([...secretList().filter((x) => x.id !== g.id && x.code.toLowerCase() !== code.toLowerCase()), { code, id: g.id, name: g.name }]);
+    app.songs = [...app.songs.filter((x) => x.secret !== g.id), ...g.songs.map((x) => ({ ...x, secret: g.id }))];
     closeSecret();
-    app.libTab = "secret"; renderSongs(); $("songList").scrollTop = 0;
+    app.libTab = g.id; renderSongs(); $("songList").scrollTop = 0;
+    if (known) return; // already open: just its tab
     sfx.unlock();
-    const n = list.length;
-    celebrate({ kicker: "Código correcto", title: "Canciones secretas", kind: "secret", ms: 2800,
-      sub: n ? `${n} ${n === 1 ? "canción desbloqueada" : "canciones desbloqueadas"}. Las encuentras en «Secretas».` : "Ya quedaron desbloqueadas, aunque todavía no hay ninguna." });
+    const n = g.songs.length;
+    if (g.songs.some((x) => x.miau)) queueMiauIntro(3200); // after the celebration
+    celebrate({ kicker: "Código correcto", title: g.name, kind: "secret", ms: 2800,
+      sub: n ? `${n} ${n === 1 ? "canción desbloqueada" : "canciones desbloqueadas"}. Las encuentras en «${g.name}».` : "Ya quedaron desbloqueadas, aunque todavía no hay ninguna." });
   } catch (err) {
     $("secretMsg").textContent = err.wrongCode ? "Ese no es. Intenta otra vez." : "No pude revisar el código. ¿Hay conexión?";
     form.classList.remove("shake"); void form.offsetWidth; form.classList.add("shake");
@@ -431,12 +463,15 @@ $("secretForm").onsubmit = async (e) => {
 };
 $("libTabs").onclick = (e) => {
   const b = e.target.closest("button[data-t]");
-  if (!b || b.dataset.t === app.libTab) return;
-  app.libTab = b.dataset.t; renderSongs(); $("songList").scrollTop = 0;
+  if (!b) return;
+  const t = b.dataset.t === "all" ? "all" : Number(b.dataset.t);
+  if (t === app.libTab) return;
+  app.libTab = t; renderSongs(); $("songList").scrollTop = 0;
 };
 $("secretLock").onclick = () => {
-  if (!confirm("¿Esconder otra vez las canciones secretas? Para verlas de nuevo hay que escribir el código.")) return;
-  lockSecret(); renderSongs();
+  const g = secretGroups().find((x) => x.id === app.libTab);
+  if (!g || !confirm(`¿Esconder otra vez «${g.name}»? Para verlas de nuevo hay que escribir su código.`)) return;
+  lockSecret(g.id); renderSongs();
 };
 // a song by id: the library, or (a secret song a friend picked in a room) straight from the database
 app.extraSongs = [];
@@ -445,7 +480,7 @@ async function findSong(id) {
   if (knownSong(id)) return knownSong(id);
   try { app.songs = await loadLibrary(); } catch {}
   if (knownSong(id)) return knownSong(id);
-  try { const r = await songById(id); if (r) app.extraSongs.push({ ...r, secret: !!r.hidden }); } catch {}
+  try { const r = await songById(id); if (r) app.extraSongs.push({ ...r, secret: r.hidden ? r.secret_group || -1 : false }); } catch {}
   return knownSong(id);
 }
 
@@ -477,22 +512,34 @@ async function openLibrary() {
 function renderSongs() {
   const box = $("songList");
   if (!online) { box.innerHTML = `<p class="empty">La biblioteca en línea aparece cuando el juego está conectado a Supabase.<br>Mientras tanto puedes tocar canciones desde tu dispositivo.</p>`; return; }
-  // the secret songs get their own tab once this browser knows the code
-  const unlocked = !!secretCode();
-  if (!unlocked) app.libTab = "all";
-  const secretTab = app.libTab === "secret";
-  $("libTabs").hidden = !unlocked;
-  $("libTabs").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.t === app.libTab)));
+  // each secret group gets its own tab once this browser knows its code
+  const groups = secretGroups();
+  if (!groups.some((x) => x.id === app.libTab)) app.libTab = "all";
+  const secretTab = app.libTab !== "all";
+  const tabs = $("libTabs");
+  tabs.hidden = !groups.length;
+  tabs.innerHTML = `<button data-t="all">Biblioteca</button>` + groups.map((g) => `<button data-t="${g.id}"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#pick"/></svg><span></span></button>`).join("");
+  groups.forEach((g, i) => (tabs.querySelectorAll("span")[i].textContent = g.name));
+  tabs.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.t === String(app.libTab))));
   $("secretLock").hidden = !secretTab;
   $("s-library").classList.toggle("secret-tab", secretTab);
   const q = $("libSearch").value.trim().toLowerCase();
-  const tab = app.songs.filter((s) => !!s.secret === secretTab);
+  const tab = app.songs.filter((s) => inTab(s));
   const list = tab.filter((s) => !q || `${s.name} ${s.artist}`.toLowerCase().includes(q));
   if (!list.length) {
     box.innerHTML = `<p class="empty">${tab.length ? "Nada coincide con tu búsqueda." : secretTab ? "Todavía no hay canciones secretas." : "Todavía no hay canciones en la biblioteca."}</p>`;
     return;
   }
   box.innerHTML = "";
+  // the kittens' challenge, on top of the tab that has the miau songs
+  if (secretTab && tab.some((s) => s.miau)) {
+    const p = miauProgress(), card = document.createElement("div");
+    card.className = "reto-card";
+    card.innerHTML = `<div class="reto-prog">${catsHtml(p)}</div><div><b>Reto · Coro de gatitos</b><small></small></div>${p.won ? `<button type="button">Tienda</button>` : ""}`;
+    card.querySelector("small").textContent = p.won ? "¡Superado! Ponte las notas Gatitos en la Tienda." : `Saca 80% o más en ${p.need} ${p.need === 1 ? "canción miau" : "canciones miau"}. Llevas ${p.done}.`;
+    const go = card.querySelector("button"); if (go) go.onclick = () => openShopAt("gems", "gatitos");
+    box.appendChild(card);
+  }
   for (const s of list) {
     const b = document.createElement("button");
     b.className = "song" + (s.secret ? " secret" : "");
@@ -521,8 +568,8 @@ function randomBox(btn, diffs, fromResults) {
     if (!b || app.loadingRandom) return;
     const diff = b.dataset.d;
     if (!app.songs.length) { try { app.songs = await loadLibrary(); } catch {} }
-    // from the tab you're in: the secret songs only from «Secretas»
-    const has = app.songs.filter((s) => (s.diffs?.[diff]?.n || 0) > 0 && !!s.secret === (app.libTab === "secret"));
+    // from the tab you're in: a group's secret songs only from its own tab
+    const has = app.songs.filter((s) => (s.diffs?.[diff]?.n || 0) > 0 && inTab(s));
     const pool = has.length > 1 ? has.filter((s) => s.id !== app.lastRandomId && s.id !== app.song?.id) : has;
     if (!pool.length) return;
     const s = pool[Math.floor(Math.random() * pool.length)];
@@ -1252,7 +1299,7 @@ function celebrateAchievements(list) {
 }
 // what your saved bests already prove (players from before the logros existed get theirs without replaying), silently
 function backfillAchievements() {
-  const ids = [], n = songsDone();
+  const ids = [...forMiau(miauIds(), bestAcc)], n = songsDone();
   if (n >= 1) ids.push("primer-acorde");
   if (n >= 10) ids.push("repertorio");
   if (n >= 25) ids.push("setlist");
@@ -1273,7 +1320,8 @@ function renderLogros() {
   const won = achievementsWon();
   const fmt = (d) => new Date(d + "T12:00:00").toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
   // the ones you have first, in list order; then the rest
-  const list = [...ACHIEVEMENTS.filter((a) => won[a.id]), ...ACHIEVEMENTS.filter((a) => !won[a.id])];
+  const all = ACHIEVEMENTS.filter((a) => !a.secret || won[a.id] || (a.id === "coro-gatitos" && knowsMiau()));
+  const list = [...all.filter((a) => won[a.id]), ...all.filter((a) => !won[a.id])];
   for (const a of list) {
     const li = document.createElement("li");
     if (won[a.id]) li.className = "on";
@@ -1283,7 +1331,7 @@ function renderLogros() {
     if (won[a.id]) { const i = document.createElement("i"); i.textContent = fmt(won[a.id]); li.querySelector("small").appendChild(i); }
     ul.appendChild(li);
   }
-  $("logrosCount").textContent = `${Object.keys(won).filter((id) => ACHIEVEMENTS.some((a) => a.id === id)).length} de ${ACHIEVEMENTS.length}`;
+  $("logrosCount").textContent = `${Object.keys(won).filter((id) => all.some((a) => a.id === id)).length} de ${all.length}`;
 }
 
 /* ---------- tutorial (first song) + lifting the phone ---------- */
@@ -1592,6 +1640,7 @@ function finishGame() {
   if (app.tourEvent === "legend") ids.push("leyenda");
   if (app.mode === "mp") ids.push("en-banda");
   if (app.retoWon) ids.push("reto-aceptado");
+  if (app.song?.miau && !sum.failed) ids.push(...forMiau(miauIds(), (id) => Math.max(bestAcc(id), id === app.song.id ? sum.acc : 0)));
   const fresh = unlock(ids);
   const celebration = !fresh.length ? ctxCel
     : !ctxCel ? () => celebrateAchievements(fresh)
@@ -1786,11 +1835,44 @@ function showNextNotice() {
   if (welcome.open || app.game || !NOTICE_SCREENS.has(app.screen)) return; // later, back in the menus
   const n = notices.current = notices.queue.shift();
   if (n.kind === "song") return showSongReady(n);
+  if (n.kind === "reto") return showReto();
   $("noticeBody").textContent = n.body;
   $("noticeReply").value = ""; $("noticeSend").hidden = true; $("noticeMsg").textContent = "";
   $("noticeModal").hidden = false;
   noticeSeen(playerSecret(), n.id).catch(() => {}); // shown: it won't come again
 }
+/* the kittens' challenge (coro-gatitos): told once, when the miau songs first show up (they come with a code) */
+const MIAU_KEY = "corde.miau.intro.v1";
+function miauProgress() {
+  const ids = miauIds(), need = Math.min(3, ids.length);
+  return { need, done: Math.min(need, ids.filter((id) => bestAcc(id) >= 0.8).length), won: !!achievementsWon()["coro-gatitos"] };
+}
+const catsHtml = (p) => Array.from({ length: p.need }, (_, i) => `<i class="${i < p.done || p.won ? "on" : ""}"></i>`).join("");
+function queueMiauIntro(delay = 0) {
+  const p = miauProgress();
+  let seen = false; try { seen = !!localStorage.getItem(MIAU_KEY); } catch {}
+  if (!p.need || p.won || seen || notices.queue.some((x) => x.kind === "reto") || notices.current?.kind === "reto") return;
+  notices.queue.unshift({ kind: "reto" });
+  setTimeout(showNextNotice, delay);
+}
+function showReto() {
+  const p = miauProgress();
+  $("retoDesc").textContent = `Saca 80% o más en ${p.need === 1 ? "la canción miau" : `${p.need === 3 ? "las 3" : `las ${p.need}`} canciones miau`} y tus notas se vuelven gatitos.`;
+  $("retoProg").innerHTML = catsHtml(p) + `<span>${p.done} de ${p.need}</span>`;
+  $("retoModal").hidden = false;
+  try { localStorage.setItem(MIAU_KEY, "1"); } catch {}
+  try { sfx.unlock(); } catch {}
+}
+function closeReto() { $("retoModal").hidden = true; notices.current = null; setTimeout(showNextNotice, 300); }
+$("retoLater").onclick = closeReto;
+$("retoModal").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closeReto(); } });
+$("retoGo").onclick = () => {
+  closeReto();
+  const g = app.songs.find((s) => s.miau)?.secret;
+  if (g) app.libTab = g;
+  app.mode = "solo";
+  if (app.screen !== "library") openLibrary(); else { renderSongs(); $("songList").scrollTop = 0; }
+};
 // "¡Ya está la canción que pediste!": its cover, its name, and a button straight to it
 function showSongReady(r) {
   const s = r.song, cov = coverOf(s);
@@ -1940,6 +2022,11 @@ function openShop() {
   previewShop();
   refreshWallet();
 }
+// straight to one item (the kittens' card in the library)
+function openShopAt(cat, id) {
+  shop.cat = cat; openShop();
+  if ($("shopGrid").querySelector(`[data-id="${id}"]`)) selectShopItem(id);
+}
 // the stage behind the panel shows the picked item with everything else you have on
 function previewShop() {
   if (app.screen !== "tienda") return;
@@ -1988,7 +2075,8 @@ function renderShop() {
     : "No pude cargar tus púas. Revisa tu conexión y vuelve a entrar.";
   $("shopAccount").hidden = !noAcc;
   const grid = $("shopGrid"); grid.innerHTML = "";
-  for (const it of ITEMS) if (it.slot === shop.cat) grid.appendChild(shopCard(it));
+  // a secret prize only for whoever can win it (the kittens: the miau songs' players), or has it
+  for (const it of ITEMS) if (it.slot === shop.cat && (!it.secret || owns(it) || knowsMiau())) grid.appendChild(shopCard(it));
   renderShopDetail();
   revealShopSel();
 }
@@ -2219,7 +2307,7 @@ async function showBoard(el) {
   let rows = [];
   try {
     // a secret song's board needs the code (a friend who joined a room without it sees none)
-    if (app.song.secret) rows = secretCode() ? await secretBoard(secretCode(), app.song.id, app.diff, lanes) : [];
+    if (app.song.secret) { const c = codeOfGroup(app.song.secret); rows = c ? await secretBoard(c, app.song.id, app.diff, lanes) : []; }
     else rows = await topScores(app.song.id, app.diff, lanes, undefined, period);
   } catch (e) { console.warn("leaderboard:", e.message); }
   if (req !== boardReq) return;
@@ -3134,7 +3222,13 @@ function sameSong(a, b) {
 // the admin sees the whole library, secret songs included (the public list can't see them)
 async function adminLibrary() {
   const code = $("adminCode").value.trim();
-  if (code) { try { adm.lib = (await adminCall({ code, action: "list" })).songs || []; return adm.lib; } catch {} }
+  if (code) {
+    try {
+      const [l, g] = await Promise.all([adminCall({ code, action: "list" }), adminCall({ code, action: "groups" })]);
+      adm.lib = l.songs || []; adm.groups = g.groups || [];
+      return adm.lib;
+    } catch {}
+  }
   adm.lib = null; // without the code only the public library: not enough to manage the secret songs
   return listSongs();
 }
@@ -3203,7 +3297,7 @@ $("adminUpload").onclick = async () => {
   adm.busy = true; renderAdmin(); adminWorkChanged();
   let lib = [];
   try { lib = await adminLibrary(); } catch {}
-  const secret = $("adminSecret").checked;
+  const group = Number($("adminGroup").value) || 0, groupName = adm.groups.find((g) => g.id === group)?.name;
   let ok = 0, bad = 0;
   for (const s of adm.songs) {
     if (!s.on || s.cls === "ok" || s.cls === "warn") continue;
@@ -3215,8 +3309,8 @@ $("adminUpload").onclick = async () => {
       if (s.kind === "mp3" && charted) { set("Ya está con chart: no la subí", 0, "warn"); continue; }
       // a chart replaces the version made from the MP3
       const autos = s.kind === "mp3" ? [] : lib.filter((x) => x.charter === AUTO_CHARTER && (x.id === conv.id || sameSong(x, conv.row)));
-      // secret only when asked: a re-upload without the box keeps whatever the song was
-      if (secret) conv.row.hidden = true;
+      // to a secret code only when asked: a re-upload to the library keeps whatever the song was
+      if (group) conv.row.secret_group = group;
       await uploadSong(code, conv, (p) => set("Subiendo", 0.85 + p * 0.15));
       for (const x of autos) if (x.id !== conv.id) await adminCall({ code, action: "delete", id: x.id });
       const replaced = autos.length ? " · reemplazó la del MP3" : "";
@@ -3230,7 +3324,7 @@ $("adminUpload").onclick = async () => {
   adm.busy = false; renderAdmin(); adminWorkChanged();
   app.songs = []; app.loadedSongId = null; // reload the library (and any re-uploaded song) next time
   loadAutoList();
-  $("adminStatus").textContent = `Listo: ${ok} subida${ok === 1 ? "" : "s"}${bad ? `, ${bad} con error` : ""}. ${secret ? "Ya aparecen en «Secretas» (con el código)." : "Ya aparecen en Jugar."}`;
+  $("adminStatus").textContent = `Listo: ${ok} subida${ok === 1 ? "" : "s"}${bad ? `, ${bad} con error` : ""}. ${groupName ? `Ya aparecen en «${groupName}» (con su código).` : "Ya aparecen en Jugar."}`;
 };
 
 /* --- songs already uploaded as one audio: their guitar apart, one after another, in this browser --- */
@@ -3281,29 +3375,80 @@ $("splitGo").onclick = async () => {
   renderSplit();
 };
 
-/* --- secret songs, from the admin's side: hide/show songs and change the code --- */
+/* --- secret songs, from the admin's side: the codes (groups) and where each song is --- */
+const groupLabel = (x) => (!x.hidden ? "Biblioteca" : adm.groups.find((g) => g.id === x.secret_group)?.name || "Escondida");
+function adminCodeOr(el) {
+  const code = $("adminCode").value.trim();
+  if (!code) $(el).textContent = "Escribe el código de administrador.";
+  return code;
+}
 function renderSecretAdmin() {
+  // the codes: name, how many songs, rename / change the code / delete (only when empty)
+  const gl = $("groupList"); gl.innerHTML = "";
+  for (const g of adm.groups) {
+    const n = (adm.lib || []).filter((x) => x.hidden && x.secret_group === g.id).length;
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="n"><span class="t"></span><small></small></span><button type="button" data-a="name">Renombrar</button><button type="button" data-a="code">Cambiar código</button>${n ? "" : `<button type="button" data-a="del">Borrar</button>`}`;
+    li.querySelector(".t").textContent = g.name; li.querySelector("small").textContent = `${n} ${n === 1 ? "canción" : "canciones"}`;
+    li.onclick = async (e) => {
+      const a = e.target.closest("button")?.dataset.a; if (!a) return;
+      const code = adminCodeOr("secretStatus"); if (!code) return;
+      try {
+        if (a === "del") {
+          if (!confirm(`¿Borrar el código «${g.name}»? Quien lo tenía ya no verá esa pestaña.`)) return;
+          await adminCall({ code, action: "group_delete", id: g.id });
+          $("secretStatus").textContent = `Borrado: «${g.name}».`;
+        } else if (a === "name") {
+          const name = prompt("Nombre (es la pestaña que ven los jugadores):", g.name)?.trim();
+          if (!name || name === g.name) return;
+          await adminCall({ code, action: "group_save", id: g.id, name });
+          $("secretStatus").textContent = `Listo: ahora se llama «${name}».`;
+        } else {
+          const next = prompt(`Nuevo código para «${g.name}» (quien tenía el anterior tendrá que escribir este):`)?.trim();
+          if (!next) return;
+          if (next.length < 3) { $("secretStatus").textContent = "El código necesita al menos 3 letras."; return; }
+          await adminCall({ code, action: "group_save", id: g.id, secret: next });
+          // this browser keeps the group with the new code
+          const mine = secretList();
+          if (mine.some((x) => x.id === g.id)) saveSecrets(mine.map((x) => (x.id === g.id ? { ...x, code: next } : x)));
+          $("secretStatus").textContent = `Listo: el código de «${g.name}» ahora es «${next.toLowerCase()}».`;
+        }
+        app.songs = [];
+      } catch (err) { $("secretStatus").textContent = err.message; }
+      loadAutoList();
+    };
+    gl.appendChild(li);
+  }
+  // where uploads go
+  const sel = $("adminGroup"), was = sel.value;
+  sel.innerHTML = `<option value="">la biblioteca</option>` + adm.groups.map((g) => `<option value="${g.id}"></option>`).join("");
+  adm.groups.forEach((g, i) => (sel.options[i + 1].textContent = `«${g.name}» (secretas)`));
+  sel.value = adm.groups.some((g) => String(g.id) === was) ? was : "";
+  // the songs: the secret ones; searching finds any song, to move it
   const ul = $("secretList"); ul.innerHTML = "";
   const lib = adm.lib || [];
   const q = $("secretFind").value.trim().toLowerCase();
-  // the secret ones; searching finds any song, to hide it or bring it back
   const list = q ? lib.filter((x) => `${x.name} ${x.artist || ""}`.toLowerCase().includes(q)).slice(0, 60) : lib.filter((x) => x.hidden);
-  $("secretEmpty").textContent = !adm.lib ? "Escribe el código de administrador para ver la biblioteca." : list.length ? "" : q ? "Ninguna canción coincide." : "Todavía no hay canciones secretas. Búscalas aquí para esconderlas, o súbelas marcando «Subirlas como secretas».";
+  $("secretEmpty").textContent = !adm.lib ? "Escribe el código de administrador para ver la biblioteca." : list.length ? "" : q ? "Ninguna canción coincide." : "Todavía no hay canciones secretas. Búscalas aquí para moverlas a un código, o súbelas eligiendo el código.";
   for (const x of list) {
     const li = document.createElement("li");
-    li.innerHTML = `<span class="n"><span class="t"></span> <span class="a"></span></span><button type="button" aria-pressed="${!!x.hidden}"></button>`;
+    li.innerHTML = `<span class="n"><span class="t"></span> <span class="a"></span></span><select class="adm-select" aria-label="Dónde está"></select>`;
     li.querySelector(".t").textContent = x.name; li.querySelector(".a").textContent = x.artist ? `· ${x.artist}` : "";
-    const b = li.querySelector("button");
-    b.textContent = x.hidden ? "Secreta" : "Pública";
-    b.title = x.hidden ? "Tócala para que vuelva a la biblioteca" : "Tócala para esconderla";
-    b.onclick = async () => {
-      const code = $("adminCode").value.trim();
-      if (!code) { $("secretStatus").textContent = "Escribe el código de administrador."; return; }
-      b.disabled = true;
+    const s = li.querySelector("select");
+    const opts = [["", "Biblioteca"], ...adm.groups.map((g) => [String(g.id), g.name])];
+    if (x.hidden && !adm.groups.some((g) => g.id === x.secret_group)) opts.push(["none", "Escondida (sin código)"]);
+    for (const [v, t] of opts) { const o = document.createElement("option"); o.value = v; o.textContent = t; s.appendChild(o); }
+    s.value = !x.hidden ? "" : adm.groups.some((g) => g.id === x.secret_group) ? String(x.secret_group) : "none";
+    s.classList.toggle("on", !!x.hidden);
+    s.onchange = async () => {
+      if (s.value === "none") return;
+      const code = adminCodeOr("secretStatus"); if (!code) { renderSecretAdmin(); return; }
+      const group = s.value ? Number(s.value) : null;
+      s.disabled = true;
       try {
-        await adminCall({ code, action: "hide", id: x.id, hidden: !x.hidden });
-        x.hidden = !x.hidden;
-        $("secretStatus").textContent = x.hidden ? `«${x.name}» ahora es secreta.` : `«${x.name}» volvió a la biblioteca.`;
+        await adminCall({ code, action: "hide", id: x.id, group });
+        x.hidden = group !== null; x.secret_group = group;
+        $("secretStatus").textContent = `«${x.name}» ahora está en ${group ? `«${groupLabel(x)}»` : "la biblioteca"}.`;
         app.songs = []; // the library reloads with it in its new place
       } catch (e) { $("secretStatus").textContent = e.message; }
       renderSecretAdmin(); loadAutoList();
@@ -3312,19 +3457,18 @@ function renderSecretAdmin() {
   }
 }
 $("secretFind").oninput = renderSecretAdmin;
-$("secretSave").onclick = async () => {
-  const code = $("adminCode").value.trim(), next = $("secretNew").value.trim();
-  if (!code) { $("secretStatus").textContent = "Escribe el código de administrador."; return; }
-  if (next.length < 3) { $("secretStatus").textContent = "El código secreto necesita al menos 3 letras."; return; }
-  $("secretSave").disabled = true;
+$("groupAdd").onclick = async () => {
+  const code = adminCodeOr("secretStatus"); if (!code) return;
+  const name = $("groupName").value.trim(), next = $("groupCode").value.trim();
+  if (!name || next.length < 3) { $("secretStatus").textContent = "Escribe el nombre y un código de al menos 3 letras."; return; }
+  $("groupAdd").disabled = true;
   try {
-    await adminCall({ code, action: "secret", secret: next });
-    // this browser keeps its secret songs with the new code (everyone else has to type it)
-    if (secretCode()) { try { localStorage.setItem(SECRET_KEY, next); } catch {} }
-    $("secretNew").value = "";
-    $("secretStatus").textContent = `Listo: el código secreto ahora es «${next.toLowerCase()}». Quien tenía el anterior tendrá que escribir este.`;
+    await adminCall({ code, action: "group_save", name, secret: next });
+    $("groupName").value = $("groupCode").value = "";
+    $("secretStatus").textContent = `Listo: el código «${next.toLowerCase()}» abre «${name}». Ahora mueve canciones ahí o súbelas eligiéndolo.`;
   } catch (e) { $("secretStatus").textContent = e.message; }
-  $("secretSave").disabled = false;
+  $("groupAdd").disabled = false;
+  loadAutoList();
 };
 
 ensureAccount();
