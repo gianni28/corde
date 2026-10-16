@@ -135,3 +135,50 @@ revoke all on function public.song_request(text, text), public.my_notices(text),
 grant execute on function public.song_request(text, text), public.my_notices(text), public.notice_seen_by(text, bigint),
   public.notice_reply(text, bigint, text) to anon, authenticated;
 grant execute on function public.notice_create(text, boolean, text[]), public.admin_inbox() to service_role;
+
+-- A request the admin answered with a song of the library: its player gets "¡Ya está tu canción!" (once), the next
+-- time they open the game, with the cover and a button to play it.
+alter table public.song_requests
+  add column if not exists song_id text references public.songs (id) on delete set null,
+  add column if not exists announced boolean not null default false;
+
+/** This account's requests that now have their song, not announced yet → [{ id, body, song: { id, name, artist, has_cover } }] */
+create or replace function public.my_fulfilled(p_secret text) returns json
+language sql stable security definer set search_path = public as $$
+  select coalesce(json_agg(json_build_object('id', r.id, 'body', r.body,
+      'song', json_build_object('id', s.id, 'name', s.name, 'artist', s.artist, 'has_cover', s.has_cover)) order by r.created_at), '[]'::json)
+  from account_devices d
+  join song_requests r on r.account_id = d.account_id
+  join songs s on s.id = r.song_id
+  where d.device_key = acct_device(p_secret) and r.done and not r.announced and not s.hidden
+$$;
+
+/** The player saw that their song is in (it won't be announced again) */
+create or replace function public.fulfilled_seen(p_secret text, p_id bigint) returns void
+language sql security definer set search_path = public as $$
+  update song_requests r set announced = true
+  from account_devices d
+  where r.id = p_id and d.device_key = acct_device(p_secret) and r.account_id = d.account_id
+$$;
+
+-- the admin's inbox shows which song answered each request
+create or replace function public.admin_inbox() returns json
+language sql stable security definer set search_path = public as $$
+  select json_build_object(
+    'requests', coalesce((select json_agg(json_build_object('id', r.id, 'name', r.name, 'body', r.body, 'done', r.done, 'at', r.created_at,
+        'song', (select json_build_object('id', s.id, 'name', s.name, 'artist', s.artist) from songs s where s.id = r.song_id),
+        'announced', r.announced) order by r.created_at desc)
+      from (select * from song_requests order by created_at desc limit 300) r), '[]'::json),
+    'notices', coalesce((select json_agg(json_build_object(
+        'id', n.id, 'body', n.body, 'all', n.to_all, 'active', n.active, 'at', n.created_at,
+        'to', coalesce((select json_agg(a.name order by a.name) from notice_targets t join accounts a on a.id = t.account_id where t.notice_id = n.id), '[]'::json),
+        'seen', (select count(*) from notice_seen s where s.notice_id = n.id),
+        'replies', coalesce((select json_agg(json_build_object('name', p.name, 'body', p.body, 'at', p.created_at) order by p.created_at) from notice_replies p where p.notice_id = n.id), '[]'::json)
+      ) order by n.created_at desc) from (select * from notices order by created_at desc limit 100) n), '[]'::json)
+  )
+$$;
+
+revoke all on function public.my_fulfilled(text), public.fulfilled_seen(text, bigint) from public, anon, authenticated;
+grant execute on function public.my_fulfilled(text), public.fulfilled_seen(text, bigint) to anon, authenticated;
+revoke all on function public.admin_inbox() from public, anon, authenticated;
+grant execute on function public.admin_inbox() to service_role;
