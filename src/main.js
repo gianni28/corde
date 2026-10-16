@@ -516,13 +516,16 @@ function renderSongs() {
   const groups = secretGroups();
   if (!groups.some((x) => x.id === app.libTab)) app.libTab = "all";
   const secretTab = app.libTab !== "all";
+  // the kittens' group (it has the miau songs): a cat face instead of the pick, and its own colour
+  const catGroup = (id) => app.songs.some((s) => s.secret === id && s.miau);
   const tabs = $("libTabs");
   tabs.hidden = !groups.length;
-  tabs.innerHTML = `<button data-t="all">Biblioteca</button>` + groups.map((g) => `<button data-t="${g.id}"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#pick"/></svg><span></span></button>`).join("");
+  tabs.innerHTML = `<button data-t="all">Biblioteca</button>` + groups.map((g) => `<button data-t="${g.id}"${catGroup(g.id) ? ` class="cat"` : ""}><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#${catGroup(g.id) ? "catface" : "pick"}"/></svg><span></span></button>`).join("");
   groups.forEach((g, i) => (tabs.querySelectorAll("span")[i].textContent = g.name));
   tabs.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.t === String(app.libTab))));
   $("secretLock").hidden = !secretTab;
   $("s-library").classList.toggle("secret-tab", secretTab);
+  $("s-library").classList.toggle("cat-tab", secretTab && catGroup(app.libTab));
   const q = $("libSearch").value.trim().toLowerCase();
   const tab = app.songs.filter((s) => inTab(s));
   const list = tab.filter((s) => !q || `${s.name} ${s.artist}`.toLowerCase().includes(q));
@@ -542,7 +545,7 @@ function renderSongs() {
   }
   for (const s of list) {
     const b = document.createElement("button");
-    b.className = "song" + (s.secret ? " secret" : "");
+    b.className = "song" + (s.secret ? " secret" : "") + (s.secret && catGroup(s.secret) ? " cat" : "");
     const cov = coverOf(s);
     const best = songBest(s.id);
     b.innerHTML = `${cov ? `<img loading="lazy" alt="" src="${cov}">` : `<div class="ph"></div>`}<span><span class="t"></span><span class="a"></span></span>`

@@ -844,6 +844,14 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .song.secret:hover, .song.secret:focus-visible { background: linear-gradient(90deg, rgba(212,42,134,.38), rgba(212,42,134,0)); border-left-color: var(--pop); }
 .song.secret .ph { background: linear-gradient(135deg, #4a0f33, #14070f); }
 #s-library.secret-tab .panel::after { background: linear-gradient(90deg, transparent, #a3125f, var(--pop), #a3125f, transparent); }
+/* the kittens' group: orange, like a ginger cat */
+.lib-tabs button.cat { text-transform: none; letter-spacing: .03em; }
+.lib-tabs button.cat[aria-pressed="true"] { background: linear-gradient(180deg, #ff9a3a, #9a3d06); }
+.song.secret.cat .t { color: #ffeedd; }
+.song.secret.cat:hover, .song.secret.cat:focus-visible { background: linear-gradient(90deg, rgba(255,138,42,.38), rgba(255,138,42,0)); border-left-color: #ff9a3a; }
+.song.secret.cat .ph { background: linear-gradient(135deg, #6a2c08, #170b05); }
+#s-library.cat-tab .panel::after { background: linear-gradient(90deg, transparent, #b2500f, #ff9a3a, #b2500f, transparent); }
+#s-library.cat-tab .secret-lock { color: #ffb36b; }
 .secret-lock { align-self: center; color: var(--pop-hi); }
 
 .secret-modal { position: fixed; inset: 0; z-index: 31; pointer-events: auto; display: grid; place-items: center; padding: 16px; background: rgba(5,2,4,.78); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); animation: tutIn .25s ease-out; }
@@ -1181,7 +1189,7 @@ body.streak-platino #hud .streak, .streak.st-platino, .sw-streak .st-platino { b
 .reto-prog i { width: 26px; --c: #4a403c; }
 .reto-prog i.on { --c: var(--gold); filter: drop-shadow(0 0 6px rgba(245,197,24,.6)); }
 .reto-card { display: flex; align-items: center; gap: 12px; margin: 0 0 10px; padding: 10px 12px; border: 1px solid #000; border-radius: 3px;
-  background: linear-gradient(135deg, rgba(212,42,134,.28), rgba(245,197,24,.12)), #16100f; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
+  background: linear-gradient(135deg, rgba(255,138,42,.3), rgba(245,197,24,.12)), #16100f; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
 .reto-card .reto-prog { margin: 0; gap: 4px; flex: none; }
 .reto-card .reto-prog i { width: 22px; }
 .reto-card div { flex: 1; min-width: 0; }
