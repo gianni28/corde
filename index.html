@@ -129,6 +129,16 @@
       <button type="button" class="primary" id="noticeClose">Cerrar</button>
     </form>
   </div>
+  <div class="secret-modal" id="retoModal" hidden>
+    <div class="panel narrow secret-box reto-box" role="dialog" aria-labelledby="retoTitle">
+      <span class="notice-kicker">¡Tienes un reto nuevo!</span>
+      <div class="reto-cats" aria-hidden="true"><i style="--c:#1fd14a"></i><i style="--c:#e8202c"></i><i style="--c:#f5c518"></i><i style="--c:#1f6fe0"></i><i style="--c:#f57a12"></i></div>
+      <h2 id="retoTitle">Coro de gatitos</h2>
+      <p class="reto-desc" id="retoDesc"></p>
+      <div class="reto-prog" id="retoProg"></div>
+      <div class="row"><button type="button" id="retoLater">Después</button><button type="button" class="primary" id="retoGo">Ver las canciones</button></div>
+    </div>
+  </div>
   <div class="secret-modal" id="songReadyModal" hidden>
     <div class="panel narrow secret-box song-ready" role="dialog" aria-labelledby="srTitle">
       <span class="notice-kicker">¡Ya está la canción que pediste!</span>
@@ -199,7 +209,7 @@
         <div class="seg" id="randomDiffs" hidden><button data-d="easy">Fácil</button><button data-d="medium">Media</button><button data-d="hard">Difícil</button><button data-d="expert">Experto</button></div>
       </div>
       <div class="songs" id="songList"></div>
-      <button type="button" class="link secret-lock" id="secretLock" hidden>Esconder las canciones secretas</button>
+      <button type="button" class="link secret-lock" id="secretLock" hidden>Esconder estas canciones</button>
       <div class="local" id="localBox" hidden>
         <div>
           <b>Canción desde tu dispositivo</b>
@@ -509,7 +519,7 @@
         <label class="btn">Elegir MP3<input type="file" id="adminMp3" multiple accept=".mp3,.m4a,.ogg,.opus,.wav,.flac,audio/*,image/*"></label>
         <button id="adminUpload" disabled>Subir</button>
       </div>
-      <label class="check-row"><input type="checkbox" id="adminSecret"> Subirlas como canciones secretas (solo aparecen con el código)</label>
+      <label class="check-row">Subirlas a <select id="adminGroup" class="adm-select"><option value="">la biblioteca</option></select></label>
       <p class="hint">Si el archivo se llama «Artista - Canción.mp3», uso ese nombre. La portada la saco del mismo MP3 o de una imagen con el mismo nombre.</p>
       <ul class="uploads" id="adminList"></ul>
       <p class="hint" id="adminStatus"></p>
@@ -532,13 +542,15 @@
         <p class="hint" id="storageStatus" aria-live="polite"></p>
       </div>
       <div class="field secret-admin">
-        <span class="label">Canciones secretas</span>
-        <p class="hint">Solo las ve quien toque 5 veces la púa escondida al final de la lista de canciones y escriba el código. No salen en la canción del día, la gira, la música del menú ni las tablas generales.</p>
+        <span class="label">Códigos secretos</span>
+        <p class="hint">Cada código abre solo sus canciones: no se mezclan entre ellos ni con la biblioteca. Se escriben tocando 5 veces la púa escondida al final de la lista de canciones, y el nombre es la pestaña que ven los jugadores. No salen en la canción del día, la gira, la música del menú ni las tablas generales.</p>
+        <ul class="uploads secret-groups" id="groupList"></ul>
         <div class="row">
-          <input type="text" id="secretNew" autocomplete="off" spellcheck="false" maxlength="40" placeholder="Nuevo código secreto" aria-label="Nuevo código secreto">
-          <button id="secretSave">Cambiar código</button>
+          <input type="text" id="groupName" autocomplete="off" maxlength="30" placeholder="Nombre" aria-label="Nombre del código nuevo">
+          <input type="text" id="groupCode" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="40" placeholder="Código" aria-label="Código nuevo">
+          <button id="groupAdd">Crear código</button>
         </div>
-        <input type="search" id="secretFind" placeholder="Busca una canción para volverla secreta o pública" autocomplete="off">
+        <input type="search" id="secretFind" placeholder="Busca una canción para moverla de lugar" autocomplete="off">
         <p class="hint" id="secretEmpty"></p>
         <ul class="uploads auto-list secret-list" id="secretList"></ul>
         <p class="hint" id="secretStatus" aria-live="polite"></p>

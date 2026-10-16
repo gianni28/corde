@@ -1,7 +1,7 @@
 // Corde — admin upload relay.
 // The browser converts songs locally, then asks this function (with the admin code) for signed upload URLs (Cloudflare R2)
 // and to save the catalog row. The service-role key never leaves Supabase.
-// It also manages the secret songs: hiding/showing a song and changing the code that unlocks them.
+// It also manages the secret songs: the codes (each opens its own group) and which group each song is in.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { AwsClient } from "npm:aws4fetch@1.0.20";
@@ -60,8 +60,10 @@ Deno.serve(async (req) => {
       has_guitar: !!r.has_guitar, has_cover: !!r.has_cover, backing_file: "backing.mp3", guitar_file: r.has_guitar ? "guitar.mp3" : null,
       audio_offset_ms: Number.isFinite(r.audio_offset_ms) ? Math.max(-3000, Math.min(3000, Math.round(r.audio_offset_ms))) : 0,
     };
-    // secret or not: only when the upload says so (a re-upload without it keeps what the song was)
-    if (typeof r.hidden === "boolean") row.hidden = r.hidden;
+    // secret or not: only when the upload says so (a re-upload without it keeps what the song was).
+    // secret_group: the code whose songs it joins (a hidden song without one shows up for nobody)
+    if (Number.isInteger(r.secret_group)) { row.hidden = true; row.secret_group = r.secret_group; }
+    else if (typeof r.hidden === "boolean") { row.hidden = r.hidden; row.secret_group = r.hidden ? 1 : null; } // panels from before the groups
     const { error } = await admin.from("songs").upsert(row);
     if (error) return json({ error: error.message }, 500);
     // a real chart replacing an automatic one: the old scores were made on other notes, so they go
@@ -104,15 +106,18 @@ Deno.serve(async (req) => {
 
   // the whole library, secret songs included (the public library can't see them)
   if (body.action === "list") {
-    const { data, error } = await admin.from("songs").select("id, name, artist, charter, hidden, has_guitar, audio_offset_ms").order("artist").order("name");
+    const { data, error } = await admin.from("songs").select("id, name, artist, charter, hidden, secret_group, miau, has_guitar, audio_offset_ms").order("artist").order("name");
     if (error) return json({ error: error.message }, 500);
     return json({ songs: data });
   }
 
-  // a song becomes secret, or comes back to the library
+  // a song goes to a code's group (group: its id), or comes back to the library (group: null)
   if (body.action === "hide") {
-    if (!validId(body.id) || typeof body.hidden !== "boolean") return json({ error: "Datos inválidos" }, 400);
-    const { data, error } = await admin.from("songs").update({ hidden: body.hidden }).eq("id", body.id).select("id");
+    if (!validId(body.id)) return json({ error: "Datos inválidos" }, 400);
+    // browsers from before the groups send hidden: true / false (the first code's group)
+    const group = Number.isInteger(body.group) ? body.group : body.group === null ? null : body.hidden === true ? 1 : body.hidden === false ? null : undefined;
+    if (group === undefined) return json({ error: "Datos inválidos" }, 400);
+    const { data, error } = await admin.from("songs").update({ hidden: group !== null, secret_group: group }).eq("id", body.id).select("id");
     if (error) return json({ error: error.message }, 500);
     if (!data?.length) return json({ error: "Esa canción ya no existe" }, 404);
     return json({ ok: true });
@@ -187,11 +192,39 @@ Deno.serve(async (req) => {
     return json({ deleted, kept, done, folders: folders.length });
   }
 
-  // the code that unlocks the secret songs (stored as the sha-256 of its lowercased text, like the database checks it)
-  if (body.action === "secret") {
+  // the secret codes (secret_groups.sql): each one opens its own songs. A code is stored as the sha-256 of its
+  // lowercased text, like the database checks it, so the panel never sees the codes again (only their names)
+  if (body.action === "groups") {
+    const { data, error } = await admin.from("secret_groups").select("id, name").order("id");
+    if (error) return json({ error: error.message }, 500);
+    return json({ groups: data });
+  }
+  // a new code (no id: name and secret), or a code renamed and/or changed (id, and name and/or secret)
+  if (body.action === "group_save" || body.action === "secret") {
+    const id = body.action === "secret" ? 1 : body.id; // "secret": the first code, as panels from before the groups change it
+    const name = typeof body.name === "string" ? body.name.trim() : "";
     const secret = typeof body.secret === "string" ? body.secret.trim().toLowerCase() : "";
-    if (secret.length < 3 || secret.length > 40) return json({ error: "El código secreto debe tener entre 3 y 40 caracteres" }, 400);
-    const { error } = await admin.from("secret_config").upsert({ id: 1, code_hash: await sha256(secret), updated_at: new Date().toISOString() });
+    if (name && name.length > 30) return json({ error: "El nombre puede tener hasta 30 letras" }, 400);
+    if (secret && (secret.length < 3 || secret.length > 40)) return json({ error: "El código secreto debe tener entre 3 y 40 caracteres" }, 400);
+    const patch: Record<string, unknown> = {};
+    if (name) patch.name = name;
+    if (secret) patch.code_hash = await sha256(secret);
+    if (id == null) {
+      if (!name || !secret) return json({ error: "Escribe el nombre y el código" }, 400);
+    } else if (!Number.isInteger(id) || !Object.keys(patch).length) return json({ error: "Datos inválidos" }, 400);
+    const q = id == null ? admin.from("secret_groups").insert(patch) : admin.from("secret_groups").update(patch).eq("id", id);
+    const { data, error } = await q.select("id, name");
+    if (error) return json({ error: error.code === "23505" ? "Ese código ya lo usa otro grupo" : error.message }, error.code === "23505" ? 409 : 500);
+    if (!data?.length) return json({ error: "Ese código ya no existe" }, 404);
+    if (id === 1 && secret) await admin.from("secret_config").upsert({ id: 1, code_hash: patch.code_hash, updated_at: new Date().toISOString() });
+    return json({ group: data[0] });
+  }
+  // a code goes away: only an empty one (its songs first go elsewhere)
+  if (body.action === "group_delete") {
+    if (!Number.isInteger(body.id)) return json({ error: "Datos inválidos" }, 400);
+    const { count } = await admin.from("songs").select("id", { count: "exact", head: true }).eq("secret_group", body.id);
+    if (count) return json({ error: "Ese código todavía tiene canciones: pásalas a otro o a la biblioteca primero" }, 409);
+    const { error } = await admin.from("secret_groups").delete().eq("id", body.id);
     if (error) return json({ error: error.message }, 500);
     return json({ ok: true });
   }

@@ -25,6 +25,8 @@ export const ACHIEVEMENTS = [
   { id: "en-banda", name: "En banda", desc: "Juega una partida multijugador." },
   { id: "reto-aceptado", name: "Reto aceptado", desc: "Gánale a alguien en un reto." },
   { id: "al-escenario", name: "Al escenario", desc: "Comparte un resultado." },
+  // secret: only listed for whoever has the songs it asks for (the miau songs, behind a code), or once won
+  { id: "coro-gatitos", name: "Coro de gatitos", desc: "Saca 80% o más en 3 canciones miau (o en todas, si hay menos).", secret: true },
 ];
 const BY_ID = Object.fromEntries(ACHIEVEMENTS.map((a) => [a.id, a]));
 
@@ -75,6 +77,12 @@ export function forRun({ sum, diff, songsDone }) {
   if (diff === "expert") ids.push("experto");
   if (diff === "expert" && sum.stars >= 5) ids.push("virtuoso");
   return ids;
+}
+
+/** The kittens: 80% or more on 3 of the miau songs this player has (all of them when there are fewer). */
+export function forMiau(miauIds, bestAcc) {
+  const need = Math.min(3, miauIds.length);
+  return need && miauIds.filter((id) => bestAcc(id) >= 0.8).length >= need ? ["coro-gatitos"] : [];
 }
 
 /** Days in a row of the song of the day. */

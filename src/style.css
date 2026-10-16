@@ -836,9 +836,10 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .secret-pick.wiggle svg { fill: var(--pop); }
 @keyframes pickWiggle { 20% { transform: rotate(-18deg) scale(1.2); } 45% { transform: rotate(14deg); } 70% { transform: rotate(-7deg); } 100% { transform: none; } }
 
-.lib-tabs button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.lib-tabs { grid-auto-columns: minmax(max-content, 1fr); overflow-x: auto; scrollbar-width: none; touch-action: pan-x; }
+.lib-tabs button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; white-space: nowrap; padding-inline: 12px; }
 .lib-tabs svg { width: 15px; height: 15px; fill: currentColor; flex: none; }
-.lib-tabs button[data-t="secret"][aria-pressed="true"] { background: linear-gradient(180deg, #d42a86, #6a0b45); }
+.lib-tabs button:not([data-t="all"])[aria-pressed="true"] { background: linear-gradient(180deg, #d42a86, #6a0b45); }
 .song.secret .t { color: #ffe3f2; }
 .song.secret:hover, .song.secret:focus-visible { background: linear-gradient(90deg, rgba(212,42,134,.38), rgba(212,42,134,0)); border-left-color: var(--pop); }
 .song.secret .ph { background: linear-gradient(135deg, #4a0f33, #14070f); }
@@ -866,7 +867,13 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .check-row input { accent-color: var(--pop); width: 18px; height: 18px; flex: none; }
 .secret-admin .row input { flex: 1 1 180px; width: auto; }
 .secret-admin .hint:empty { display: none; }
-.secret-list button[aria-pressed="true"] { background: linear-gradient(180deg, #d42a86, #6a0b45); }
+.adm-select { background: rgba(0,0,0,.5); color: var(--ink); border: 1px solid #000; border-radius: 3px; padding: 8px 10px; font: 500 16px var(--body); max-width: 100%; }
+.secret-list .adm-select { max-width: 46vw; width: auto; }
+.secret-list .adm-select.on { border-color: #d42a86; box-shadow: 0 0 0 1px #d42a86; }
+.secret-groups li { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+.secret-groups .n { flex: 1 1 140px; }
+.secret-groups button { padding: 7px 12px; font: 600 14px/1 var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); background: linear-gradient(180deg, #3a3430, #1b1715); border: 1px solid #000; border-radius: 3px; cursor: pointer; }
+.secret-groups .n small { color: var(--muted); margin-left: 6px; }
 @media (prefers-reduced-motion: reduce) { .secret-pick.wiggle, .secret-box.shake, .secret-modal { animation: none; } }
 
 /* ---------- the stage can't be shown: say why (no 3D, lost GPU, everything black) ---------- */
@@ -971,6 +978,10 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .sw-gems.g-neon { background: #07060a; }
 .sw-gems.g-neon i { background: radial-gradient(ellipse, #0b0b0f 0 34%, var(--c) 46%); box-shadow: 0 0 0 1px #000, 0 0 8px 2px var(--c), 0 0 16px var(--c); }
 .sw-gems.g-pixel i { aspect-ratio: 1.3; border-radius: 0; box-shadow: inset -3px -3px 0 rgba(0,0,0,.35), inset 3px 3px 0 rgba(255,255,255,.4), 0 0 0 2px #000; background: var(--c); }
+.sw-gems.g-cat i, .reto-cats i, .reto-prog i { aspect-ratio: 1.15; border-radius: 0; box-shadow: none; filter: drop-shadow(0 0 0 #000) drop-shadow(0 2px 0 #000);
+  clip-path: polygon(8% 4%, 34% 30%, 66% 30%, 92% 4%, 98% 44%, 100% 64%, 90% 86%, 68% 98%, 32% 98%, 10% 86%, 0 64%, 2% 44%);
+  background: radial-gradient(ellipse 9% 12% at 33% 58%, #150f10 90%, transparent 100%), radial-gradient(ellipse 9% 12% at 67% 58%, #150f10 90%, transparent 100%),
+    radial-gradient(ellipse 30% 18% at 50% 82%, rgba(255,255,255,.75) 90%, transparent 100%), var(--c); }
 .sw-gems.g-crystal i { aspect-ratio: 1.2; border-radius: 0; box-shadow: none; clip-path: polygon(50% 0, 100% 38%, 80% 100%, 20% 100%, 0 38%);
   background: linear-gradient(135deg, rgba(255,255,255,.85), var(--c) 40%, rgba(0,0,0,.45) 100%); }
 .sw-gems.g-gold i { background: radial-gradient(ellipse at 50% 40%, var(--c) 0 46%, #fff1b0 52%, #c9971a 64%, #7a5810 78%); box-shadow: 0 3px 0 #000; }
@@ -1155,3 +1166,25 @@ body.streak-platino #hud .streak, .streak.st-platino, .sw-streak .st-platino { b
 .req-hits { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 14px; }
 .req-hits button, .req-pick .req-none { text-align: left; text-transform: none !important; letter-spacing: 0 !important; font: 500 15px var(--body) !important; }
 .req-pick .req-none { align-self: flex-start; opacity: .8; }
+
+/* the kittens' challenge: the notice and its card in the library */
+.reto-box { text-align: center; }
+.reto-cats { display: flex; justify-content: center; gap: 4%; margin: 14px auto 6px; width: min(300px, 90%); }
+.reto-cats i { width: 17%; animation: catBob 1.6s ease-in-out infinite; }
+.reto-cats i:nth-child(2) { animation-delay: .15s; } .reto-cats i:nth-child(3) { animation-delay: .3s; }
+.reto-cats i:nth-child(4) { animation-delay: .45s; } .reto-cats i:nth-child(5) { animation-delay: .6s; }
+@keyframes catBob { 0%, 100% { transform: translateY(0) rotate(0); } 30% { transform: translateY(-9px) rotate(-6deg); } 60% { transform: translateY(0) rotate(5deg); } }
+@media (prefers-reduced-motion: reduce) { .reto-cats i { animation: none; } }
+.reto-box h2 { margin: 4px 0 6px; }
+.reto-desc { color: var(--muted); margin: 0 0 12px; }
+.reto-prog { display: flex; justify-content: center; align-items: center; gap: 8px; margin-bottom: 16px; font: 600 15px var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.reto-prog i { width: 26px; --c: #4a403c; }
+.reto-prog i.on { --c: var(--gold); filter: drop-shadow(0 0 6px rgba(245,197,24,.6)); }
+.reto-card { display: flex; align-items: center; gap: 12px; margin: 0 0 10px; padding: 10px 12px; border: 1px solid #000; border-radius: 3px;
+  background: linear-gradient(135deg, rgba(212,42,134,.28), rgba(245,197,24,.12)), #16100f; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
+.reto-card .reto-prog { margin: 0; gap: 4px; flex: none; }
+.reto-card .reto-prog i { width: 22px; }
+.reto-card div { flex: 1; min-width: 0; }
+.reto-card b { display: block; font: 700 15px var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--gold); }
+.reto-card small { display: block; color: var(--ink); font-size: 14px; line-height: 1.3; }
+.reto-card button { flex: none; }

@@ -455,7 +455,7 @@ export const NECKS = {
 
 /* ================= note gems ================= */
 // lanes: the five colours (sRGB, lane order green red yellow blue orange; also the fret buttons, tails, string flashes
-// and the HUD). shape: "round" (today's), "square", "pixel", "crystal", "diamond".
+// and the HUD). shape: "round" (today's), "square", "pixel", "crystal", "diamond", "cat".
 // body/dome: finish of the coloured parts; each part's colour is the lane colour mixed towards `to` by `mix`, times `mul`;
 // glow: how much that colour lights the part itself (today's notes: none). ring: the band around the top (color: its
 // own colour, or the lane colour mixed like above when `lane` is set; glow as above); base: the bottom disc.
@@ -495,6 +495,11 @@ export const GEMS = {
     lanes: LANE_HEX, shape: "diamond", body: { metal: 0.1, rough: 0.02, mix: 0.9, mul: 1.15, glow: 0.1 }, dome: { metal: 0.05, rough: 0.05, mix: 0.05, mul: 1.2, glow: 0.35 },
     ring: { color: 0xffffff, metal: 0.3, rough: 0.05, emissive: 0xdfeaff, ei: 0.3 }, base: { color: 0xe4ecf6, metal: 0.4, rough: 0.05, emissive: 0xbfd8ff, ei: 0.35 },
     halo: { size: 1.2, mul: 0.4, mix: 0.75, twinkle: true },
+  },
+  // kittens: matte fur in the lane colour, a pale muzzle, a dark face (the "ring")
+  gatitos: {
+    lanes: LANE_HEX, shape: "cat", body: { metal: 0, rough: 0.6 }, dome: { metal: 0, rough: 0.55, mix: 0.82 },
+    ring: { color: 0x150f10, metal: 0, rough: 0.35, emissive: 0x000000, ei: 0 }, base: { color: 0x0c0909, metal: 0.05, rough: 0.6 },
   },
 };
 for (const s of Object.values(GEMS)) { s.ring = s.ring || RING; s.base = s.base || BASE; s.shape = s.shape || "round"; }
