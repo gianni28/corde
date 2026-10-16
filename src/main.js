@@ -2331,9 +2331,31 @@ addEventListener("keyup", (e) => {
   const lane = laneForKey(e.key.toLowerCase()); if (lane >= 0 && app.game) app.game.release(lane);
 });
 
-const pointerLane = new Map();
+// Fingers go through touch events, whose touchstart can be cancelled: on an iPhone that stops the long-press and
+// double-tap gestures (the magnifier) from taking over the screen, and with them the next taps of a fast run.
+// The mouse and pens stay on pointer events.
+const pointerLane = new Map(), touchLane = new Map();
+canvas.addEventListener("touchstart", (e) => {
+  if (!app.game) return;
+  e.preventDefault();
+  if (app.paused || app.failing) return;
+  const rect = canvas.getBoundingClientRect(), t0 = evTime(e);
+  for (const t of e.changedTouches) {
+    const lane = R.laneFromClientX(t.clientX, rect);
+    touchLane.set(t.identifier, lane);
+    app.game.press(lane, t0);
+  }
+}, { passive: false });
+const touchUp = (e) => {
+  for (const t of e.changedTouches) {
+    if (!touchLane.has(t.identifier)) continue;
+    const lane = touchLane.get(t.identifier); touchLane.delete(t.identifier);
+    if (app.game && ![...touchLane.values()].includes(lane)) app.game.release(lane);
+  }
+};
+["touchend", "touchcancel"].forEach((t) => canvas.addEventListener(t, touchUp));
 canvas.addEventListener("pointerdown", (e) => {
-  if (!app.game || app.paused || app.failing) return;
+  if (e.pointerType === "touch" || !app.game || app.paused || app.failing) return;
   e.preventDefault();
   const lane = R.laneFromClientX(e.clientX, canvas.getBoundingClientRect());
   pointerLane.set(e.pointerId, lane);
