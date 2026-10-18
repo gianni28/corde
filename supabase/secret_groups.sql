@@ -93,3 +93,14 @@ create trigger songs_miau_flag before insert or update on public.songs for each 
 -- the kittens' songs have their own code (created 2026-10-16): "(cat's version)"
 insert into public.secret_groups (name, code_hash) values ('(cat''s version)', encode(sha256(convert_to('(cat''s version)', 'UTF8')), 'hex'))
 on conflict (code_hash) do nothing;
+
+-- the kittens' challenge from the boards: this player's best accuracy on each miau song (any difficulty, any device)
+create or replace function public.miau_progress(p_name text) returns json
+language sql stable security definer set search_path = public as $$
+  select coalesce(json_object_agg(t.song_id, t.acc), '{}'::json) from (
+    select s.song_id, max(s.acc) as acc from scores s join songs g on g.id = s.song_id and g.miau
+    where s.name_key = acct_key(p_name) and s.score > 0 group by s.song_id
+  ) t
+$$;
+revoke all on function public.miau_progress(text) from public, anon, authenticated;
+grant execute on function public.miau_progress(text) to anon, authenticated;
