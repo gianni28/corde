@@ -319,6 +319,7 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 /* random song */
 .random { display: flex; flex-direction: column; gap: 8px; }
 .random-btn { align-self: flex-start; display: inline-flex !important; align-items: center; gap: 10px; }
+.random-btn[hidden] { display: none !important; }
 .random-btn svg { width: 20px; height: 20px; fill: var(--fire); flex: none; }
 .random-btn[aria-expanded="true"] { filter: brightness(1.25); }
 
@@ -1288,3 +1289,23 @@ body.fx-mirror #stage { transform: scaleX(-1); }
 #cupRes { margin-top: 12px; }
 .lobby-mode button:disabled { opacity: 1; cursor: default; }
 @media (prefers-reduced-motion: reduce) { body.fx-quake #stage, .fog-fx.on { animation: none; } }
+
+/* the room's cups: a setlist picked at random, changed song by song */
+.cup-pick { margin-bottom: 8px; }
+.cup-pick button:disabled { opacity: 1; cursor: default; }
+#lobbyRandom { margin-top: 8px; width: 100%; }
+.cup-setlist .cs-head { display: flex; justify-content: space-between; align-items: baseline; margin: 2px 2px 6px; }
+.cup-setlist .cs-head b { font: 700 18px var(--display); letter-spacing: .06em; text-transform: uppercase; color: var(--gold); }
+.cup-setlist .cs-head span { color: var(--muted); font-size: 14px; }
+.cup-setlist ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.cup-setlist li { display: grid; grid-template-columns: 26px 1fr auto auto; gap: 8px; align-items: center; padding: 6px 8px; background: rgba(0,0,0,.35); }
+.cup-setlist li.now { box-shadow: inset 0 0 0 1px var(--fire), 0 0 10px rgba(255,122,26,.25); }
+.cup-setlist li.played { opacity: .55; }
+.cup-setlist .cs-n { font: 700 16px var(--display); text-align: center; color: var(--muted); }
+.cup-setlist li.now .cs-n { color: var(--fire); }
+.cup-setlist .cs-t { display: flex; flex-direction: column; min-width: 0; }
+.cup-setlist .cs-t b { font: 600 16px var(--display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cup-setlist .cs-t small { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cup-setlist .cs-btn { padding: 6px 9px; font: 600 13px/1 var(--display); letter-spacing: .06em; text-transform: uppercase; color: var(--ink); background: linear-gradient(180deg, #3a3430, #1b1715); border: 1px solid #000; border-radius: 3px; cursor: pointer; }
+#cupReroll { margin-top: 8px; }
+.cup-champ { margin: 4px 0 8px; padding: 10px; text-align: center; font: 700 20px var(--display); letter-spacing: .04em; color: #120c0a; background: linear-gradient(180deg, #fff1a0, var(--gold)); border-radius: 3px; box-shadow: 0 0 18px rgba(245,197,24,.5); }
