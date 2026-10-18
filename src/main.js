@@ -26,8 +26,9 @@ import { cssVars } from "./skins.js";
 const $ = (id) => document.getElementById(id);
 const LANE_CSS = ["--g", "--r", "--y", "--b", "--o"];
 let touch = isTouchDevice();
+document.documentElement.classList.toggle("touch", touch);
 // a PC with a touchscreen can look like a phone until the first key press: from then on it's a PC (keys, 5 lanes)
-addEventListener("keydown", () => { if (touch && !isTouchDevice()) touch = false; }, { capture: true, passive: true });
+addEventListener("keydown", () => { if (touch && !isTouchDevice()) { touch = false; document.documentElement.classList.remove("touch"); } }, { capture: true, passive: true });
 
 // iPhone: every tap/keypress re-asserts "music playback" so the silent switch doesn't mute the game.
 ["pointerdown", "pointerup", "touchend", "keydown", "click"].forEach((t) => addEventListener(t, unlockAudio, { capture: true, passive: true }));
@@ -1370,7 +1371,9 @@ function renderLogros() {
 const liftOn = () => touch && motionAvailable() && settings.starMode !== "tap" && (!motionNeedsPermission() || settings.motion === "granted");
 function activateStar(g = app.game) {
   if (!g || app.paused || app.rewinding || app.failing) return;
+  const was = g.starOn;
   g.activateStar(); // the frame loop reacts to the "starOn" event
+  if (!was && g.starOn) { settings.starActs = (settings.starActs || 0) + 1; save(); } // the "how" reminder stops after a few
 }
 // lifting/shaking the phone: only when the player chose that way in Ajustes
 const liftStar = () => { if (settings.starMode !== "tap") activateStar(); };
@@ -1410,33 +1413,44 @@ function starGain(g) {
 // "star power ready" reminder (top left) if the player doesn't use it within a couple of seconds; shown only once per device
 const tip = { at: 0, hideAt: 0 };
 function starTipHow() {
-  return touch ? (liftOn() ? "Levanta o sacude el celular" : "Toca el multiplicador") : `Pulsa ${keyLabel(settings.starKey)}`;
+  return touch ? (liftOn() ? "Levanta el celular o toca el círculo de arriba" : "Toca el círculo de arriba a la izquierda") : `Pulsa ${keyLabel(settings.starKey)}`;
 }
 function hideStarTip() { tip.at = 0; tip.hideAt = 0; $("spTip").hidden = true; }
 if (liftOn()) onLift(liftStar);
-// iPhone forgets the motion permission every time the page opens. It's asked again only on a button tap in the
-// screens a song starts from (not while just looking around), and not at all when the sensors already reach the page
-// or the player chose to activate star power by tapping the multiplier.
-const SONG_SCREENS = new Set(["setup", "daily", "tour", "results", "duo", "lobby"]);
-if (touch && motionNeedsPermission()) {
-  const rearm = (e) => {
-    if (settings.starMode === "tap" || settings.motion !== "granted" || motionReady()) return;
-    if (!SONG_SCREENS.has(app.screen) || !e.target.closest?.("button, [role=button], li")) return;
-    requestMotion().then((ok) => ok && onLift(liftStar));
-  };
-  for (const ev of ["touchend", "click"]) document.addEventListener(ev, rearm, { capture: true, passive: true });
+// iPhone asks for the motion permission (only from a tap) and forgets it every time the page opens. So before the
+// first song of each visit the player is asked (or, if they allowed it before, it's asked again right in the tap that
+// starts the song); "Usar el dedo" goes on with the multiplier, and "Siempre con el dedo" stops asking.
+let motionAsked = false; // this visit
+const motionNeeded = () => touch && motionAvailable() && motionNeedsPermission() && settings.starMode !== "tap" && !motionReady() && !motionAsked;
+let motionThen = null;
+function withMotion(fn) {
+  if (!motionNeeded()) return fn();
+  if (settings.motion === "granted") { motionAsked = true; requestMotion().then((ok) => ok && onLift(liftStar)); return fn(); }
+  motionThen = fn;
+  $("motionModal").hidden = false;
 }
+function motionGo() { $("motionModal").hidden = true; const f = motionThen; motionThen = null; if (app.screen === "lobby") renderLobby(); f && f(); }
+$("motionAllow").onclick = async () => {
+  motionAsked = true;
+  const asking = requestMotion(); // in this tap: iPhone shows its prompt now
+  const ok = await asking;
+  settings.motion = ok ? "granted" : "denied"; save();
+  if (ok) onLift(liftStar); else toast("Sin permiso de movimiento: toca el círculo de arriba a la izquierda cuando brille.", 4200);
+  motionGo();
+};
+$("motionTap").onclick = () => { motionAsked = true; motionGo(); };
+$("motionNever").onclick = () => { motionAsked = true; settings.starMode = "tap"; save(); motionGo(); };
 let tut = { i: 0, done: null, fromSettings: false };
 function withTutorial(fn) {
-  if (settings.tutorialDone) return fn();
-  openTutorial({ done: fn });
+  if (settings.tutorialDone) return withMotion(fn);
+  openTutorial({ done: () => withMotion(fn) });
 }
 function openTutorial({ done = null, fromSettings = false } = {}) {
   tut = { i: 0, done, fromSettings };
   $("tutNotes").textContent = touch
     ? "Toca la columna de cada color cuando la nota llegue a los botones. Mantén el dedo en las notas largas."
     : "Presiona la tecla de cada color cuando la nota llegue a los botones. Mantén en las notas largas.";
-  $("tutStarHow").textContent = touch && motionAvailable() && settings.starMode !== "tap" ? "Actívalo levantando o sacudiendo el celular, como una guitarra." : touch ? "Toca el multiplicador." : `Actívalo con ${keyLabel(settings.starKey)}.`;
+  $("tutStarHow").textContent = touch && motionAvailable() && settings.starMode !== "tap" ? "Actívalo levantando o sacudiendo el celular, como una guitarra, o tocando el círculo de arriba a la izquierda cuando brille." : touch ? "Actívalo tocando el círculo de arriba a la izquierda cuando brille." : `Actívalo con ${keyLabel(settings.starKey)}.`;
   $("motionBtn").hidden = !(touch && motionNeedsPermission() && settings.motion !== "granted");
   $("motionNote").hidden = !(touch && settings.motion === "denied");
   $("tutAlert").hidden = true;
@@ -1471,6 +1485,7 @@ $("tutNext").onclick = () => {
 };
 $("tutSkip").onclick = () => tutGuard(finishTutorial);
 async function askMotion() {
+  motionAsked = true;
   const ok = await requestMotion();
   settings.motion = ok ? "granted" : "denied"; save();
   $("motionBtn").hidden = true; // asked once: iPhone won't show the prompt again anyway
@@ -1480,7 +1495,7 @@ async function askMotion() {
 }
 $("motionBtn").onclick = askMotion;
 $("tutAlertYes").onclick = async () => { $("tutAlert").hidden = true; await askMotion(); const n = tutPending; tutPending = null; n && n(); };
-$("tutAlertNo").onclick = () => { $("tutAlert").hidden = true; const n = tutPending; tutPending = null; n && n(); };
+$("tutAlertNo").onclick = () => { motionAsked = true; $("tutAlert").hidden = true; const n = tutPending; tutPending = null; n && n(); };
 $("openTutorial").onclick = () => openTutorial({ fromSettings: true });
 $("mult").addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); activateStar(); });
 
@@ -2666,7 +2681,8 @@ function frame(now) {
     }
     if (tip.at && now >= tip.at && !g.starOn && g.starMeter >= STAR_READY && !app.paused) {
       tip.at = 0;
-      if (!settings.starTipSeen) { // once is enough: after that the chime and the glowing meter say it
+      // on a phone: until it's been used a few times; with a keyboard once is enough (the chime and the glowing meter say it)
+      if (touch ? (settings.starActs || 0) < 3 : !settings.starTipSeen) {
         settings.starTipSeen = true; save();
         tip.hideAt = now + 5500; $("spTipHow").textContent = starTipHow(); $("spTip").hidden = false;
       }
@@ -3018,17 +3034,20 @@ function renderLobby() {
   }
   const allReady = cfg && app.peers.length > 0 && app.peers.every((p) => p.ready && p.songId === cfg.songId);
   $("startRound").hidden = !isHost;
+  $("lobbyMotion").hidden = isHost || !motionNeeded();
   $("startRound").disabled = !allReady || !notesFor(app.chart || { diffs: {} }, cfg?.diff, lanes).length;
   $("lobbyStatus").textContent = !cfg ? (isHost ? "Elige una canción para empezar." : "")
     : !allReady ? "Esperando a que todos descarguen la canción…"
     : `Todos listos. Se toca con ${lanes} cuerdas${lanes === 4 && app.peers.some((p) => p.lanes === 5) ? " porque alguien juega desde el celular" : ""}.`;
 }
-$("startRound").onclick = () => {
+$("startRound").onclick = () => withMotion(() => {
   const cfg = app.roomConfig; if (!cfg) return;
   const payload = { songId: cfg.songId, diff: cfg.diff, lanes: roomLanes() };
   app.room.send("start", payload);
   onRoomEvent("start", payload);
-};
+});
+// a guest starts when the host does (no tap of theirs): the permission is asked here, from a tap in the room
+$("lobbyMotion").onclick = () => withMotion(() => {});
 
 function onRoomEvent(ev, p) {
   if (ev === "start") {
