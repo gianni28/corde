@@ -124,6 +124,13 @@ export async function secretBoard(code, songId, diff, lanes, limit = BOARD_MAX) 
   if (error) throw rpcError(error);
   return data || [];
 }
+/** The kittens' challenge from the boards: { songId: best accuracy } of this name on the miau songs. */
+export async function fetchMiauProgress(name) {
+  if (!supabase || !name) return {};
+  const { data, error } = await supabase.rpc("miau_progress", { p_name: name });
+  if (error) throw new Error(error.message);
+  return data || {};
+}
 /** One song by its exact id, hidden or not (a secret song picked in a multiplayer room). */
 export async function songById(id) {
   if (!supabase) return null;

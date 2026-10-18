@@ -13,7 +13,7 @@ import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from 
 import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, nameStyles, songRequest, myNotices, noticeSeen, noticeReply, myFulfilled, fulfilledSeen } from "./net.js";
 import { shareCard, retoUrl, readReto } from "./share.js";
 import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau } from "./achievements.js";
-import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretOpen, secretBoard, songById } from "./net.js";
+import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretOpen, secretBoard, songById, fetchMiauProgress } from "./net.js";
 import { VENUES, TO_ENCORE, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song, separateExisting } from "./admin.js";
 import { fillDifficulties } from "./reduce.js";
@@ -326,7 +326,7 @@ renderHomeBoard();
 Promise.resolve().then(() => {
   if (!online) return;
   loadLibrary()
-    .then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); backfillAchievements(); queueMiauIntro(); })
+    .then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); backfillAchievements(); queueMiauIntro(); refreshMiau(); })
     .catch((e) => console.warn("library:", e.message))
     .finally(() => loadDaily());
 });
@@ -350,8 +350,17 @@ function recordBest(songId, diff, sum) {
   return { old, beat };
 }
 // what the song list shows: your stars on the hardest difficulty you've played
+// the miau songs' accuracies on the boards (any device): the kittens' challenge counts them with this browser's bests
+const MIAU_BEST_KEY = "corde.miau.best.v1";
+let miauBests = {};
+try { miauBests = JSON.parse(localStorage.getItem(MIAU_BEST_KEY) || "{}") || {}; } catch {}
+function recordMiauBest(songId, acc) {
+  if (!(acc > (miauBests[songId] || 0))) return;
+  miauBests[songId] = Math.round(acc * 1000) / 1000;
+  try { localStorage.setItem(MIAU_BEST_KEY, JSON.stringify(miauBests)); } catch {}
+}
 // the best accuracy on a song, any difficulty (0: never finished)
-const bestAcc = (songId) => Math.max(0, ...Object.values(bests[songId] || {}).map((x) => (x && x.score > 0 ? x.acc || 0 : 0)));
+const bestAcc = (songId) => Math.max(miauBests[songId] || 0, ...Object.values(bests[songId] || {}).map((x) => (x && x.score > 0 ? x.acc || 0 : 0)));
 // the miau songs this browser has (they come with a secret code): the kittens' logro and prize are only for them
 const miauIds = () => app.songs.filter((s) => s.miau).map((s) => s.id);
 const knowsMiau = () => app.songs.some((s) => s.miau) || !!achievementsWon()["coro-gatitos"];
@@ -452,7 +461,7 @@ $("secretForm").onsubmit = async (e) => {
     if (known) return; // already open: just its tab
     sfx.unlock();
     const n = g.songs.length;
-    if (g.songs.some((x) => x.miau)) queueMiauIntro(3200); // after the celebration
+    if (g.songs.some((x) => x.miau)) { queueMiauIntro(3200); refreshMiau(); } // after the celebration
     celebrate({ kicker: "Código correcto", title: g.name, kind: "secret", ms: 2800,
       sub: n ? `${n} ${n === 1 ? "canción desbloqueada" : "canciones desbloqueadas"}. Las encuentras en «${g.name}».` : "Ya quedaron desbloqueadas, aunque todavía no hay ninguna." });
   } catch (err) {
@@ -487,7 +496,7 @@ async function findSong(id) {
 async function openLibrary() {
   $("libTitle").textContent = app.mode === "pick" ? "Elige la canción" : app.mode === "duo" ? "2 jugadores" : "Canciones";
   $("localFolderBtn").hidden = touch;
-  $("randomBox").hidden = !online || app.mode === "pick" || app.mode === "duo";
+  $("randomBox").hidden = !online || app.mode === "pick";
   $("randomDiffs").hidden = true; $("randomBtn").setAttribute("aria-expanded", "false");
   show("library");
   renderSongs();
@@ -508,6 +517,7 @@ async function openLibrary() {
     app.songs = fresh;
     if (app.screen === "library") renderSongs();
   } catch {}
+  refreshMiau();
 }
 function renderSongs() {
   const box = $("songList");
@@ -562,6 +572,7 @@ $("libSearch").oninput = renderSongs;
 // The same box is in the library and on the results screen.
 function randomBox(btn, diffs, fromResults) {
   $(btn).onclick = () => {
+    if (app.mode === "duo" || (fromResults && app.duo)) return randomDuoSong(); // two players: their difficulties are on their screen
     const open = $(diffs).hidden;
     $(diffs).hidden = !open; $(btn).setAttribute("aria-expanded", String(open));
     if (open && fromResults) $(diffs).scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -815,6 +826,8 @@ function renderDuo() {
     const name = col.querySelector(".duo-name");
     if (document.activeElement !== name) name.value = duoNames()[p];
     name.oninput = () => { settings.duoNames[p] = name.value.slice(0, 16); save(); };
+    name.onfocus = () => name.select();
+    name.onkeydown = (e) => { if (e.key === "Enter") name.blur(); };
     name.onblur = () => { name.value = duoNames()[p]; };
     renderDiffChips(col.querySelector(".duo-diffs"), app.chart, 5, app.duoDiffs[p], (k) => { app.duoDiffs[p] = k; settings.duoDiffs[p] = k; save(); renderDuo(); });
     const box = col.querySelector(".duo-keys"); box.innerHTML = "";
@@ -875,9 +888,25 @@ function finishDuo() {
   $("shareBtn").hidden = true;
   $("retoLine").hidden = true; $("picksRes").hidden = true; picksRun++;
   $("againBtn").hidden = false; $("againBtn").classList.add("primary"); $("otherSongBtn").hidden = false; $("menuBtn").textContent = "Menú";
-  $("resRandomBox").hidden = true;
+  $("resRandomBox").hidden = !online;
   show("results");
 }
+// a random song for two players: from the tab you're in, straight to the two-player screen (each keeps their difficulty)
+async function randomDuoSong() {
+  if (app.loadingRandom) return;
+  if (!app.songs.length) { try { app.songs = await loadLibrary(); } catch {} }
+  const has = app.songs.filter((s) => inTab(s) && Object.values(s.diffs || {}).some((d) => d?.n > 0));
+  const pool = has.length > 1 ? has.filter((s) => s.id !== app.lastRandomId && s.id !== app.song?.id) : has;
+  if (!pool.length) return;
+  const s = pool[Math.floor(Math.random() * pool.length)];
+  app.lastRandomId = s.id; app.loadingRandom = true;
+  app.mode = "duo";
+  if (app.screen === "results") { app.duo = null; app.history = ["home", "mp"]; }
+  try { await loadLibrarySong(s); openDuoSetup(); }
+  catch (err) { toast(err.message); show("library", false); }
+  finally { app.loadingRandom = false; }
+}
+$("duoRandom").onclick = randomDuoSong;
 $("otherSongBtn").onclick = () => { app.mode = "duo"; openLibrary(); app.history = ["home", "mp"]; };
 
 /* ================= song of the day ================= */
@@ -1845,6 +1874,17 @@ function showNextNotice() {
   noticeSeen(playerSecret(), n.id).catch(() => {}); // shown: it won't come again
 }
 /* the kittens' challenge (coro-gatitos): told once, when the miau songs first show up (they come with a code) */
+// what this player already did on any device (the boards keep each name's runs): it counts here too
+async function refreshMiau() {
+  const name = account?.name || settings.name;
+  if (!online || !name || !miauIds().length) return;
+  let got = {};
+  try { got = await fetchMiauProgress(name); } catch { return; }
+  for (const [id, acc] of Object.entries(got)) recordMiauBest(id, +acc || 0);
+  const fresh = unlock(forMiau(miauIds(), bestAcc));
+  if (fresh.length) { syncSoon(); celebrateAchievements(fresh); }
+  if (app.screen === "library") renderSongs();
+}
 const MIAU_KEY = "corde.miau.intro.v1";
 function miauProgress() {
   const ids = miauIds(), need = Math.min(3, ids.length);

@@ -547,6 +547,11 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .duo-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .duo-col { --pc: var(--p1); display: flex; flex-direction: column; gap: 9px; padding: 12px; background: rgba(0,0,0,.3); box-shadow: inset 0 0 0 1px #000, inset 0 3px 0 var(--pc); }
 .duo-col.p2 { --pc: var(--p2); }
+.duo-name-wrap { position: relative; display: block; }
+.duo-name-wrap svg { position: absolute; right: 10px; top: 50%; width: 16px; height: 16px; transform: translateY(-50%); fill: var(--pc); opacity: .7; pointer-events: none; }
+.duo-name-wrap .duo-name { padding-right: 34px !important; border-bottom: 2px dashed color-mix(in srgb, var(--pc) 55%, transparent) !important; cursor: text; }
+.duo-name-hint { display: block; margin: 2px 0 6px; font: 500 13px var(--body); color: var(--muted); }
+.duo-random { margin-left: auto; align-self: center; flex: none; }
 .duo-name { font: 700 22px var(--display) !important; text-transform: uppercase; letter-spacing: .04em; color: var(--pc) !important; padding: 6px 10px !important; }
 .duo-diffs { grid-template-columns: repeat(2, 1fr); }
 .duo-diffs .diff { flex-direction: row; justify-content: space-between; padding: 9px 10px; font-size: 15px; }
