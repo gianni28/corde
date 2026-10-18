@@ -163,10 +163,11 @@ const wideMQ = matchMedia("(min-width: 1000px)");
 const adm = { songs: [], busy: false, groups: [] };
 const split = { on: false, stop: false, rows: [] }; // the library's songs whose guitar is being separated
 const notices = { queue: [], current: null, asked: false }; // the admin's messages waiting for this player (see checkNotices)
+let previewing = null, previewLoading = null; // the song list's ▶ (see previewSong): up here, the menu music asks from the start
 // while the admin uploads or separates songs, the stage and the menu music rest (they'd take the processor from it)
 function adminWorking() { return adm.busy || split.on; }
 function adminWorkChanged() { syncMenuMusic(); }
-const music = createMenuMusic({ onChange: () => renderNowPlaying() });
+const music = createMenuMusic({ onChange: () => { renderNowPlaying(); if (typeof markPreview === "function") markPreview(); } });
 // It starts as soon as the page opens: a random song is fetched right away and plays the moment the browser
 // allows sound. Chrome allows it straight away on sites you use a lot and in the installed app; otherwise the first
 // touch, click or key starts it (already loaded, so instantly), with a "touch to listen" hint until then.
@@ -559,15 +560,38 @@ function renderSongs() {
     b.className = "song" + (s.secret ? " secret" : "") + (s.secret && catGroup(s.secret) ? " cat" : "");
     const cov = coverOf(s);
     const best = songBest(s.id);
-    b.innerHTML = `${cov ? `<img loading="lazy" alt="" src="${cov}">` : `<div class="ph"></div>`}<span><span class="t"></span><span class="a"></span></span>`
+    b.innerHTML = `<span class="cov">${cov ? `<img loading="lazy" alt="" src="${cov}">` : `<div class="ph"></div>`}<span class="song-play" role="button" tabindex="0" aria-label="Escuchar"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="pl" d="M8 5.5v13l11-6.5z"/><path class="st" d="M7 7h10v10H7z"/></svg></span></span><span><span class="t"></span><span class="a"></span></span>`
       + `<span class="len">${best ? `<span class="best" title="Tu mejor: ${best.diff.name}">${starsHtml(best.stars)}<small>${best.diff.name}</small></span>` : ""}${fmtLen(s.duration_ms)}</span>`;
     b.querySelector(".t").textContent = s.name;
     b.querySelector(".a").textContent = s.artist || "";
     b.onclick = () => pickLibrarySong(s);
+    const pl = b.querySelector(".song-play");
+    pl.dataset.id = s.id;
+    pl.onclick = (e) => { e.stopPropagation(); previewSong(s); };
+    pl.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); previewSong(s); } };
     box.appendChild(b);
   }
 }
 $("libSearch").oninput = renderSongs;
+// ▶ on a cover: listen to the song's chorus before picking it (the menu music switches to it); ■ stops it
+async function previewSong(s) {
+  unlockAudio();
+  if (previewing === s.id || previewLoading === s.id) { previewing = previewLoading = null; music.stopSong(); markPreview(); return; }
+  previewLoading = s.id; markPreview();
+  try { if (await music.playSong(s)) previewing = s.id; }
+  catch (e) { toast("No se pudo cargar la canción para escucharla."); }
+  if (previewLoading === s.id) previewLoading = null;
+  markPreview();
+}
+function markPreview() {
+  const now = music.info();
+  if (previewing && !(now.song && now.song.id === previewing && now.playing)) previewing = null; // it ended or was replaced
+  document.querySelectorAll(".song-play").forEach((el) => {
+    el.classList.toggle("on", el.dataset.id === previewing);
+    el.classList.toggle("loading", el.dataset.id === previewLoading);
+    el.setAttribute("aria-label", el.dataset.id === previewing ? "Detener" : "Escuchar");
+  });
+}
 
 // Random song: pick the difficulty, then a random song that has it starts right away (never the same one twice in a row).
 // The same box is in the library and on the results screen.
@@ -623,6 +647,7 @@ async function loadLibrarySong(s) {
   const { chart, stems } = await downloadSong(s, (p) => loading(`Descargando ${s.name}`, p * 0.85));
   loading("Preparando audio", 0.9);
   audioCtx();
+  app.decoded = null; app.loadedSongId = null; // a phone can't hold two decoded songs at once: the old one goes first
   app.decoded = await decodeStems(stems);
   app.chart = chart; app.song = s; app.loadedSongId = s.id;
   app.songOffsetMs = s.audio_offset_ms || 0;
@@ -1612,7 +1637,21 @@ function startGame({ lanes, diff, practice = null, duo = null, ctx = null }) {
   // the frets light up one by one with a little riff, like the classics
   if (!practice) sfx.intro(lanes, (i) => games().forEach((g, k) => R.hit(i, false, k)));
   try { navigator.wakeLock?.request("screen").then((l) => (app.wake = l)).catch(() => {}); } catch {}
+  checkSoundAwake();
 }
+// A song started without a tap (a multiplayer round, started by the host) on a phone whose sound is still asleep
+// (it went to the background, or never had a tap): the song can't run until there's one, so ask for it.
+function checkSoundAwake() {
+  clearTimeout(app.soundT);
+  app.soundT = setTimeout(() => {
+    if (!app.game || app.paused || audioCtx().state === "running") { $("tapStart").hidden = true; return; }
+    $("tapStart").hidden = false;
+  }, 500);
+}
+$("tapStart").addEventListener("pointerdown", () => {
+  unlockAudio(); audioCtx().resume().catch(() => {});
+  $("tapStart").hidden = true;
+});
 // Keep what auto-sync learned only after a solid run, and move at most 30 ms per song so one bad game can't wreck the next.
 function keepLearnedSync(g) {
   if (!g || !settings.autoSync || g.hits < 40 || g.accuracy < 0.6) return;
@@ -1709,6 +1748,8 @@ function finishGame() {
   $("newRecord").hidden = true; $("boardMe").hidden = true; $("nameAsk").hidden = true; $("resultsBoard").hidden = true;
   $("picksRes").hidden = true; picksRun++; // filled when the server says what the run earned
   app.boardLanes = app.lanes;
+  // multiplayer runs count too (the boards and the púas), quietly: the room's ranking is the results there
+  if (app.mode === "mp" && hasBoard() && settings.name && !sum.failed) sendScore(sum, true);
   if (app.mode !== "mp" && hasBoard()) {
     if (sum.failed) showBoard($("resultsBoard")); // a failed song doesn't go on the board
     else if (settings.name || !(sum.score > 0)) sendScore(sum); else { $("nameAsk").hidden = false; $("boardName").value = ""; app.pendingScore = sum; }
@@ -2364,17 +2405,17 @@ function gotPicks(p, run, row = true) {
   $("picksRes").hidden = false;
 }
 
-async function sendScore(sum) {
-  if (!(sum.score > 0)) { showBoard($("resultsBoard")); return; } // empty runs stay off the board
+async function sendScore(sum, quiet = false) {
+  if (!(sum.score > 0)) { if (!quiet) showBoard($("resultsBoard")); return; } // empty runs stay off the board
   const run = picksRun;
   try {
     const r = await submitScore({ song_id: app.song.id, diff: app.diff, lanes: app.lanes, secret: playerSecret(), name: settings.name,
       score: sum.score, acc: sum.acc, max_combo: sum.maxCombo, stars: sum.stars });
     if (r.picks) gotPicks(r.picks, run);
-    if (run !== picksRun) return; // the player already started another song
+    if (run !== picksRun || quiet) return; // the player already started another song (or the room shows its own)
     $("newRecord").hidden = !r.newRecord;
     showBoard($("resultsBoard"));
-  } catch (e) { console.warn("leaderboard:", e.message); showBoard($("resultsBoard")); }
+  } catch (e) { console.warn("leaderboard:", e.message); if (!quiet) showBoard($("resultsBoard")); }
 }
 $("nameAsk").onsubmit = (e) => {
   e.preventDefault();
@@ -2952,6 +2993,7 @@ function enterRoom(code) {
     onStatus: (s) => { if (s === "error") toast("No se pudo conectar a la sala."); },
   });
   $("roomCode").textContent = code;
+  try { navigator.wakeLock?.request("screen").then((l) => (app.lobbyWake = l)).catch(() => {}); } catch {} // a sleeping phone drops out of the room
   renderInvite();
   if (!app.songs.length) loadLibrary().then((s) => { app.songs = s; renderLobby(); }).catch(() => {});
   renderLobby();
@@ -3009,7 +3051,13 @@ async function openFromReto() {
 }
 setTimeout(openFromReto, 0);
 addEventListener("hashchange", joinFromLink);
-$("leaveRoom").onclick = () => { app.room?.leave(); app.room = null; app.mode = "solo"; app.history = []; show("home", false); };
+$("leaveRoom").onclick = () => { app.room?.leave(); app.room = null; app.mode = "solo"; app.history = []; try { app.lobbyWake?.release(); } catch {} show("home", false); };
+// back from another app (sharing the code, a message): the sound and the room may have gone to sleep
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden || !app.room) return;
+  try { app.room.update({}); } catch {} // tell the room we're still here
+  if (app.screen === "lobby") try { navigator.wakeLock?.request("screen").then((l) => (app.lobbyWake = l)).catch(() => {}); } catch {}
+});
 
 const roomLanes = () => Math.min(5, ...app.peers.map((p) => p.lanes || 5));
 const host = () => app.peers[0];
@@ -3028,7 +3076,7 @@ async function syncConfig() {
   try {
     if (app.loadedSongId !== song.id) {
       const { chart, stems } = await downloadSong(song, (p) => { $("lobbyStatus").textContent = `Descargando canción… ${Math.round(p * 100)}%`; });
-      audioCtx();
+      app.decoded = null; app.loadedSongId = null; // a phone can't hold two decoded songs at once: the old one goes first
       app.decoded = await decodeStems(stems);
       app.chart = chart; app.loadedSongId = song.id;
       app.songOffsetMs = song.audio_offset_ms || 0;

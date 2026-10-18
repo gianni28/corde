@@ -117,7 +117,7 @@ async function loadPiece(song, ctx) {
  */
 export function createMenuMusic({ onChange }) {
   let songs = [], cur = null, next = null, loadingNext = null;
-  let muted = false, want = false; // want = the menus are showing
+  let muted = false, want = false, previewSeq = 0; // want = the menus are showing
   let srcs = [], gain = null, startAt = 0, seek = 0, playing = false, stopT = null, lastId = null;
   const ctx = () => sfxCtx();
   const emit = () => onChange && onChange({ song: cur?.song || null, playing: playing && audible(), muted, blocked: playing && !audible() });
@@ -222,6 +222,18 @@ export function createMenuMusic({ onChange }) {
       else if (want) this.play();
     },
     skip() { if (muted || !songs.length || loadingNext) return; advance(0.6); },
+    /** A preview of this song right now (the ▶ on a cover in the song list): its chorus, crossfading from what
+     *  played, even with the menu music muted. Resolves false when another preview was asked meanwhile. */
+    async playSong(s) {
+      const token = ++previewSeq;
+      const n = await loadPiece(s, ctx());
+      if (token !== previewSeq) return false;
+      next = null; stopSources(0.4); cur = n; lastId = s.id; seek = 0; want = true;
+      startSources(0);
+      return true;
+    },
+    /** Stop a preview: back to the random menu music (or silence when muted). */
+    stopSong() { previewSeq++; if (muted) { stopSources(0.4); emit(); } else advance(0.5); },
     /** For the menu highway and stage: time base, notes, beats and energy of what's playing (null when silent). */
     show() {
       if (!playing || !cur || !audible()) return null;
