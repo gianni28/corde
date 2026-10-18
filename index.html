@@ -487,8 +487,11 @@
       <p class="hint center">Comparte el código o el enlace: quien lo abra entra directo a la sala. Todos tocan la misma canción a la vez.</p>
       <ul class="players" id="players"></ul>
       <div class="field">
-        <span class="label">Canción</span>
+        <span class="label">Canciones</span>
+        <div class="seg cup-pick" id="cupPick"><button data-c="libre">Libre</button><button data-c="telonero">Copa 3</button><button data-c="gira">Copa 5</button><button data-c="leyenda">Copa 10</button></div>
         <div class="pick" id="lobbySong"></div>
+        <button class="btn random-btn" id="lobbyRandom" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#dice"/></svg>Canción al azar</button>
+        <div class="cup-setlist" id="cupSetlist" hidden></div>
       </div>
       <div class="field">
         <span class="label">Modo</span>

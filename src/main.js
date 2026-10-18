@@ -629,9 +629,13 @@ randomBox("randomBtn", "randomDiffs", false);
 randomBox("resRandomBtn", "resRandomDiffs", true);
 
 async function pickLibrarySong(s) {
-  if (app.mode === "pick") { // host choosing for the room
-    const diff = app.roomConfig?.diff || "medium";
-    app.room.update({ config: { ...(app.roomConfig || {}), songId: s.id, diff, at: Date.now() } }); // the mode and the cup stay
+  if (app.mode === "pick") { // host choosing for the room: the song, or one song of the cup's setlist
+    const cfg = app.roomConfig || {}, plan = cfg.plan, slot = app.pickSlot;
+    app.pickSlot = null;
+    if (plan && slot != null) {
+      const songs = [...plan.songs]; songs[slot] = s.id;
+      setRoomConfig({ plan: { ...plan, songs }, ...(slot === plan.idx ? { songId: s.id, at: Date.now() } : {}) });
+    } else setRoomConfig({ songId: s.id, diff: cfg.diff || "medium", at: Date.now() });
     app.mode = "mp"; show("lobby", false);
     return;
   }
@@ -2506,7 +2510,7 @@ $("shareBtn").onclick = async () => {
 };
 $("againBtn").onclick = () => startGame({ lanes: app.lanes, diff: app.diff, duo: app.duo, ctx: againCtx() });
 $("menuBtn").onclick = () => {
-  if (app.mode === "mp") { renderLobby(); show("lobby", false); }
+  if (app.mode === "mp") { tallyCup(true); renderLobby(); show("lobby", false); }
   else if (app.ctx?.kind === "tour") { clearTimeout(app.celTimer); app.history = ["home"]; openTour(false); }
   else if (app.ctx?.kind === "daily" && !app.ctx.via) { clearTimeout(app.celTimer); app.history = ["home"]; openDaily(false); }
   else if (app.duo) { app.duo = null; app.mode = "solo"; app.history = []; show("home", false); }
@@ -3100,7 +3104,7 @@ function renderLobby() {
   if (!app.room) return;
   const ul = $("players"); ul.innerHTML = "";
   const roomCfg = app.roomConfig || {}, cfg = roomCfg.songId ? roomCfg : null;
-  renderLobbyMode(roomCfg); renderCup($("cupLobby"), roomCfg);
+  renderLobbyMode(roomCfg); renderCup($("cupLobby"), roomCfg); renderRoomSongs(amHost(), roomCfg);
   app.peers.forEach((p, i) => {
     const li = document.createElement("li");
     const ready = cfg && p.ready && p.songId === cfg.songId;
@@ -3123,12 +3127,17 @@ function renderLobby() {
   const lanes = roomLanes();
   $("lobbyDiffField").hidden = !cfg || app.loadedRoomSong !== cfg.songId;
   if (cfg && app.chart && app.loadedRoomSong === cfg.songId) {
-    renderDiffChips($("lobbyDiffs"), app.chart, lanes, cfg.diff, (k) => app.room.update({ config: { ...cfg, diff: k } }), !isHost);
+    renderDiffChips($("lobbyDiffs"), app.chart, lanes, cfg.diff, (k) => setRoomConfig({ diff: k }), !isHost);
   }
   const allReady = cfg && app.peers.length > 0 && app.peers.every((p) => p.ready && p.songId === cfg.songId);
   $("startRound").hidden = !isHost;
   $("lobbyMotion").hidden = isHost || !motionNeeded();
   $("startRound").disabled = !allReady || !notesFor(app.chart || { diffs: {} }, cfg?.diff, lanes).length;
+  if (roomCfg.plan?.done) { // a finished cup: the next one (or free play) first
+    $("startRound").disabled = true;
+    $("lobbyStatus").textContent = isHost ? "¡Copa terminada! Elige otra copa o Libre para seguir." : "¡Copa terminada! El anfitrión elige qué sigue.";
+    return;
+  }
   $("lobbyStatus").textContent = !cfg ? (isHost ? "Elige una canción para empezar." : "")
     : !allReady ? "Esperando a que todos descarguen la canción…"
     : `Todos listos. Se toca con ${lanes} cuerdas${lanes === 4 && app.peers.some((p) => p.lanes === 5) ? " porque alguien juega desde el celular" : ""}.`;
@@ -3226,13 +3235,115 @@ function tallyCup(force = false) {
     const c = cup[id] || { name: r.name, pts: 0, wins: 0 };
     cup[id] = { name: r.name, pts: c.pts + ([3, 2, 1][i] || 0), wins: c.wins + (i === 0 ? 1 : 0) };
   });
-  app.room.update({ config: { ...cfg, cup, counted: app.roundId } });
+  const patch = { cup, counted: app.roundId };
+  // a cup moves on to its next song (everyone starts downloading it), or ends
+  const plan = cfg.plan;
+  if (plan && !plan.done) {
+    if (plan.idx < plan.songs.length - 1) { patch.plan = { ...plan, idx: plan.idx + 1 }; patch.songId = plan.songs[plan.idx + 1]; patch.at = Date.now(); }
+    else patch.plan = { ...plan, done: true };
+  }
+  setRoomConfig(patch);
 }
+// the host changes the room's setup: right away here, and for everyone through its presence
+function setRoomConfig(patch) {
+  const cfg = { ...(app.roomConfig || {}), ...patch };
+  app.roomConfig = cfg;
+  app.room.update({ config: cfg });
+  if (app.screen === "lobby") renderLobby();
+  if (app.screen === "results") renderCup($("cupRes"), cfg);
+  return cfg;
+}
+
+/* ---------- cups, like Mario Kart: a run of songs, picked at random and changed one by one ---------- */
+const CUPS = { telonero: { name: "Copa Telonero", n: 3 }, gira: { name: "Copa Gira", n: 5 }, leyenda: { name: "Copa Leyenda", n: 10 } };
+// songs to pick from: the library's songs that have the room's difficulty (any song when that's too few)
+function roomPool(exclude = []) {
+  const diff = app.roomConfig?.diff || "medium";
+  const all = publicSongs().filter((s) => Object.values(s.diffs || {}).some((d) => d?.n > 0));
+  const withDiff = all.filter((s) => (s.diffs?.[diff]?.n || 0) > 0);
+  const pool = (withDiff.length >= 3 ? withDiff : all).filter((s) => !exclude.includes(s.id));
+  return pool.length ? pool : all;
+}
+const randomOf = (list) => list[Math.floor(Math.random() * list.length)];
+function randomSongs(n) {
+  const out = [];
+  for (let i = 0; i < n; i++) { const s = randomOf(roomPool(out)); if (!s) break; out.push(s.id); }
+  return out;
+}
+async function ensureSongs() { if (!app.songs.length) { try { app.songs = await loadLibrary(); } catch {} } }
+async function startCup(key) {
+  await ensureSongs();
+  if (key === "libre") { setRoomConfig({ plan: null }); return; }
+  const c = CUPS[key], songs = randomSongs(c.n);
+  if (!songs.length) { toast("No hay canciones en la biblioteca."); return; }
+  // a new cup: its own table
+  setRoomConfig({ plan: { key, name: c.name, songs, idx: 0, done: false }, songId: songs[0], at: Date.now(), cup: {}, counted: null });
+}
+async function rerollSlot(i) {
+  await ensureSongs();
+  const plan = app.roomConfig?.plan; if (!plan) return;
+  const s = randomOf(roomPool(plan.songs)); if (!s) return;
+  const songs = [...plan.songs]; songs[i] = s.id;
+  setRoomConfig({ plan: { ...plan, songs }, ...(i === plan.idx ? { songId: s.id, at: Date.now() } : {}) });
+}
+function rerollRest() {
+  const plan = app.roomConfig?.plan; if (!plan) return;
+  const keep = plan.songs.slice(0, plan.idx);
+  const songs = [...keep];
+  for (let i = plan.idx; i < plan.songs.length; i++) { const s = randomOf(roomPool(songs)); songs.push(s ? s.id : plan.songs[i]); }
+  setRoomConfig({ plan: { ...plan, songs }, songId: songs[plan.idx], at: Date.now() });
+}
+async function randomRoomSong() {
+  await ensureSongs();
+  const s = randomOf(roomPool([app.roomConfig?.songId].filter(Boolean)));
+  if (s) setRoomConfig({ songId: s.id, at: Date.now() });
+}
+// the lobby's song part: free play (one song, picked or random) or a cup's setlist
+function renderRoomSongs(isHost, cfg) {
+  const plan = cfg?.plan;
+  document.querySelectorAll("#cupPick button").forEach((b) => { b.setAttribute("aria-pressed", String(b.dataset.c === (plan ? plan.key : "libre"))); b.disabled = !isHost; });
+  $("lobbySong").hidden = !!plan;
+  $("lobbyRandom").hidden = !isHost || !!plan;
+  const box = $("cupSetlist");
+  box.hidden = !plan;
+  if (!plan) return;
+  box.innerHTML = `<div class="cs-head"><b></b><span></span></div><ol></ol>${isHost && !plan.done ? `<button class="link" id="cupReroll">🎲 Cambiar todas las que faltan</button>` : ""}`;
+  box.querySelector("b").textContent = plan.name;
+  box.querySelector(".cs-head span").textContent = plan.done ? "¡Terminada!" : `Canción ${plan.idx + 1} de ${plan.songs.length}`;
+  const ol = box.querySelector("ol");
+  plan.songs.forEach((id, i) => {
+    const s = knownSong(id), li = document.createElement("li");
+    const played = i < plan.idx || plan.done, now = i === plan.idx && !plan.done;
+    li.className = played ? "played" : now ? "now" : "";
+    li.innerHTML = `<span class="cs-n">${played ? "✓" : i + 1}</span><span class="cs-t"><b></b><small></small></span>`
+      + (isHost && !played ? `<button class="cs-btn" data-a="dice" aria-label="Otra al azar">🎲</button><button class="cs-btn" data-a="pick">Elegir</button>` : "");
+    li.querySelector("b").textContent = s ? s.name : "…";
+    li.querySelector("small").textContent = s ? s.artist || "" : "";
+    li.onclick = (e) => {
+      const a = e.target.closest("button")?.dataset.a; if (!a) return;
+      if (a === "dice") rerollSlot(i);
+      else { app.pickSlot = i; app.mode = "pick"; openLibrary(); }
+    };
+    ol.appendChild(li);
+  });
+  const rr = $("cupReroll"); if (rr) rr.onclick = rerollRest;
+}
+$("cupPick").onclick = (e) => {
+  const b = e.target.closest("button[data-c]"); if (!b || !amHost()) return;
+  const cur = app.roomConfig?.plan;
+  if (b.dataset.c === (cur ? cur.key : "libre") && !(cur && cur.done)) return;
+  if (cur && !cur.done && !confirm("¿Empezar otra copa? Se pierde la tabla de esta.")) return;
+  startCup(b.dataset.c);
+};
+$("lobbyRandom").onclick = () => { if (amHost()) randomRoomSong(); };
 function renderCup(el, cfg) {
   const rows = Object.values(cfg?.cup || {}).sort((a, b) => b.pts - a.pts || b.wins - a.wins);
   el.hidden = !rows.length;
   if (!rows.length) return;
-  el.innerHTML = `<span class="label">Copa de la sala</span><ol></ol>`;
+  const plan = cfg?.plan;
+  el.innerHTML = `<span class="label"></span>${plan?.done ? `<div class="cup-champ"></div>` : ""}<ol></ol>`;
+  if (plan?.done) el.querySelector(".cup-champ").textContent = `🏆 ¡${rows[0].name} gana la ${plan.name}!`;
+  el.querySelector(".label").textContent = plan ? `${plan.name}${plan.done ? "" : ` · canción ${Math.min(plan.idx + 1, plan.songs.length)} de ${plan.songs.length}`}` : "Copa de la sala";
   const ol = el.querySelector("ol");
   rows.forEach((r, i) => {
     const li = document.createElement("li");
@@ -3251,7 +3362,7 @@ function renderLobbyMode(cfg) {
 }
 $("lobbyMode").onclick = (e) => {
   const b = e.target.closest("button[data-m]"); if (!b || !amHost()) return;
-  app.room.update({ config: { ...(app.roomConfig || {}), battle: b.dataset.m === "battle" } });
+  setRoomConfig({ battle: b.dataset.m === "battle" });
 };
 function renderRivals() {
   const ol = $("rivals");
