@@ -349,6 +349,13 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .star-ring .fill { fill: none; stroke: var(--star-fill, #2fb4ff); stroke-width: 6; stroke-dasharray: 0 100; transition: stroke-dasharray .45s cubic-bezier(.2,.9,.25,1), stroke .25s; filter: drop-shadow(0 0 4px rgba(var(--star-rgb, 63,191,255), .95)); }
 .star-ring .notch { stroke: #05070a; stroke-width: 2.6; }
 .mult.star-ready { animation: starReady 1.1s ease-in-out infinite; }
+/* on a phone the glowing multiplier says it can be tapped */
+.touch .mult.star-ready::before { content: "¡Toca!"; position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); padding: 2px 7px 1px; border-radius: 3px;
+  font: 700 12px/1.2 var(--display); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; color: #04121c; background: var(--star-hi, #9fe8ff); box-shadow: 0 0 10px rgba(var(--star-rgb, 63,191,255), .8); pointer-events: none; }
+.motion-box { text-align: center; }
+.motion-box .row { margin-top: 6px; }
+.motion-box .link { margin-top: 10px; }
+#lobbyMotion { align-self: center; }
 .mult.star-ready .star-ring .fill { stroke: var(--star-hi, #9fe8ff); filter: drop-shadow(0 0 6px var(--star, #3fbfff)) drop-shadow(0 0 12px rgba(var(--star-rgb, 63,191,255), .8)); }
 .mult.star-on .star-ring .fill { stroke: var(--star-hi, #7fdcff); filter: drop-shadow(0 0 8px var(--star, #3fbfff)); }
 /* a phrase just completed: the meter flashes white and the multiplier jumps */

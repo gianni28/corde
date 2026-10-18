@@ -129,6 +129,16 @@
       <button type="button" class="primary" id="noticeClose">Cerrar</button>
     </form>
   </div>
+  <div class="secret-modal" id="motionModal" hidden>
+    <div class="panel narrow secret-box motion-box" role="dialog" aria-labelledby="motionTitle">
+      <span class="notice-kicker">Antes de tocar</span>
+      <h2 id="motionTitle">Poder estrella</h2>
+      <p class="hint">Se activa levantando o sacudiendo el celular, como una guitarra. Para eso el celular te va a pedir permiso para usar el movimiento.</p>
+      <p class="hint motion-alt">También puedes tocar el <b>círculo de arriba a la izquierda</b> cuando brille.</p>
+      <div class="row"><button type="button" id="motionTap">Usar el dedo</button><button type="button" class="primary" id="motionAllow">Permitir movimiento</button></div>
+      <button type="button" class="link" id="motionNever">Siempre con el dedo (no preguntar más)</button>
+    </div>
+  </div>
   <div class="secret-modal" id="retoModal" hidden>
     <div class="panel narrow secret-box reto-box" role="dialog" aria-labelledby="retoTitle">
       <span class="notice-kicker">¡Tienes un reto nuevo!</span>
@@ -478,6 +488,7 @@
         <span class="label">Dificultad</span>
         <div class="diffs" id="lobbyDiffs"></div>
       </div>
+      <button class="btn" id="lobbyMotion" hidden>Activar movimiento (poder estrella)</button>
       <p class="hint" id="lobbyStatus"></p>
       <button class="primary" id="startRound">Empezar</button>
     </div>
@@ -662,7 +673,7 @@
         <p class="hint">Las notas con estrella llenan la barra azul. Con la mitad llena, actívalo y tus puntos valen el doble.</p>
         <p class="hint tut-how" id="tutStarHow"></p>
         <button class="btn" id="motionBtn" hidden>Permitir movimiento</button>
-        <p class="hint" id="motionNote" hidden>Sin permiso: toca el multiplicador.</p>
+        <p class="hint" id="motionNote" hidden>Sin permiso: toca el círculo de arriba a la izquierda cuando brille.</p>
       </article>
       <article class="tut-card" data-i="2" hidden>
         <svg class="tut-art" viewBox="0 0 120 72" aria-hidden="true">
