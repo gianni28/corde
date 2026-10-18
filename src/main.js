@@ -14,7 +14,7 @@ import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, 
 import { shareCard, retoUrl, readReto } from "./share.js";
 import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau } from "./achievements.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretOpen, secretBoard, songById, fetchMiauProgress } from "./net.js";
-import { VENUES, TO_ENCORE, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
+import { VENUES, TO_ENCORE, TOUR_PRIZES, TOUR_THEMES, prizesWon, savedTourDiffs, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song, separateExisting } from "./admin.js";
 import { fillDifficulties } from "./reduce.js";
 import * as sfx from "./sfx.js";
@@ -1168,13 +1168,16 @@ function renderTour() {
   if (tourOpen == null || (tourOpen >= 0 && !prog.venues[tourOpen]?.open)) tourOpen = prog.current;
   $("tourStars").innerHTML = `<span class="ts-star">★</span>${prog.stars}<small>/${prog.maxStars}</small>`;
   // the road: one stop per venue
-  $("tourRoad").innerHTML = prog.venues.map((v, i) => `<i class="${v.complete ? "done" : v.open ? "open" : ""}${i === prog.current && !prog.done ? " here" : ""}"></i>`).join("");
+  $("tourRoad").innerHTML = prog.venues.map((v, i) => `<i class="${v.complete ? "done" : v.open ? "open" : ""}${i === prog.current && !prog.done ? " here" : ""}${TOUR_PRIZES[tourDiff].some((p) => p.venue === i) ? " prize" : ""}"></i>`).join("");
+  renderTourPrizes(prog);
   list.innerHTML = "";
   prog.venues.forEach((v, vi) => {
     const card = document.createElement("article");
     const expanded = vi === tourOpen && v.open;
     card.className = `venue v-${v.venue.id}` + (v.open ? " open" : " locked") + (v.complete ? " complete" : "") + (expanded ? " expanded" : "");
-    const status = v.complete ? `<span class="venue-done">Superado</span>` : v.open ? "" : `<svg class="venue-lock" aria-hidden="true"><use href="#lock"/></svg>`;
+    const prize = TOUR_PRIZES[tourDiff].find((p) => p.venue === vi), prizeIt = prize && itemOf(prize.slot, prize.id);
+    const status = (prizeIt ? `<span class="venue-prize${v.complete ? " won" : ""}">Premio: ${prizeIt.name}</span>` : "")
+      + (v.complete ? `<span class="venue-done">Superado</span>` : v.open ? "" : `<svg class="venue-lock" aria-hidden="true"><use href="#lock"/></svg>`);
     card.innerHTML = `<button class="venue-head" ${v.open ? "" : "disabled"} aria-expanded="${expanded}">
         <span class="venue-num">${vi + 1}</span>
         <span class="venue-text"><b></b><small></small></span>
@@ -1220,6 +1223,23 @@ function renderTour() {
     $("tourDoneSub").textContent = prog.stars < prog.maxStars
       ? `★ ${prog.stars} de ${prog.maxStars}: vuelve a tocar para llevar cada canción a 5 estrellas${next ? `, o prueba la gira en ${next.name}` : ""}.`
       : `¡Las ${prog.maxStars} estrellas!${next ? ` ¿Te le mides a la gira en ${next.name}?` : " No queda nada más grande que esto."}`;
+  }
+}
+// this difficulty's three prizes: what they are, where they're won, and "Ponérmelo" once they're yours
+function renderTourPrizes(prog) {
+  const box = $("tourPrizes"); box.innerHTML = "";
+  $("tourTheme").textContent = `Premios · ${TOUR_THEMES[tourDiff]}`;
+  for (const p of TOUR_PRIZES[tourDiff]) {
+    const it = itemOf(p.slot, p.id); if (!it) continue;
+    const won = !!achievementsWon()[`gira-${tourDiff}-${VENUES[p.venue].id}`];
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "tour-prize" + (won ? " won" : "");
+    b.innerHTML = `<span class="sw"></span><span class="tp-text"><b></b><small></small></span>`;
+    fillSwatch(b.querySelector(".sw"), it);
+    b.querySelector("b").textContent = it.name;
+    b.querySelector("small").textContent = won ? "¡Ganado! Tócalo para ponértelo" : p.venue === VENUES.length - 1 ? "Al terminar la gira" : `Al superar ${VENUES[p.venue].name}`;
+    b.onclick = () => openShopAt(p.slot, p.id);
+    box.appendChild(b);
   }
 }
 async function playTourSong(vi, si, diff = tourDiff) {
@@ -1290,11 +1310,24 @@ function finishCtx(sum) {
   // "Otra vez" stops being the main button when the tour has somewhere to go
   $("againBtn").classList.toggle("primary", !next);
   app.tourEvent = counted ? (legend ? "legend" : venue ? "venue" : null) : null;
-  if (legend) return () => { sfx.unlock(); R.pyro(); celebrate({ kicker: "Gira terminada", title: "¡Leyenda del rock!", sub: `Llenaste ${legend.venue.in || legend.venue.name}. ¿Te le mides a la gira en otra dificultad?`, ms: 4200, kind: "legend" }); };
-  if (venue) return () => { sfx.unlock(); R.pyro(); celebrate({ kicker: "Nuevo escenario", title: venue.next.name, sub: venue.next.blurb, ms: 3600, kind: "venue" }); };
-  if (encore) return () => { sfx.encore(); celebrate({ kicker: v.venue.name, title: "¡Otra! ¡Otra!", sub: "El público pide el bis.", ms: 2600, kind: "encore" }); };
-  return null;
+  // the tour's prizes this run earned (each difficulty has its own: the bar, the theater, the whole tour)
+  const prizes = counted ? unlock(prizesWon(after)).map((id) => ITEMS.find((it) => it.req === id)).filter(Boolean) : [];
+  if (prizes.length) syncSoon();
+  const pb = $("tourPrizeBtn"); pb.hidden = !prizes.length;
+  if (prizes.length) { const it = prizes[prizes.length - 1]; pb.textContent = `Ponerme «${it.name}»`; pb.onclick = () => openShopAt(it.slot, it.id); }
+  const prizeCel = (k = 0) => {
+    const it = prizes[k]; if (!it) return;
+    sfx.unlock();
+    celebrate({ kicker: `Premio · ${TOUR_THEMES[ctx.diff]}`, title: it.name, sub: `${SLOT_ONE[it.slot]} nuevo. Póntelo en la Tienda.`, ms: 3400, kind: "prize", then: () => prizeCel(k + 1) });
+  };
+  let main = null;
+  if (legend) main = (then) => { sfx.unlock(); R.pyro(); celebrate({ kicker: "Gira terminada", title: "¡Leyenda del rock!", sub: `Llenaste ${legend.venue.in || legend.venue.name}. ¿Te le mides a la gira en otra dificultad?`, ms: 4200, kind: "legend", then }); };
+  else if (venue) main = (then) => { sfx.unlock(); R.pyro(); celebrate({ kicker: "Nuevo escenario", title: venue.next.name, sub: venue.next.blurb, ms: 3600, kind: "venue", then }); };
+  else if (encore) main = (then) => { sfx.encore(); celebrate({ kicker: v.venue.name, title: "¡Otra! ¡Otra!", sub: "El público pide el bis.", ms: 2600, kind: "encore", then }); };
+  if (!main && !prizes.length) return null;
+  return () => (main ? main(prizes.length ? () => prizeCel() : null) : prizeCel());
 }
+const SLOT_ONE = { neck: "Mástil", gems: "Notas", flames: "Llamas", strings: "Cuerdas y bordes", star: "Poder estrella", name: "Estilo de nombre", streak: "Estilo de rachas", crowd: "Público" };
 // Full-screen moment: a new venue, an encore, a streak. Tap to skip.
 let celT = 0, celThen = null;
 function celebrate({ kicker = "", title, sub = "", ms = 3000, kind = "", then = null }) {
@@ -1333,6 +1366,8 @@ function celebrateAchievements(list) {
 // what your saved bests already prove (players from before the logros existed get theirs without replaying), silently
 function backfillAchievements() {
   const ids = [...forMiau(miauIds(), bestAcc)], n = songsDone();
+  // the tour's prizes for venues already cleared (before there were prizes, or on another device)
+  if (publicSongs().length) for (const d of savedTourDiffs()) { const t = tourFor(d, publicSongs()); if (t) ids.push(...prizesWon(tourProgress(t, bestOf))); }
   if (n >= 1) ids.push("primer-acorde");
   if (n >= 10) ids.push("repertorio");
   if (n >= 25) ids.push("setlist");
@@ -1353,7 +1388,7 @@ function renderLogros() {
   const won = achievementsWon();
   const fmt = (d) => new Date(d + "T12:00:00").toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
   // the ones you have first, in list order; then the rest
-  const all = ACHIEVEMENTS.filter((a) => !a.secret || won[a.id] || (a.id === "coro-gatitos" && knowsMiau()));
+  const all = ACHIEVEMENTS.filter((a) => !a.tour && (!a.secret || won[a.id] || (a.id === "coro-gatitos" && knowsMiau()))); // the tour's are on its screen
   const list = [...all.filter((a) => won[a.id]), ...all.filter((a) => !won[a.id])];
   for (const a of list) {
     const li = document.createElement("li");
@@ -1994,8 +2029,8 @@ const owns = (it) => isDefault(it) || !!app.wallet?.owned.has(ownedKey(it.slot, 
 // prizes: a logro's (req) or a level's (lvl), claimed for free once earned
 const isPrize = (it) => !!(it.req || it.lvl);
 const prizeWon = (it) => it.req ? !!achievementsWon()[it.req] : it.lvl ? (app.wallet?.level || 1) >= it.lvl : false;
-const prizeLock = (it) => it.req ? `Logro: ${achName(it.req)}` : `Nivel ${it.lvl}`;
-const prizeOf = (it) => it.req ? `Premio del logro «${achName(it.req)}»` : `Premio del nivel ${it.lvl}`;
+const prizeLock = (it) => it.tour ? achName(it.req) : it.req ? `Logro: ${achName(it.req)}` : `Nivel ${it.lvl}`;
+const prizeOf = (it) => it.tour ? `Premio de la ${achName(it.req).replace(/^Gira /, "gira en ").replace(":", ",")}` : it.req ? `Premio del logro «${achName(it.req)}»` : `Premio del nivel ${it.lvl}`;
 const achName = (id) => ACHIEVEMENTS.find((a) => a.id === id)?.name || id;
 const shopOffline = () => !online || navigator.onLine === false;
 const SHOP_ERRORS = {
@@ -2150,7 +2185,7 @@ function shopCard(it) {
   const b = document.createElement("button");
   const on = equipped[it.slot] === it.id, mine = owns(it), won = prizeWon(it);
   b.type = "button"; b.dataset.id = it.id;
-  b.className = "shop-item" + (on ? " on" : "") + (isPrize(it) ? " excl" : "") + (!mine && isPrize(it) && !won ? " locked" : "");
+  b.className = "shop-item" + (on ? " on" : "") + (isPrize(it) ? " excl" : "") + (it.tour ? " tour-prize" : "") + (!mine && isPrize(it) && !won ? " locked" : "");
   b.setAttribute("role", "option"); b.setAttribute("aria-selected", String(shop.sel === it.id));
   b.innerHTML = `<span class="sw"></span><span class="si-name"></span><span class="si-state"></span>`;
   fillSwatch(b.querySelector(".sw"), it);
@@ -2213,6 +2248,7 @@ function renderShopDetail() {
   $("sdName").textContent = it.name;
   info.textContent = on ? "Lo tienes puesto." : mine ? (isDefault(it) ? "El de siempre." : "Es tuyo.")
     : it.lvl ? (won ? `${prizeOf(it)}: es tuyo gratis.` : `${it.desc || prizeOf(it)} Vas en el nivel ${w?.level || 1}.`)
+    : it.tour ? (won ? `Lo ganaste en la gira: es tuyo gratis.` : it.desc)
     : it.req ? (won ? `Ganaste el logro «${achName(it.req)}»: es tuyo gratis.` : it.desc || `Se gana con el logro «${achName(it.req)}».`)
     : w && w.picks < it.price ? `Te faltan ${fmtPicks(it.price - w.picks)} púas. Las ganas terminando canciones.`
     : it.desc || "";
