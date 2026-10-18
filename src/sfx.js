@@ -188,3 +188,6 @@ export function metronome(at, accent = false) {
 
 /** The context the calibration measures against (the same one its ticks play on). */
 export const calibCtx = () => sfxCtx();
+/** Multiplayer battle: an attack goes out (rising) / hits you (falling, buzzing). */
+export function launch() { const c = bus(), t = c.currentTime + 0.01; [B3 * 2, E4 * 2, B3 * 4].forEach((f, i) => note(f, t + i * 0.06, { dur: 0.18, gain: 0.26, dist: false })); }
+export function zap() { const c = bus(), t = c.currentTime + 0.01; [B3 * 4, E4 * 2, B3, E3].forEach((f, i) => note(f, t + i * 0.07, { dur: 0.22, gain: 0.32 })); }

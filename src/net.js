@@ -89,7 +89,7 @@ export function joinRoom(code, me, h) {
     return Object.entries(ps).map(([k, arr]) => ({ id: k, ...arr[arr.length - 1] })).sort((a, b) => a.joinedAt - b.joinedAt);
   };
   ch.on("presence", { event: "sync" }, () => h.onPeers(peers()));
-  ["config", "start", "score", "final", "abort"].forEach((ev) => ch.on("broadcast", { event: ev }, ({ payload }) => h.onEvent(ev, payload)));
+  ["config", "start", "score", "final", "abort", "attack"].forEach((ev) => ch.on("broadcast", { event: ev }, ({ payload }) => h.onEvent(ev, payload)));
   ch.subscribe(async (status) => {
     if (status === "SUBSCRIBED") { await ch.track(state); h.onStatus && h.onStatus("ok"); }
     else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") h.onStatus && h.onStatus("error");

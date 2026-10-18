@@ -164,6 +164,7 @@ const adm = { songs: [], busy: false, groups: [] };
 const split = { on: false, stop: false, rows: [] }; // the library's songs whose guitar is being separated
 const notices = { queue: [], current: null, asked: false }; // the admin's messages waiting for this player (see checkNotices)
 let previewing = null, previewLoading = null; // the song list's ▶ (see previewSong): up here, the menu music asks from the start
+const mp = { fx: { terremoto: 0, niebla: 0, espejo: 0 }, on: "", lastPos: 0, posAt: 0, bannerT: 0 }; // multiplayer battle (see launchAttack)
 // while the admin uploads or separates songs, the stage and the menu music rest (they'd take the processor from it)
 function adminWorking() { return adm.busy || split.on; }
 function adminWorkChanged() { syncMenuMusic(); }
@@ -630,7 +631,7 @@ randomBox("resRandomBtn", "resRandomDiffs", true);
 async function pickLibrarySong(s) {
   if (app.mode === "pick") { // host choosing for the room
     const diff = app.roomConfig?.diff || "medium";
-    app.room.update({ config: { songId: s.id, diff, at: Date.now() } });
+    app.room.update({ config: { ...(app.roomConfig || {}), songId: s.id, diff, at: Date.now() } }); // the mode and the cup stay
     app.mode = "mp"; show("lobby", false);
     return;
   }
@@ -1661,7 +1662,7 @@ function keepLearnedSync(g) {
 // with two players, the one who played the most notes teaches the sync
 const syncTeacher = () => games().reduce((a, b) => (b.hits > a.hits ? b : a), app.game);
 function stopGame() {
-  app.practice = null; app.failing = false; R.setHype(0.5); hideStarTip();
+  app.practice = null; app.failing = false; R.setHype(0.5); hideStarTip(); clearFx(); $("mpPos").hidden = true;
   if (!app.game) return;
   keepLearnedSync(syncTeacher());
   app.game.player.stop();
@@ -1701,6 +1702,7 @@ document.addEventListener("visibilitychange", () => { if (document.hidden) pause
 function finishGame() {
   if (app.duo) return finishDuo();
   const g = app.game; if (!g) return;
+  clearFx(); $("mpPos").hidden = true;
   const sum = g.summary();
   g.player.stop();
   keepLearnedSync(g);
@@ -1741,7 +1743,7 @@ function finishGame() {
   $("resRandomBox").hidden = app.mode === "mp" || !online || (!!app.ctx && !app.ctx.via);
   $("resRandomDiffs").hidden = true; $("resRandomBtn").setAttribute("aria-expanded", "false");
   $("menuBtn").textContent = app.mode === "mp" ? "Volver a la sala" : app.ctx?.kind === "tour" ? "Gira" : app.ctx?.kind === "daily" && !app.ctx.via ? "Canción del día" : "Menú";
-  if (app.mode === "mp") { app.room.send("final", { name: app.me.name, ...sum }); app.finals[app.me.id] = { name: app.me.name, ...sum }; }
+  if (app.mode === "mp") { app.room.send("final", { name: app.me.name, round: app.roundId, ...sum }); app.finals[app.me.id] = { name: app.me.name, round: app.roundId, ...sum }; }
   renderRanking();
   app.game = null;
   R.setLanes(5);
@@ -2564,7 +2566,8 @@ canvas.addEventListener("touchstart", (e) => {
   if (app.paused || app.failing) return;
   const rect = canvas.getBoundingClientRect(), t0 = evTime(e);
   for (const t of e.changedTouches) {
-    const lane = R.laneFromClientX(t.clientX, rect);
+    let lane = R.laneFromClientX(t.clientX, rect);
+    if (mirrored()) lane = app.lanes - 1 - lane; // an Espejo attack: the finger goes where the note is seen
     touchLane.set(t.identifier, lane);
     app.game.press(lane, t0);
   }
@@ -2580,7 +2583,8 @@ const touchUp = (e) => {
 canvas.addEventListener("pointerdown", (e) => {
   if (e.pointerType === "touch" || !app.game || app.paused || app.failing) return;
   e.preventDefault();
-  const lane = R.laneFromClientX(e.clientX, canvas.getBoundingClientRect());
+  let lane = R.laneFromClientX(e.clientX, canvas.getBoundingClientRect());
+  if (mirrored()) lane = app.lanes - 1 - lane;
   pointerLane.set(e.pointerId, lane);
   app.game.press(lane, evTime(e));
 });
@@ -2724,7 +2728,10 @@ function onGameEvent(g, ev, now) {
     }
     else if (ev.ready && !g.starOn && $("spTip").hidden && !app.duo) tip.at = now + 1400;
   }
-  else if (ev.type === "starOn") { const el = h.starPop; el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); sfx.starOn(); hideStarTip(); g.ui.starWasReady = false; }
+  else if (ev.type === "starOn") {
+    const el = h.starPop; el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); sfx.starOn(); hideStarTip(); g.ui.starWasReady = false;
+    if (battleOn() && g === app.game) launchAttack();
+  }
   else if (ev.type === "fail") failSong();
 }
 let prev = performance.now(), lastNet = 0;
@@ -2776,6 +2783,7 @@ function frame(now) {
       app.rivals[app.me.id] = { name: app.me.name, score: Math.round(g.score), combo: g.combo, acc: g.accuracy, me: true };
       renderRivals();
     }
+    if (app.mode === "mp") updateFx(now);
     if (gs.every((x) => x.ended)) finishGame();
   } else {
     // attract mode behind the menus: the menu song's own notes, in time with it (or a demo pattern when it's silent)
@@ -2988,7 +2996,7 @@ function enterRoom(code) {
   app.mode = "mp";
   app.roomConfig = null; app.loadedRoomSong = null;
   app.room = joinRoom(code, app.me, {
-    onPeers: (ps) => { app.peers = ps; syncConfig(); renderLobby(); },
+    onPeers: (ps) => { app.peers = ps; syncConfig(); renderLobby(); if (app.screen === "results") renderCup($("cupRes"), app.roomConfig); },
     onEvent: onRoomEvent,
     onStatus: (s) => { if (s === "error") toast("No se pudo conectar a la sala."); },
   });
@@ -3067,7 +3075,7 @@ async function syncConfig() {
   const h = host();
   const cfg = h?.config || null;
   app.roomConfig = cfg;
-  if (!cfg) return;
+  if (!cfg?.songId) return; // no song yet (maybe only the mode)
   if (app.loadedRoomSong === cfg.songId || app.loadingRoomSong === cfg.songId) return;
   const song = await findSong(cfg.songId);
   if (!song) return;
@@ -3091,7 +3099,8 @@ async function syncConfig() {
 function renderLobby() {
   if (!app.room) return;
   const ul = $("players"); ul.innerHTML = "";
-  const cfg = app.roomConfig;
+  const roomCfg = app.roomConfig || {}, cfg = roomCfg.songId ? roomCfg : null;
+  renderLobbyMode(roomCfg); renderCup($("cupLobby"), roomCfg);
   app.peers.forEach((p, i) => {
     const li = document.createElement("li");
     const ready = cfg && p.ready && p.songId === cfg.songId;
@@ -3125,8 +3134,9 @@ function renderLobby() {
     : `Todos listos. Se toca con ${lanes} cuerdas${lanes === 4 && app.peers.some((p) => p.lanes === 5) ? " porque alguien juega desde el celular" : ""}.`;
 }
 $("startRound").onclick = () => withMotion(() => {
-  const cfg = app.roomConfig; if (!cfg) return;
-  const payload = { songId: cfg.songId, diff: cfg.diff, lanes: roomLanes() };
+  const cfg = app.roomConfig; if (!cfg?.songId) return;
+  tallyCup(true); // a round whose results didn't all arrive still counts with what came
+  const payload = { songId: cfg.songId, diff: cfg.diff, lanes: roomLanes(), round: Date.now() };
   app.room.send("start", payload);
   onRoomEvent("start", payload);
 });
@@ -3136,8 +3146,12 @@ $("lobbyMotion").onclick = () => withMotion(() => {});
 function onRoomEvent(ev, p) {
   if (ev === "start") {
     if (app.loadedRoomSong !== p.songId) { toast("Tu canción no terminó de cargar."); return; }
-    app.diff = p.diff;
+    app.diff = p.diff; app.roundId = p.round || Date.now(); mp.lastPos = 0; mp.posAt = 0;
     startGame({ lanes: p.lanes, diff: p.diff });
+  } else if (ev === "attack") {
+    if (!app.game || app.mode !== "mp") return;
+    if (p.to === app.me.id) takeAttack(p.kind, p.name);
+    else if (ATTACKS[p.kind]) mpBanner(`${p.name} ⚔ ${p.toName}: ${ATTACKS[p.kind].name}`, "feed");
   } else if (ev === "score") {
     app.rivals[p.from] = { name: p.name, score: p.score, combo: p.combo, acc: p.acc };
     renderRivals();
@@ -3146,9 +3160,103 @@ function onRoomEvent(ev, p) {
     renderRanking();
   }
 }
+
+/* ---------- multiplayer fun: battle mode, overtakes and the room's cup ---------- */
+// Battle mode (the host picks it in the room, on by default): turning on star power launches an attack at whoever
+// leads (or, when that's you, at the one right behind): their screen shakes, fills with fog or turns mirrored
+// for a few seconds. Overtakes are called out as they happen. Each round gives 3/2/1 points to the podium, and the
+// host keeps the room's cup (in its presence, so everyone sees the same table).
+const ATTACKS = { terremoto: { name: "Terremoto", ms: 5000 }, niebla: { name: "Niebla", ms: 6000 }, espejo: { name: "Espejo", ms: 6000 } };
+const battleOn = () => app.mode === "mp" && app.roomConfig?.battle !== false;
+function launchAttack() {
+  const others = Object.entries(app.rivals).filter(([id]) => id !== app.me?.id).sort((a, b) => b[1].score - a[1].score);
+  if (!others.length) return;
+  const [to, r] = others[0];
+  const kinds = Object.keys(ATTACKS), kind = kinds[Math.floor(Math.random() * kinds.length)];
+  app.room.send("attack", { to, kind, name: app.me.name, toName: r.name });
+  sfx.launch();
+  mpBanner(`⚔ ¡Le lanzaste ${ATTACKS[kind].name.toUpperCase()} a ${r.name}!`, "out");
+}
+function takeAttack(kind, from) {
+  const a = ATTACKS[kind]; if (!a) return;
+  mp.fx[kind] = performance.now() + a.ms;
+  sfx.zap();
+  try { navigator.vibrate?.([80, 40, 120]); } catch {}
+  mpBanner(`¡${from} te lanzó ${a.name.toUpperCase()}!`, "in");
+  updateFx(performance.now());
+}
+const mirrored = () => mp.fx.espejo > performance.now();
+function updateFx(now) {
+  const on = !app.game ? "" : Object.keys(mp.fx).filter((k) => mp.fx[k] > now).join(" ");
+  if (on === mp.on) return;
+  mp.on = on;
+  document.body.classList.toggle("fx-quake", on.includes("terremoto"));
+  document.body.classList.toggle("fx-mirror", on.includes("espejo"));
+  $("fogFx").classList.toggle("on", on.includes("niebla"));
+}
+function clearFx() { for (const k in mp.fx) mp.fx[k] = 0; updateFx(0); }
+function mpBanner(text, kind) {
+  const el = $("mpBanner");
+  el.textContent = text; el.className = "mp-banner " + kind; el.hidden = false;
+  void el.offsetWidth; el.classList.add("show");
+  clearTimeout(mp.bannerT); mp.bannerT = setTimeout(() => { el.classList.remove("show"); }, kind === "feed" ? 1800 : 2600);
+}
+// your place among the players, and who you just passed (or who passed you)
+function trackPosition(list) {
+  const pos = list.findIndex(([id]) => id === app.me?.id) + 1;
+  if (!pos || list.length < 2) return;
+  $("mpPos").hidden = false; $("mpPos").textContent = `${pos}.º`; $("mpPos").className = "mp-pos p" + Math.min(pos, 4);
+  const now = performance.now();
+  if (mp.lastPos && pos !== mp.lastPos && now - mp.posAt > 2500 && app.game && app.game.time() > 4) {
+    if (pos < mp.lastPos) mpBanner(`¡Pasaste a ${list[pos][1].name}! Vas ${pos}.º`, "up");
+    else mpBanner(`${list[pos - 2][1].name} te pasó. Vas ${pos}.º`, "down");
+    mp.posAt = now;
+  }
+  mp.lastPos = pos;
+}
+// the host adds the round to the cup when every result is in (or, forced, when the next round starts)
+function tallyCup(force = false) {
+  if (!amHost() || !app.roundId) return;
+  const cfg = app.roomConfig || {};
+  if (cfg.counted === app.roundId) return;
+  const fin = Object.entries(app.finals);
+  if (!fin.length || (!force && fin.length < app.peers.length)) return;
+  const cup = { ...(cfg.cup || {}) };
+  fin.sort((a, b) => b[1].score - a[1].score).forEach(([id, r], i) => {
+    const c = cup[id] || { name: r.name, pts: 0, wins: 0 };
+    cup[id] = { name: r.name, pts: c.pts + ([3, 2, 1][i] || 0), wins: c.wins + (i === 0 ? 1 : 0) };
+  });
+  app.room.update({ config: { ...cfg, cup, counted: app.roundId } });
+}
+function renderCup(el, cfg) {
+  const rows = Object.values(cfg?.cup || {}).sort((a, b) => b.pts - a.pts || b.wins - a.wins);
+  el.hidden = !rows.length;
+  if (!rows.length) return;
+  el.innerHTML = `<span class="label">Copa de la sala</span><ol></ol>`;
+  const ol = el.querySelector("ol");
+  rows.forEach((r, i) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="medal">${["🥇", "🥈", "🥉"][i] || i + 1}</span><span class="n"></span><span class="w">${r.wins ? `${r.wins} ${r.wins === 1 ? "victoria" : "victorias"}` : ""}</span><span class="s">${r.pts} ${r.pts === 1 ? "punto" : "pts"}</span>`;
+    li.querySelector(".n").textContent = r.name;
+    styledName(li.querySelector(".n"), r.name);
+    ol.appendChild(li);
+  });
+}
+function renderLobbyMode(cfg) {
+  const host = amHost(), battle = cfg?.battle !== false;
+  document.querySelectorAll("#lobbyMode button").forEach((b) => { b.setAttribute("aria-pressed", String((b.dataset.m === "battle") === battle)); b.disabled = !host; });
+  $("lobbyModeHint").textContent = battle
+    ? "Al activar tu poder estrella le lanzas un ataque al que va ganando: terremoto, niebla o espejo."
+    : "Sin ataques: gana el que más puntos haga.";
+}
+$("lobbyMode").onclick = (e) => {
+  const b = e.target.closest("button[data-m]"); if (!b || !amHost()) return;
+  app.room.update({ config: { ...(app.roomConfig || {}), battle: b.dataset.m === "battle" } });
+};
 function renderRivals() {
   const ol = $("rivals");
   const list = Object.entries(app.rivals).sort((a, b) => b[1].score - a[1].score);
+  trackPosition(list);
   ol.innerHTML = "";
   for (const [id, r] of list) {
     const li = document.createElement("li");
@@ -3175,6 +3283,8 @@ function renderRanking() {
   }
   const waiting = app.peers.length - list.length;
   if (waiting > 0) { const li = document.createElement("li"); li.innerHTML = `<span class="n" style="color:var(--muted)">Esperando a ${waiting} jugador${waiting > 1 ? "es" : ""}…</span>`; ol.appendChild(li); }
+  tallyCup();
+  renderCup($("cupRes"), app.roomConfig);
 }
 
 // expose for debugging / tests
