@@ -38,9 +38,9 @@ function fit(ctx, text, font, size, maxW) {
 }
 
 // the player's name as the shop styled it (same looks as the .nm-* classes on the boards), and their level
-const NAME_COLORS = { dorado: "#f5c518", corona: "#f5c518", rosa: "#ff6fbf", cian: "#4fe3ff", verde: "#4cff7a", electrico: "#e9fbff", estrella: "#fff6d0" };
+const NAME_COLORS = { racha: "#ffd9a0", dorado: "#f5c518", corona: "#f5c518", rosa: "#ff6fbf", cian: "#4fe3ff", verde: "#4cff7a", electrico: "#e9fbff", estrella: "#fff6d0" };
 const NAME_GLOW = { dorado: "rgba(245,197,24,.6)", corona: "rgba(245,197,24,.6)", rosa: "rgba(255,79,168,.6)", cian: "rgba(63,220,255,.6)",
-  verde: "rgba(60,255,120,.5)", electrico: "#3fa8ff", estrella: "rgba(255,190,60,.8)", plata: "rgba(200,220,240,.45)", festival: "rgba(255,79,216,.5)" };
+  verde: "rgba(60,255,120,.5)", electrico: "#3fa8ff", estrella: "rgba(255,190,60,.8)", plata: "rgba(200,220,240,.45)", festival: "rgba(255,79,216,.5)", racha: "rgba(255,120,30,.75)" };
 function drawName(ctx, name, style, level, x, y, maxW) {
   const size = fit(ctx, name, `600 {s}px ${DISPLAY}`, style && style !== "normal" ? 46 : 42, maxW);
   const w = ctx.measureText(name).width, x0 = x - w / 2;

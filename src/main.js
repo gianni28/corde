@@ -27,6 +27,13 @@ const $ = (id) => document.getElementById(id);
 const LANE_CSS = ["--g", "--r", "--y", "--b", "--o"];
 let touch = isTouchDevice();
 document.documentElement.classList.toggle("touch", touch);
+// iPhone scrolls the whole page to show a text field over the keyboard and leaves it there when the keyboard closes:
+// every screen ends up shifted and taps land beside the buttons. The page never scrolls, so it goes back to the top.
+document.addEventListener("focusout", (e) => {
+  if (!e.target.matches?.("input, textarea")) return;
+  setTimeout(() => { if (!document.activeElement?.matches?.("input, textarea")) window.scrollTo(0, 0); }, 60);
+});
+window.visualViewport?.addEventListener("resize", () => { if (!document.activeElement?.matches?.("input, textarea") && (window.scrollY || window.scrollX)) window.scrollTo(0, 0); });
 // a PC with a touchscreen can look like a phone until the first key press: from then on it's a PC (keys, 5 lanes)
 addEventListener("keydown", () => { if (touch && !isTouchDevice()) { touch = false; document.documentElement.classList.remove("touch"); } }, { capture: true, passive: true });
 
@@ -1079,6 +1086,7 @@ function renderDaily() {
     li.title = fmtDay(d);
     week.appendChild(li);
   }
+  renderStreakPrizes(st);
   // difficulty: from the library row (nothing is downloaded until you play)
   const has = (k) => (s.diffs?.[k]?.n || 0) > 0;
   const pref = settings.lastDiff || (lanes === 4 ? "medium" : "hard");
@@ -1166,6 +1174,24 @@ async function sendDaily(sum, ctx, diff, lanes) {
     el.textContent = `Puesto #${r.rank} de ${r.players} hoy en ${dn}` + (r.newRecord ? "" : ` · tu mejor de hoy: ${r.best.toLocaleString("es-CO")}`);
     daily.boards = {};
   } catch (e) { el.textContent = /Espera/.test(e.message) ? e.message : "No se pudo guardar en la clasificación del día."; console.warn("daily:", e.message); }
+}
+
+// the song of the day's streak prizes: what each one is, how many days it takes, how close you are
+const STREAK_PRIZES = ITEMS.filter((it) => it.streak).sort((a, b) => a.streak - b.streak);
+function renderStreakPrizes(st) {
+  const box = $("streakPrizes"); box.innerHTML = "";
+  const won = achievementsWon();
+  for (const it of STREAK_PRIZES) {
+    const got = !!won[it.req], b = document.createElement("button");
+    b.type = "button"; b.className = "tour-prize streak-card" + (got ? " won" : "");
+    b.innerHTML = `<span class="sc-days"><b>${it.streak}</b>días</span><span class="sw"></span><span class="tp-text"><b></b><small></small></span><span class="sc-bar"><i style="width:${Math.min(100, (st / it.streak) * 100)}%"></i></span>`;
+    fillSwatch(b.querySelector(".sw"), it);
+    b.querySelector(".tp-text b").textContent = it.name;
+    const left = it.streak - st;
+    b.querySelector("small").textContent = got ? "¡Ganado! Tócalo para ponértelo" : left === 1 ? "¡Te falta 1 día!" : `Te faltan ${left} días`;
+    b.onclick = () => openShopAt(it.slot, it.id);
+    box.appendChild(b);
+  }
 }
 
 /* ================= tour ================= */
@@ -1747,6 +1773,7 @@ function finishGame() {
   $("resRandomBox").hidden = app.mode === "mp" || !online || (!!app.ctx && !app.ctx.via);
   $("resRandomDiffs").hidden = true; $("resRandomBtn").setAttribute("aria-expanded", "false");
   $("menuBtn").textContent = app.mode === "mp" ? "Volver a la sala" : app.ctx?.kind === "tour" ? "Gira" : app.ctx?.kind === "daily" && !app.ctx.via ? "Canción del día" : "Menú";
+  $("homeBtn").hidden = app.mode === "mp" || $("menuBtn").textContent === "Menú"; // the tour / the song of the day: the menu is one tap away too
   if (app.mode === "mp") { app.room.send("final", { name: app.me.name, round: app.roundId, ...sum }); app.finals[app.me.id] = { name: app.me.name, round: app.roundId, ...sum }; }
   renderRanking();
   app.game = null;
@@ -2076,8 +2103,8 @@ const owns = (it) => isDefault(it) || !!app.wallet?.owned.has(ownedKey(it.slot, 
 // prizes: a logro's (req) or a level's (lvl), claimed for free once earned
 const isPrize = (it) => !!(it.req || it.lvl);
 const prizeWon = (it) => it.req ? !!achievementsWon()[it.req] : it.lvl ? (app.wallet?.level || 1) >= it.lvl : false;
-const prizeLock = (it) => it.tour ? achName(it.req) : it.req ? `Logro: ${achName(it.req)}` : `Nivel ${it.lvl}`;
-const prizeOf = (it) => it.tour ? `Premio de la ${achName(it.req).replace(/^Gira /, "gira en ").replace(":", ",")}` : it.req ? `Premio del logro «${achName(it.req)}»` : `Premio del nivel ${it.lvl}`;
+const prizeLock = (it) => it.streak ? `Racha de ${it.streak} días` : it.tour ? achName(it.req) : it.req ? `Logro: ${achName(it.req)}` : `Nivel ${it.lvl}`;
+const prizeOf = (it) => it.streak ? `Premio por ${it.streak} días seguidos de canción del día` : it.tour ? `Premio de la ${achName(it.req).replace(/^Gira /, "gira en ").replace(":", ",")}` : it.req ? `Premio del logro «${achName(it.req)}»` : `Premio del nivel ${it.lvl}`;
 const achName = (id) => ACHIEVEMENTS.find((a) => a.id === id)?.name || id;
 const shopOffline = () => !online || navigator.onLine === false;
 const SHOP_ERRORS = {
@@ -2232,7 +2259,7 @@ function shopCard(it) {
   const b = document.createElement("button");
   const on = equipped[it.slot] === it.id, mine = owns(it), won = prizeWon(it);
   b.type = "button"; b.dataset.id = it.id;
-  b.className = "shop-item" + (on ? " on" : "") + (isPrize(it) ? " excl" : "") + (it.tour ? " tour-prize" : "") + (!mine && isPrize(it) && !won ? " locked" : "");
+  b.className = "shop-item" + (on ? " on" : "") + (isPrize(it) ? " excl" : "") + (it.tour ? " tour-prize" : "") + (it.streak ? " streak-prize" : "") + (!mine && isPrize(it) && !won ? " locked" : "");
   b.setAttribute("role", "option"); b.setAttribute("aria-selected", String(shop.sel === it.id));
   b.innerHTML = `<span class="sw"></span><span class="si-name"></span><span class="si-state"></span>`;
   fillSwatch(b.querySelector(".sw"), it);
@@ -2296,6 +2323,7 @@ function renderShopDetail() {
   info.textContent = on ? "Lo tienes puesto." : mine ? (isDefault(it) ? "El de siempre." : "Es tuyo.")
     : it.lvl ? (won ? `${prizeOf(it)}: es tuyo gratis.` : `${it.desc || prizeOf(it)} Vas en el nivel ${w?.level || 1}.`)
     : it.tour ? (won ? `Lo ganaste en la gira: es tuyo gratis.` : it.desc)
+    : it.streak ? (won ? `Lo ganaste con tu racha de la canción del día: es tuyo gratis.` : it.desc)
     : it.req ? (won ? `Ganaste el logro «${achName(it.req)}»: es tuyo gratis.` : it.desc || `Se gana con el logro «${achName(it.req)}».`)
     : w && w.picks < it.price ? `Te faltan ${fmtPicks(it.price - w.picks)} púas. Las ganas terminando canciones.`
     : it.desc || "";
@@ -2509,6 +2537,7 @@ $("shareBtn").onclick = async () => {
   b.disabled = false;
 };
 $("againBtn").onclick = () => startGame({ lanes: app.lanes, diff: app.diff, duo: app.duo, ctx: againCtx() });
+$("homeBtn").onclick = () => { clearTimeout(app.celTimer); app.duo = null; app.mode = "solo"; app.history = []; show("home", false); };
 $("menuBtn").onclick = () => {
   if (app.mode === "mp") { tallyCup(true); renderLobby(); show("lobby", false); }
   else if (app.ctx?.kind === "tour") { clearTimeout(app.celTimer); app.history = ["home"]; openTour(false); }

@@ -538,6 +538,32 @@ function worldTour(g, w, h) {
   sides(g, w, h, 0.6, "0,0,0", 0.08);
 }
 
+// the song of the day's 30-day prize: a starry night sky, a golden sun and a silver crescent moon
+function sunMoon(g, w, h) {
+  const b = g.createLinearGradient(0, 0, w, 0);
+  b.addColorStop(0, "#060a1c"); b.addColorStop(0.5, "#16245a"); b.addColorStop(1, "#060a1c");
+  g.fillStyle = b; g.fillRect(0, 0, w, h);
+  blots(g, w, h, 12, "70,90,200", [0.06, 0.12], [40, 110]);
+  for (let i = 0; i < 500; i++) { const r = rnd(0.4, 1.3); g.fillStyle = `rgba(255,255,240,${rnd(0.25, 0.9)})`; g.beginPath(); g.ellipse(rnd(0, w), rnd(0, h), r, r * TALL, 0, 0, TAU); g.fill(); }
+  const glow = (x, y, r, rgb, a) => { const rg = g.createRadialGradient(x, y, 0, x, y, r); rg.addColorStop(0, `rgba(${rgb},${a})`); rg.addColorStop(1, `rgba(${rgb},0)`); g.save(); g.translate(x, y); g.scale(1, TALL); g.translate(-x, -y); g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2); g.restore(); };
+  // the sun (off the middle string, so the yellow notes keep their contrast): rays, a warm glow, the disc
+  const sx = w * 0.3, sy = h * 0.25;
+  glow(sx, sy, 140, "255,170,40", 0.35);
+  g.save(); g.translate(sx, sy); g.scale(1, TALL); g.globalAlpha = 0.85;
+  for (let k = 0; k < 16; k++) { const a = (k / 16) * TAU; g.strokeStyle = "rgba(255,200,80,.5)"; g.lineWidth = k % 2 ? 3 : 5; g.beginPath(); g.moveTo(Math.cos(a) * 56, Math.sin(a) * 56); g.lineTo(Math.cos(a) * (k % 2 ? 76 : 90), Math.sin(a) * (k % 2 ? 76 : 90)); g.stroke(); }
+  const sd = g.createRadialGradient(-12, -12, 4, 0, 0, 46); sd.addColorStop(0, "#fff4c8"); sd.addColorStop(0.5, "#ffc23a"); sd.addColorStop(1, "#f08a1a");
+  g.fillStyle = sd; g.beginPath(); g.arc(0, 0, 44, 0, TAU); g.fill(); g.restore();
+  // the moon: a crescent cut on its own little canvas (cutting it on the neck would cut the sky too), a cold glow
+  const mx = w * 0.7, my = h * 0.75;
+  glow(mx, my, 110, "160,190,255", 0.3);
+  const mc = document.createElement("canvas"); mc.width = mc.height = 100;
+  const m = mc.getContext("2d");
+  m.fillStyle = "#eef2fa"; m.beginPath(); m.arc(50, 50, 44, 0, TAU); m.fill();
+  m.globalCompositeOperation = "destination-out"; m.beginPath(); m.arc(70, 38, 40, 0, TAU); m.fill();
+  g.drawImage(mc, mx - 50, my - 50 * TALL, 100, 100 * TALL);
+  sides(g, w, h, 0.6, "0,0,0", 0.08);
+}
+
 // draw: the canvas; emissive: how much the neck lights itself (light woods less, so the notes keep their contrast);
 // tint: colour of that self-light; rough/metal: the board's finish; light: the strike light (warm by default)
 export const NECKS = {
@@ -558,6 +584,7 @@ export const NECKS = {
   calcomanias: { draw: stickers, emissive: 0.3, rough: 0.6 },
   laser: { draw: lasers, emissive: 0.6, rough: 0.4 },
   mundial: { draw: worldTour, emissive: 0.55, rough: 0.35 },
+  "sol-luna": { draw: sunMoon, emissive: 0.5, rough: 0.4 },
 };
 
 /* ================= note gems ================= */
@@ -663,11 +690,12 @@ export const STARS = {
   arcoiris: { hue: 0xff40c0, rainbow: true, css: "#ff5cd6" },
   atardecer: { hue: 0xff7a12, css: "#ff9a3a" },
   cian: { hue: 0x00ffd5, css: "#3dffe0" },
+  sol: { hue: 0xfff04a, css: "#fff04a" },
   blanca: { hue: 0xfff4e8, css: "#fff4e8" },
 };
 
 /* ================= the crowd's lights ================= */
-export const CROWDS = { encendedores: "lighters", celulares: "phones", rojo: "red", barras: "sticks", bengalas: "sparklers" };
+export const CROWDS = { encendedores: "lighters", celulares: "phones", rojo: "red", barras: "sticks", bengalas: "sparklers", luciernagas: "fireflies" };
 
 const SLOTS = { neck: NECKS, gems: GEMS, flames: FLAMES, strings: STRINGS, star: STARS, crowd: CROWDS };
 /** The ids to show for an equipped set: anything missing or unknown is that slot's default. */

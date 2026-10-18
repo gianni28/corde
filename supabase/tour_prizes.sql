@@ -6,3 +6,8 @@ insert into public.shop_items (slot, id, price, req, sort) values
   ('name', 'festival', 0, 'gira-hard-bar', 30), ('streak', 'pirotecnia', 0, 'gira-hard-theater', 30), ('neck', 'laser', 0, 'gira-hard-stadium', 31),
   ('flames', 'supernova', 0, 'gira-expert-bar', 31), ('star', 'blanca', 0, 'gira-expert-theater', 31), ('neck', 'mundial', 0, 'gira-expert-stadium', 32)
 on conflict (slot, id) do update set price = 0, req = excluded.req, sort = excluded.sort, lvl = null;
+
+-- the song of the day's streak prizes (logros dia-3, dia-7, dia-14, dia-30: days in a row, counted in the game)
+insert into public.shop_items (slot, id, price, req, sort) values
+  ('star', 'sol', 0, 'dia-3', 20), ('crowd', 'luciernagas', 0, 'dia-7', 20), ('name', 'racha', 0, 'dia-14', 20), ('neck', 'sol-luna', 0, 'dia-30', 20)
+on conflict (slot, id) do update set price = 0, req = excluded.req, sort = excluded.sort, lvl = null;

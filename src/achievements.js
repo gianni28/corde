@@ -19,6 +19,7 @@ export const ACHIEVEMENTS = [
   { id: "estrella-rock", name: "Estrella de rock", desc: "Usa el poder estrella 3 veces en una misma canción." },
   { id: "dia-3", name: "Fiel al rock", desc: "Toca la canción del día 3 días seguidos." },
   { id: "dia-7", name: "Una semana de rock", desc: "Toca la canción del día 7 días seguidos." },
+  { id: "dia-14", name: "Dos semanas de rock", desc: "Toca la canción del día 14 días seguidos." },
   { id: "dia-30", name: "Un mes de rock", desc: "Toca la canción del día 30 días seguidos." },
   { id: "de-gira", name: "De gira", desc: "Supera tu primer escenario de la gira." },
   { id: "leyenda", name: "Leyenda del rock", desc: "Termina la gira." },
@@ -94,6 +95,7 @@ export function forStreak(days) {
   const ids = [];
   if (days >= 3) ids.push("dia-3");
   if (days >= 7) ids.push("dia-7");
+  if (days >= 14) ids.push("dia-14");
   if (days >= 30) ids.push("dia-30");
   return ids;
 }
