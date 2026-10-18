@@ -548,6 +548,11 @@ export function createRenderer(canvas) {
         base: flat(at(new THREE.CylinderGeometry(0.4, 0.42, 0.09, 8), 0)), body: flat(at(new THREE.CylinderGeometry(0.36, 0.39, 0.12, 8), 0.08)),
         dome: flat(at(new THREE.CylinderGeometry(0.17, 0.36, 0.13, 8), 0.205, Math.PI / 8)), ring: null,
       };
+    } else if (key === "vinyl") {
+      // a record: a wide black disc with grooves (the band's part), the label in the lane colour in the middle
+      const cyl = (r, h, y) => at(new THREE.CylinderGeometry(r, r, h, 40), y);
+      const grooves = [0.29, 0.335, 0.38].map((r) => { const t = new THREE.TorusGeometry(r, 0.008, 4, 48); t.rotateX(Math.PI / 2); return at(t, 0.1); });
+      G = { base: cyl(0.43, 0.05, 0), body: cyl(0.42, 0.07, 0.06), dome: cyl(0.25, 0.035, 0.11), ring: mergeGeometries(grooves) };
     } else if (key === "cat") {
       // a kitten's head: round, two ears, a pale muzzle (dome) and the face (the band's part, dark: eyes, nose and
       // whiskers). Flat it would be seen almost edge-on, so it sits up, tilted toward the player, its chin on the neck.

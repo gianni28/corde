@@ -434,6 +434,110 @@ function legend(g, w, h) {
   });
 }
 
+/* --- the tour's prizes (tour.js TOUR_PRIZES) --- */
+const rrect = (g, x, y, w, h, r) => (g.roundRect ? g.roundRect(x, y, w, h, r) : g.rect(x, y, w, h)); // older Safari: square corners
+// the garage tour: worn wood covered in band stickers
+function stickers(g, w, h) {
+  g.fillStyle = "#5a3820"; g.fillRect(0, 0, w, h);
+  grain(g, w, h, 260, ["120,80,44", "40,22,10"], [0.06, 0.16], [0.5, 2.5], 4);
+  grime(g, w, h, 50, 0.16);
+  sides(g, w, h, 0.6);
+  const cols = ["#ff4f6a", "#ffd23a", "#3fd06a", "#3fa8ff", "#b46bff", "#ff8a2a", "#f2f2f2"];
+  const words = ["ROCK", "CORDE", "LIVE", "TOUR", "¡OTRA!", "BIS"];
+  const star = (r) => { g.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + (i * Math.PI) / 5, q = i % 2 ? r * 0.45 : r; g.lineTo(Math.cos(a) * q, Math.sin(a) * q); } g.closePath(); };
+  const bolt = (r) => { g.beginPath(); g.moveTo(-r * 0.2, -r); g.lineTo(r * 0.5, -r); g.lineTo(r * 0.05, -r * 0.1); g.lineTo(r * 0.55, -r * 0.1); g.lineTo(-r * 0.35, r); g.lineTo(-r * 0.05, r * 0.05); g.lineTo(-r * 0.5, r * 0.05); g.closePath(); };
+  const pickRect = (r) => { g.beginPath(); g.ellipse(0, 0, r, r * 0.62, 0, 0, TAU); };
+  // a grid with jitter so they spread over the whole tile (and wrap across its ends)
+  const rows = 7, colsN = 3;
+  for (let ry = 0; ry < rows; ry++) for (let cx = 0; cx < colsN; cx++) {
+    if (Math.random() < 0.45) continue;
+    const x = ((cx + 0.5) / colsN) * w + rnd(-40, 40), y0 = ((ry + 0.5) / rows) * h + rnd(-30, 30), rot = rnd(-0.5, 0.5);
+    const kind = pick(["star", "bolt", "word", "dot", "pick", "word"]), c = pick(cols), r = rnd(22, 32);
+    wrap(h, y0, r * TALL * 1.4, (y) => {
+      g.save(); g.translate(x, y); g.scale(1, TALL); g.rotate(rot); g.globalAlpha = 0.6; // faded, so the notes stay on top
+      g.shadowColor = "rgba(0,0,0,.6)"; g.shadowBlur = 6; g.shadowOffsetY = 2;
+      if (kind === "word") {
+        const t = pick(words); g.font = `900 ${Math.round(r * 0.75)}px Impact, "Arial Black", sans-serif`;
+        const tw = g.measureText(t).width + 18, th = r * 1.05;
+        g.fillStyle = "#f6f1e6"; g.beginPath(); rrect(g, -tw / 2 - 4, -th / 2 - 4, tw + 8, th + 8, 8); g.fill();
+        g.shadowBlur = 0; g.fillStyle = c === "#f2f2f2" ? "#1a1a1a" : c; g.beginPath(); rrect(g, -tw / 2, -th / 2, tw, th, 6); g.fill();
+        g.fillStyle = c === "#ffd23a" || c === "#f2f2f2" ? "#1a1a1a" : "#ffffff"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(t, 0, 2);
+      } else {
+        const shape = kind === "star" ? star : kind === "bolt" ? bolt : kind === "pick" ? pickRect : (rr) => { g.beginPath(); g.arc(0, 0, rr * 0.8, 0, TAU); };
+        g.lineJoin = "round"; g.fillStyle = "#f6f1e6"; shape(r + 6); g.fill(); g.shadowBlur = 0;
+        g.fillStyle = c; shape(r); g.fill();
+        if (kind === "dot") { g.fillStyle = "rgba(0,0,0,.75)"; g.beginPath(); g.arc(0, 0, r * 0.28, 0, TAU); g.fill(); }
+      }
+      g.restore();
+    });
+  }
+  blots(g, w, h, 16, "0,0,0", [0.08, 0.18], [20, 60]); // worn over the stickers too
+}
+
+// the festivals tour: a black stage cut by laser beams in the haze
+function lasers(g, w, h) {
+  g.fillStyle = "#050308"; g.fillRect(0, 0, w, h);
+  blots(g, w, h, 18, "60,20,90", [0.08, 0.16], [40, 110]); // haze
+  blots(g, w, h, 10, "10,70,40", [0.06, 0.12], [40, 100]);
+  const beam = (x0, y0, x1, y1, rgb) => {
+    for (const [lw, a] of [[22, 0.05], [10, 0.12], [4, 0.35], [1.6, 0.95]]) { g.strokeStyle = `rgba(${rgb},${a})`; g.lineWidth = lw; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); }
+  };
+  // fans of beams from both sides; each one crosses the tile and comes back on the next (whole tile: no seam)
+  g.globalAlpha = 0.55; // dimmer than a real laser: the notes go over it
+  for (let k = 0; k < 2; k++) {
+    const y = (k / 2) * h, rgb = k % 2 ? "255,40,200" : "60,255,90";
+    for (let j = 0; j < 2; j++) {
+      const dy = (j - 0.5) * 90;
+      beam(0, y, w, y + h / 8 + dy, rgb); beam(0, y + h, w, y + h + h / 8 + dy, rgb); beam(0, y - h, w, y - h + h / 8 + dy, rgb);
+      beam(w, y + h / 8, 0, y + h / 4 + dy, rgb === "60,255,90" ? "40,220,255" : "255,200,40");
+      beam(w, y + h / 8 - h, 0, y + h / 4 - h + dy, rgb === "60,255,90" ? "40,220,255" : "255,200,40");
+    }
+  }
+  g.globalAlpha = 1;
+  for (let i = 0; i < 260; i++) { g.fillStyle = `rgba(255,255,255,${rnd(0.05, 0.25)})`; g.fillRect(rnd(0, w), rnd(0, h), 1.5, 1.5); } // dust in the light
+  sides(g, w, h, 0.7, "0,0,0", 0.1);
+}
+
+// the world tour: the night side of the Earth, city lights and the routes of the tour in gold
+function worldTour(g, w, h) {
+  const b = g.createLinearGradient(0, 0, w, 0);
+  b.addColorStop(0, "#020611"); b.addColorStop(0.5, "#06122a"); b.addColorStop(1, "#020611");
+  g.fillStyle = b; g.fillRect(0, 0, w, h);
+  // lines of latitude and longitude
+  g.strokeStyle = "rgba(90,140,220,.14)"; g.lineWidth = 1;
+  for (let k = 0; k <= 8; k++) { g.beginPath(); g.moveTo(0, (k * h) / 8); g.lineTo(w, (k * h) / 8); g.stroke(); }
+  for (let k = 1; k < 6; k++) { g.beginPath(); g.moveTo((k * w) / 6, 0); g.lineTo((k * w) / 6, h); g.stroke(); }
+  // land: soft dark masses, lit by towns
+  blots(g, w, h, 14, "30,46,70", [0.35, 0.55], [50, 110]);
+  const cities = [];
+  for (let i = 0; i < 9; i++) cities.push([rnd(60, w - 60), rnd(0, h)]);
+  for (const [cx, cy] of cities) {
+    for (let i = 0; i < 70; i++) { // a cluster of lights, brighter in the middle
+      const r = Math.abs(rnd(-1, 1) * rnd(0, 1)) * 46, a = rnd(0, TAU);
+      const x = cx + Math.cos(a) * r; wrap(h, cy + Math.sin(a) * r * TALL, 4, (y) => { g.fillStyle = `rgba(255,${Math.round(rnd(170, 225))},120,${rnd(0.35, 0.9)})`; g.fillRect(x, y, rnd(1, 2.4), rnd(1, 2.4)); });
+    }
+    wrap(h, cy, 30, (y) => { const rg = g.createRadialGradient(cx, y, 0, cx, y, 26); rg.addColorStop(0, "rgba(255,200,110,.35)"); rg.addColorStop(1, "rgba(255,200,110,0)"); g.fillStyle = rg; g.fillRect(cx - 26, y - 26, 52, 52); });
+  }
+  // the routes: golden arcs from city to city, a dashed trail and a little plane on each
+  g.lineCap = "round";
+  for (let i = 0; i < cities.length; i++) {
+    const [x0, y0] = cities[i], [x1, y1raw] = cities[(i + 1) % cities.length];
+    const y1 = Math.abs(y1raw - y0) > h / 2 ? y1raw + (y1raw < y0 ? h : -h) : y1raw;
+    const mx = (x0 + x1) / 2 + (i % 2 ? 60 : -60), my = (y0 + y1) / 2;
+    for (const off of [-h, 0, h]) {
+      g.setLineDash([10, 9]); g.strokeStyle = "rgba(255,206,90,.75)"; g.lineWidth = 2.4;
+      g.beginPath(); g.moveTo(x0, y0 + off); g.quadraticCurveTo(mx, my + off, x1, y1 + off); g.stroke(); g.setLineDash([]);
+      const t = 0.55, px = (1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * mx + t * t * x1, py = (1 - t) * (1 - t) * (y0 + off) + 2 * (1 - t) * t * (my + off) + t * t * (y1 + off);
+      const ang = Math.atan2(2 * (1 - t) * (my - y0) + 2 * t * (y1 - my), 2 * (1 - t) * (mx - x0) + 2 * t * (x1 - mx));
+      g.save(); g.translate(px, py); g.scale(1, TALL); g.rotate(ang); g.fillStyle = "#fff3c4";
+      g.beginPath(); g.moveTo(12, 0); g.lineTo(-8, -3); g.lineTo(-10, 0); g.lineTo(-8, 3); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(2, 0); g.lineTo(-4, -10); g.lineTo(-7, -10); g.lineTo(-3, 0); g.lineTo(-7, 10); g.lineTo(-4, 10); g.closePath(); g.fill();
+      g.restore();
+    }
+  }
+  sides(g, w, h, 0.6, "0,0,0", 0.08);
+}
+
 // draw: the canvas; emissive: how much the neck lights itself (light woods less, so the notes keep their contrast);
 // tint: colour of that self-light; rough/metal: the board's finish; light: the strike light (warm by default)
 export const NECKS = {
@@ -451,11 +555,14 @@ export const NECKS = {
   galaxia: { draw: galaxy, emissive: 0.5 },
   oro: { draw: gold, emissive: 0.15, rough: 0.32, metal: 0.45 },
   leyenda: { draw: legend, emissive: 0.4, rough: 0.3 },
+  calcomanias: { draw: stickers, emissive: 0.3, rough: 0.6 },
+  laser: { draw: lasers, emissive: 0.6, rough: 0.4 },
+  mundial: { draw: worldTour, emissive: 0.55, rough: 0.35 },
 };
 
 /* ================= note gems ================= */
 // lanes: the five colours (sRGB, lane order green red yellow blue orange; also the fret buttons, tails, string flashes
-// and the HUD). shape: "round" (today's), "square", "pixel", "crystal", "diamond", "cat".
+// and the HUD). shape: "round" (today's), "square", "pixel", "crystal", "diamond", "cat", "vinyl".
 // body/dome: finish of the coloured parts; each part's colour is the lane colour mixed towards `to` by `mix`, times `mul`;
 // glow: how much that colour lights the part itself (today's notes: none). ring: the band around the top (color: its
 // own colour, or the lane colour mixed like above when `lane` is set; glow as above); base: the bottom disc.
@@ -496,6 +603,12 @@ export const GEMS = {
     ring: { color: 0xffffff, metal: 0.3, rough: 0.05, emissive: 0xdfeaff, ei: 0.3 }, base: { color: 0xe4ecf6, metal: 0.4, rough: 0.05, emissive: 0xbfd8ff, ei: 0.35 },
     halo: { size: 1.2, mul: 0.4, mix: 0.75, twinkle: true },
   },
+  // vinyl records: black and glossy, the label in the lane colour
+  vinilo: {
+    lanes: LANE_HEX, shape: "vinyl", body: { metal: 0.55, rough: 0.08, mix: 0.9, to: 0x16161a }, dome: { metal: 0.05, rough: 0.35, mix: 0.05, glow: 0.45 },
+    ring: { color: 0x9a9aa8, metal: 0.7, rough: 0.12, emissive: 0x30303a, ei: 0.6 }, base: { color: 0x050506, metal: 0.4, rough: 0.15 },
+    halo: { size: 1.1, mul: 0.5 },
+  },
   // kittens: matte fur in the lane colour, a pale muzzle, a dark face (the "ring")
   gatitos: {
     lanes: LANE_HEX, shape: "cat", body: { metal: 0, rough: 0.6 }, dome: { metal: 0, rough: 0.55, mix: 0.82 },
@@ -519,6 +632,8 @@ export const FLAMES = {
   arcoiris: { rainbow: true, k: 1.8 },
   perfecto: { tint: 0xffe6a6, k: 2.2 },
   aurora: { tint: 0x3dffc8, k: 2.1 },
+  fogata: { tint: 0xff4214, k: 1.5 },
+  supernova: { tint: 0xc77dff, k: 2.6 },
 };
 
 /* ================= strings, rails, edges ================= */
@@ -532,6 +647,7 @@ export const STRINGS = {
   hielo: { string: [0xe6eef6, 1, 0.12], rail: [0xe4ecf4, 1, 0.12], fret: [0xd8e6f0, 1, 0.18], fretGlow: 0x1c3a4c, edges: [0x5ff0ff, 0x5ff0ff, 0xa0f8ff], k: 1.15 },
   bronce: { string: [0xc98a4a, 1, 0.3], rail: [0xa8682e, 1, 0.26], fret: [0xb87a40, 1, 0.3], fretGlow: 0x3a2008, edges: [0xe0a060, 0xe0a060, 0xf0c080], k: 1 },
   neon: { string: [0x2a2a30, 0.6, 0.4], rail: [0x2a2240, 0.8, 0.3], fret: [0x9a86c0, 0.8, 0.3], fretGlow: 0x3a1460, edges: [0xff3fc8, 0x3ff0ff, 0xd070ff], k: 1.25, laneGlow: 0.32 },
+  cables: { string: [0x2c2c30, 0.5, 0.5], rail: [0x18181c, 0.4, 0.5], fret: [0x8a8a90, 0.9, 0.3], fretGlow: 0x202024, edges: [0xff3a3a, 0x3a8aff, 0xffd23a], k: 1.15 },
 };
 
 /* ================= star power ================= */
@@ -546,10 +662,12 @@ export const STARS = {
   morado: { hue: 0x9446ff, css: "#b072ff" },
   arcoiris: { hue: 0xff40c0, rainbow: true, css: "#ff5cd6" },
   atardecer: { hue: 0xff7a12, css: "#ff9a3a" },
+  cian: { hue: 0x00ffd5, css: "#3dffe0" },
+  blanca: { hue: 0xfff4e8, css: "#fff4e8" },
 };
 
 /* ================= the crowd's lights ================= */
-export const CROWDS = { encendedores: "lighters", celulares: "phones", rojo: "red", barras: "sticks" };
+export const CROWDS = { encendedores: "lighters", celulares: "phones", rojo: "red", barras: "sticks", bengalas: "sparklers" };
 
 const SLOTS = { neck: NECKS, gems: GEMS, flames: FLAMES, strings: STRINGS, star: STARS, crowd: CROWDS };
 /** The ids to show for an equipped set: anything missing or unknown is that slot's default. */

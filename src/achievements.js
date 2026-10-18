@@ -25,6 +25,10 @@ export const ACHIEVEMENTS = [
   { id: "en-banda", name: "En banda", desc: "Juega una partida multijugador." },
   { id: "reto-aceptado", name: "Reto aceptado", desc: "Gánale a alguien en un reto." },
   { id: "al-escenario", name: "Al escenario", desc: "Comparte un resultado." },
+  // the tour's prizes (tour.js TOUR_PRIZES): shown on the tour screen, not in this list
+  ...[["easy", "Fácil"], ["medium", "Media"], ["hard", "Difícil"], ["expert", "Experto"]].flatMap(([d, dn]) =>
+    [["bar", "Bar La Cueva"], ["theater", "El Gran Teatro"], ["stadium", "El Estadio"]].map(([v, vn]) =>
+      ({ id: `gira-${d}-${v}`, name: `Gira ${dn}: ${vn}`, desc: `Supera ${vn} en la gira en ${dn}.`, tour: true }))),
   // secret: only listed for whoever has the songs it asks for (the miau songs, behind a code), or once won
   { id: "coro-gatitos", name: "Coro de gatitos", desc: "Saca 80% o más en 3 canciones miau (o en todas, si hay menos).", secret: true },
 ];

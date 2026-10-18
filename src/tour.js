@@ -119,7 +119,7 @@ export function progress(tour, best) {
     return r;
   });
   const done = venues.every((v) => v.complete);
-  return { venues, stars, maxStars, current, done };
+  return { diff: tour.diff, venues, stars, maxStars, current, done };
 }
 
 /** What changed between two progress snapshots (for the celebration after a song). */
@@ -141,3 +141,23 @@ export function nextSong(prog) {
   if (pick) return { venue: v.venue, song: pick.song, encore: pick === v.encore };
   return null;
 }
+
+/* ---------- the tour's prizes ---------- */
+// Each difficulty is its own tour with its own three prizes (shop items claimed like a logro's: the logro is
+// "gira-<diff>-<venue>"), for clearing the bar, the theater and the whole tour. Each difficulty has its own style:
+// Fácil is the neighbourhood (homemade, warm), Media the bars (neon at night), Difícil the festivals (lasers and
+// fireworks), Experto the world tour (stars and planes).
+export const TOUR_PRIZES = {
+  easy: [{ venue: 1, slot: "flames", id: "fogata" }, { venue: 3, slot: "crowd", id: "bengalas" }, { venue: 5, slot: "neck", id: "calcomanias" }],
+  medium: [{ venue: 1, slot: "strings", id: "cables" }, { venue: 3, slot: "star", id: "cian" }, { venue: 5, slot: "gems", id: "vinilo" }],
+  hard: [{ venue: 1, slot: "name", id: "festival" }, { venue: 3, slot: "streak", id: "pirotecnia" }, { venue: 5, slot: "neck", id: "laser" }],
+  expert: [{ venue: 1, slot: "flames", id: "supernova" }, { venue: 3, slot: "star", id: "blanca" }, { venue: 5, slot: "neck", id: "mundial" }],
+};
+export const TOUR_THEMES = { easy: "Gira de barrio", medium: "Gira de bares", hard: "Gira de festivales", expert: "Gira mundial" };
+export const prizeLogro = (diff, venueIndex) => `gira-${diff}-${VENUES[venueIndex].id}`;
+/** The prizes this progress has earned (their logro ids). */
+export function prizesWon(prog) {
+  return (TOUR_PRIZES[prog.diff] || []).filter((p) => prog.venues[p.venue]?.complete).map((p) => prizeLogro(prog.diff, p.venue));
+}
+/** The difficulties this browser has a tour saved for (the ones played at least once). */
+export const savedTourDiffs = () => Object.keys(load()).filter((d) => TOUR_PRIZES[d]);
