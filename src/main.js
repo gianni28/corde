@@ -3732,14 +3732,16 @@ function renderRivals() {
   const list = Object.entries(app.rivals).sort((a, b) => b[1].score - a[1].score);
   trackPosition(list);
   ol.innerHTML = "";
-  for (const [id, r] of list) {
+  // a phone shows five rows at most (style.css .cut): the top five, or the top four and you
+  const mine = list.findIndex(([id]) => id === app.me?.id), keep = mine >= 5 ? 4 : 5;
+  list.forEach(([id, r], i) => {
     const li = document.createElement("li");
-    if (id === app.me?.id) li.className = "me";
+    li.className = id === app.me?.id ? "me" : i >= keep ? "cut" : "";
     li.innerHTML = `<span class="n"></span><span class="s">${r.score.toLocaleString("es-CO")}</span><span class="m">${Math.round((r.acc || 0) * 100)}% · racha ${r.combo}</span>`;
     li.querySelector(".n").textContent = r.name;
     styledName(li.querySelector(".n"), r.name);
     ol.appendChild(li);
-  }
+  });
 }
 function renderRanking() {
   const ol = $("ranking");
