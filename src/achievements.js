@@ -9,10 +9,14 @@ export const BANANA_GIFTS = [30, 90, 180];
 export const BANANA_LOGROS = ["otaku-titi", "otaku-nero", "otaku-antimagia"];
 /** The Otaku gifts these bananas reach. */
 export const forBananas = (n) => BANANA_LOGROS.filter((_, i) => n >= BANANA_GIFTS[i]);
-// the One Direction event (its songs in a secret group): 4 stars or more on each of its songs, on Media or harder (the
-// caller counts only those runs), once there are all six
-export const ONED_SONGS = 6, ONED_STARS = 4, ONED_DIFF = "medium";
-export const forOneD = (ids, stars) => (ids.length >= ONED_SONGS && ids.every((id) => stars(id) >= ONED_STARS) ? ["one-direction"] : []);
+// the bands' events (their songs in a secret group, told apart by the artist): 4 stars or more on each of the band's
+// songs, on Media or harder (the caller counts only those runs), once all of them are up. The gift: the band as pets
+export const BAND_STARS = 4, BAND_DIFF = "medium";
+export const BANDS = [
+  { id: "one-direction", name: "One Direction", badge: "1D", artist: /one\s*direction/i, songs: 6 },
+  { id: "bts", name: "BTS", badge: "BTS", artist: /\bbts\b|bangtan|방탄/i, songs: 6 },
+];
+export const forBand = (band, ids, stars) => (ids.length >= band.songs && ids.every((id) => stars(id) >= BAND_STARS) ? [band.id] : []);
 
 export const ACHIEVEMENTS = [
   { id: "primer-acorde", name: "Primer acorde", desc: "Termina tu primera canción." },
@@ -47,8 +51,9 @@ export const ACHIEVEMENTS = [
   { id: "otaku-titi", name: "Bigotes del Emperador", desc: `Junta ${BANANA_GIFTS[0]} bananas doradas en las canciones Otaku.`, secret: true, surprise: true },
   { id: "otaku-nero", name: "El anti-pájaro", desc: `Junta ${BANANA_GIFTS[1]} bananas doradas en las canciones Otaku.`, secret: true, surprise: true },
   { id: "otaku-antimagia", name: "Antimagia", desc: `Junta ${BANANA_GIFTS[2]} bananas doradas en las canciones Otaku.`, secret: true, surprise: true },
-  // the One Direction event: a surprise gift (a pet) for 3 stars on each of its songs
+  // the bands' events: a surprise gift (the band as pets) for 4 stars on each of its songs
   { id: "one-direction", name: "Directioner", desc: "Saca 4 estrellas o más en las 6 canciones de One Direction, en Media o más difícil.", secret: true, surprise: true },
+  { id: "bts", name: "ARMY", desc: "Saca 4 estrellas o más en las 6 canciones de BTS, en Media o más difícil.", secret: true, surprise: true },
 ];
 const BY_ID = Object.fromEntries(ACHIEVEMENTS.map((a) => [a.id, a]));
 

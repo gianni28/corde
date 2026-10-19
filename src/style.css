@@ -1504,6 +1504,7 @@ body.fx-quake #stage { animation: quake .11s linear infinite; }
 .od-head { display: flex; align-items: center; gap: 10px; }
 .od-badge { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; font: 700 15px var(--display); color: #0e1220;
   background: linear-gradient(180deg, #f4f7ff, #a9bde6); box-shadow: 0 0 0 2px #000, 0 0 10px rgba(150,190,255,.5); letter-spacing: -.02em; }
+.od-badge.long { font-size: 11px; letter-spacing: 0; }
 .od-head div { flex: 1; min-width: 0; }
 .od-head b { display: block; font: 700 15px var(--display); letter-spacing: .1em; text-transform: uppercase; color: #cfe0ff; }
 .od-head small { display: block; font: 500 14px/1.3 var(--body); color: var(--muted); }

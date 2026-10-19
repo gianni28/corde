@@ -10,7 +10,7 @@ import { Pass, FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js"
 import { CopyShader } from "three/examples/jsm/shaders/CopyShader.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { createCrowd, createBand } from "./stagecrew.js";
-import { LANE_HEX, NECKS, GEMS, FLAMES, STRINGS, STARS, CROWDS, PETS, ONED, resolveSkin, grime } from "./skins.js";
+import { LANE_HEX, NECKS, GEMS, FLAMES, STRINGS, STARS, CROWDS, PETS, MEMBERS, resolveSkin, grime } from "./skins.js";
 
 export { LANE_HEX };
 const HL = 24; // highway length (world units)
@@ -372,9 +372,10 @@ function napZ() {
   zz.scale.set(0.34, 0.34, 1);
   return zz;
 }
-// One Direction, as little figures (the event's gift; skins.js ONED): a big head, each one known by his hair (Harry's
-// curls, Liam's wavy mop falling over his forehead, Louis's fringe swept aside, Niall's blond swoop, Zayn's tall black
-// quiff) and his clothes. Built facing +z with the feet at 0, about 1.1 tall; pose() as Nero's: lids, arms up (wing), the z's.
+// The bands as little figures (the events' gifts; skins.js MEMBERS): a big head, each one known by his hair and his
+// clothes (One Direction: Harry's curls, Liam's wavy mop, Louis's fringe swept aside, Niall's blond swoop, Zayn's tall
+// black quiff; BTS: RM's glasses, Jin's pink suit, Suga's mint hair, J-Hope's bucket hat, Jimin's pink hair, V's waves
+// and beret, Jungkook's long black hair, earrings and inked arm). Built facing +z with the feet at 0, about 1.1 tall; pose() as Nero's: lids, arms up (wing), the z's.
 // They don't fly: with star power they jump and wave both arms over their heads (lift: how high the renderer raises them).
 function makeMember(m) {
   const g = new THREE.Group(), b = new THREE.Group(); g.add(b); g.lift = 0.3;
@@ -407,9 +408,15 @@ function makeMember(m) {
   if (m.buttons != null) for (let i = 0; i < 3; i++) add(sph(0.011, 8, 6), mat(m.buttons, 0.4)).position.set(0, 0.54 - i * 0.045, 0.134 + i * 0.004);
   add(new THREE.CylinderGeometry(0.045, 0.05, 0.07, 12), SKIN).position.y = 0.6;
   // arms, hung from the shoulders (pose() raises them)
+  const INK = m.tattoo ? mat(0xffffff, 0.55) : null;
+  if (INK) INK.map = canvasTex(64, 64, (c) => {
+    c.fillStyle = "#" + m.skin.toString(16).padStart(6, "0"); c.fillRect(0, 0, 64, 64);
+    c.strokeStyle = "rgba(20,20,30,.85)"; c.lineWidth = 4;
+    for (let i = 0; i < 7; i++) { c.beginPath(); c.arc((i * 23) % 64, 8 + i * 8, 7 + (i % 3) * 3, 0, Math.PI * 1.4); c.stroke(); }
+  });
   const arms = [-1, 1].map((side) => {
     const p = new THREE.Group(); p.position.set(side * 0.155, 0.55, 0); b.add(p);
-    add(new THREE.CylinderGeometry(0.045, 0.042, 0.24, 10), TOP, p).position.y = -0.12;
+    add(new THREE.CylinderGeometry(0.045, 0.042, 0.24, 10), INK && side < 0 ? INK : TOP, p).position.y = -0.12; // his right arm, inked
     add(sph(0.048), SKIN, p).position.y = -0.26;
     return p;
   });
@@ -438,6 +445,30 @@ function makeMember(m) {
     // high at the front, swept up and back (short at the sides)
     const q = add(sph(1, 20, 14), HAIR, head); q.scale.set(0.16, 0.07, 0.2); q.position.set(0, 0.2, 0.1); q.rotation.x = -0.15;
     const q2 = add(sph(1, 16, 12), HAIR, head); q2.scale.set(0.13, 0.065, 0.1); q2.position.set(0, 0.235, 0.2); q2.rotation.x = 0.8;
+  } else if (m.hair === "short") {
+    cap(0.262, -0.5);
+    if (m.hat == null) { const top = add(sph(1, 18, 12), HAIR, head); top.scale.set(0.21, 0.08, 0.2); top.position.set(0, 0.2, 0.04); top.rotation.x = -0.2; }
+  } else if (m.hair === "neat") {
+    // short, combed to one side from a parting
+    cap(0.262, -0.5);
+    const a = add(sph(1, 18, 12), HAIR, head); a.scale.set(0.2, 0.075, 0.19); a.position.set(0.04, 0.2, 0.06); a.rotation.set(-0.25, 0, -0.25);
+    const p = add(new THREE.BoxGeometry(0.012, 0.02, 0.14), mat(m.skin, 0.6), head); p.position.set(-0.08, 0.235, 0.1); p.rotation.x = -0.6;
+  } else if (m.hair === "part") {
+    // parted in the middle, a curtain falling to each side of the forehead (above the brows)
+    cap(0.264, -0.5);
+    for (const side of [-1, 1]) {
+      const c = add(sph(1, 16, 12), HAIR, head); c.scale.set(0.12, 0.07, 0.08); c.position.set(side * 0.1, 0.15, 0.18); c.rotation.set(0.5, 0, side * -0.5);
+    }
+    const top = add(sph(1, 18, 12), HAIR, head); top.scale.set(0.22, 0.08, 0.21); top.position.set(0, 0.2, 0.02);
+  } else if (m.hair === "waves") {
+    cap(0.27, -0.45);
+    for (let i = 0; i < 9; i++) { const a = -1.2 + i * 0.3; add(sph(0.075, 12, 10), HAIR, head).position.set(Math.sin(a) * 0.2, 0.15 + Math.cos(a) * 0.05, Math.cos(a) * 0.12); }
+  } else if (m.hair === "mullet") {
+    // longer: down the back to the neck and over the ears
+    cap(0.268, -0.45);
+    const back = add(sph(1, 18, 12), HAIR, head); back.scale.set(0.22, 0.2, 0.12); back.position.set(0, -0.07, -0.16);
+    for (const side of [-1, 1]) { const s2 = add(sph(1, 14, 10), HAIR, head); s2.scale.set(0.06, 0.12, 0.12); s2.position.set(side * 0.22, 0.03, -0.04); }
+    const f = add(sph(1, 16, 12), HAIR, head); f.scale.set(0.2, 0.06, 0.08); f.position.set(0, 0.17, 0.17); f.rotation.x = 0.4;
   } else if (m.hair === "swoop") {
     // swept up and over at the front, soft and rounded (not Zayn's tall one)
     cap(0.264, -0.5);
@@ -468,6 +499,18 @@ function makeMember(m) {
     for (const [x, y] of [[-0.12, 0.17], [0.1, 0.19], [-0.02, 0.21]]) add(sph(0.065, 10, 8), HAIR, head).position.set(x, y, 0.15);
   }
   if (m.earrings != null) for (const side of [-1, 1]) add(sph(0.018, 8, 6), mat(m.earrings, 0.2), head).position.set(side * 0.25, -0.05, 0.01);
+  if (m.glasses != null) {
+    const G = mat(m.glasses, 0.3);
+    for (const side of [-1, 1]) { const r = add(new THREE.TorusGeometry(0.05, 0.008, 6, 20), G, head); r.position.set(side * 0.088, 0, 0.24); }
+    add(new THREE.BoxGeometry(0.06, 0.008, 0.008), G, head).position.set(0, 0.01, 0.245);
+  }
+  if (m.hat != null) {
+    // a bucket hat: its crown, and the brim all round (above the brows)
+    const H = mat(m.hat, 0.7);
+    add(new THREE.CylinderGeometry(0.2, 0.25, 0.14, 24), H, head).position.set(0, 0.22, 0);
+    const brim = add(new THREE.CylinderGeometry(0.25, 0.34, 0.06, 28, 1, true), H, head); brim.position.set(0, 0.13, 0.01); brim.material.side = THREE.DoubleSide;
+  }
+  if (m.beret != null) { const be = add(sph(1, 20, 12), mat(m.beret, 0.75), head); be.scale.set(0.24, 0.07, 0.23); be.position.set(-0.03, 0.25, -0.02); be.rotation.z = 0.25; }
   const zz = napZ(); g.add(zz);
   g.pose = ({ lid, wing, sleep, now }) => {
     lids.forEach((l) => (l.rotation.x = -1.45 + lid * 3.0));
@@ -478,7 +521,7 @@ function makeMember(m) {
   };
   return g;
 }
-const petModels = { nero: makeNero, ...Object.fromEntries(Object.entries(ONED).map(([id, m]) => [id, () => makeMember(m)])) };
+const petModels = { nero: makeNero, ...Object.fromEntries(Object.entries(MEMBERS).map(([id, m]) => [id, () => makeMember(m)])) };
 const starDotTex = () => canvasTex(64, 64, (g) => {
   const rg = g.createRadialGradient(32, 32, 0, 32, 32, 14); rg.addColorStop(0, "rgba(255,255,255,1)"); rg.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = rg; g.fillRect(0, 0, 64, 64);
   g.fillStyle = "#fff"; g.beginPath(); g.moveTo(32, 2); g.lineTo(36, 28); g.lineTo(62, 32); g.lineTo(36, 36); g.lineTo(32, 62); g.lineTo(28, 36); g.lineTo(2, 32); g.lineTo(28, 28); g.fill();
