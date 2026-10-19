@@ -3055,6 +3055,8 @@ function enterRoom(code, pub = null) {
   if (!online) { $("mpErr").textContent = "El multijugador necesita que el juego esté conectado a Supabase."; $("mpErr").hidden = false; return; }
   settings.name = name; save();
   if (app.room) { try { app.room.leave(); } catch {} app.room = null; } // never in two rooms (or twice in one) at once
+  try { sessionStorage.setItem("corde.mp.room", JSON.stringify({ code, at: Date.now() })); } catch {} // back in it after a reload
+  if (history.state?.corde !== "sala") history.pushState({ corde: "sala" }, ""); // the back gesture stays in the game (see popstate)
   app.me = { id: mpId(), name, lanes: deviceLanes(), device: touch ? "cel" : "pc" };
   app.mode = "mp";
   app.roomConfig = null; app.loadedRoomSong = null;
@@ -3124,6 +3126,28 @@ async function joinFromLink() {
   enterRoom(code);
 }
 setTimeout(joinFromLink, 0);
+// The page reloaded while in a room (a phone short of memory, the back gesture and forward again): straight back into
+// it, as the same player, if it was a little while ago
+async function backToRoom() {
+  let r = null; try { r = JSON.parse(sessionStorage.getItem("corde.mp.room") || "null"); } catch {}
+  if (!r?.code || Date.now() - r.at > 20 * 60e3 || /^#sala-/i.test(location.hash)) return;
+  await waitForName();
+  if (app.room) return;
+  $("mpName").value = settings.name; $("mpErr").hidden = true; $("joinCode").value = r.code;
+  $("duoCard").hidden = $("duoOr").hidden = touch;
+  show("mp");
+  enterRoom(r.code);
+  toast(`Volviste a la sala ${r.code}`);
+}
+setTimeout(backToRoom, 0);
+// In a room, the browser's back (an iPhone's swipe from the edge, easy to do while playing) would leave the page and
+// drop you from the room: it stays here instead (from choosing a song it goes back to the room)
+addEventListener("popstate", () => {
+  if (!app.room) return;
+  history.pushState({ corde: "sala" }, "");
+  if (app.screen === "library" && app.mode === "pick") { app.mode = "mp"; show("lobby", false); }
+  else if (!app.game && app.screen !== "lobby") { renderLobby(); show("lobby", false); }
+});
 // opened from a challenge link: once there's a name, straight to that song with the score to beat
 async function openFromReto() {
   const r = readReto();
@@ -3139,7 +3163,7 @@ async function openFromReto() {
 }
 setTimeout(openFromReto, 0);
 addEventListener("hashchange", joinFromLink);
-function leaveRoom(to = "home") { app.room?.leave(); app.room = null; app.mode = "solo"; app.history = []; try { app.lobbyWake?.release(); } catch {} announceRoom(); show(to, false); }
+function leaveRoom(to = "home") { try { sessionStorage.removeItem("corde.mp.room"); } catch {} app.room?.leave(); app.room = null; app.mode = "solo"; app.history = []; try { app.lobbyWake?.release(); } catch {} announceRoom(); show(to, false); }
 $("leaveRoom").onclick = () => leaveRoom();
 
 /* the open rooms: every room's host tells a shared channel how it's going (net.js roomDirectory); the multiplayer
