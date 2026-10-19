@@ -90,23 +90,41 @@ export function joinRoom(code, me, h) {
   };
   ch.on("presence", { event: "sync" }, () => h.onPeers(peers()));
   ["config", "start", "score", "final", "abort", "attack"].forEach((ev) => ch.on("broadcast", { event: ev }, ({ payload }) => h.onEvent(ev, payload)));
+  // Telling the room how we are: one update at a time, the latest state, a few in a row folded into one. Changing the
+  // song sends three at once (the song, "loading", "ready"), and the realtime server could lose the host in that burst.
+  let tracking = null, again = false;
+  const push = () => {
+    if (tracking) { again = true; return tracking; }
+    tracking = (async () => {
+      do { again = false; await new Promise((r) => setTimeout(r, 150)); try { await ch.track(state); } catch {} } while (again);
+      tracking = null;
+    })();
+    return tracking;
+  };
   ch.subscribe(async (status) => {
-    if (status === "SUBSCRIBED") { await ch.track(state); h.onStatus && h.onStatus("ok"); }
+    if (status === "SUBSCRIBED") { await push(); h.onStatus && h.onStatus("ok"); }
     else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") h.onStatus && h.onStatus("error");
   });
   // a phone can lose its place in the room without noticing (a busy moment, a blip in the connection): the others see
   // it leave while it still sees itself. Every few seconds: if the room doesn't have us, say we're here again.
+  // And every 20 s anyway: someone else's view of the room may have lost us without ours noticing.
+  let ticks = 0;
   const watch = setInterval(() => {
     try {
+      ticks++;
       if (!supabase.realtime.isConnected()) supabase.realtime.connect();
-      else if (ch.state === "joined" && !ch.presenceState()[id]) ch.track(state);
+      else if (ch.state === "joined" && (!ch.presenceState()[id] || ticks % 5 === 0)) push();
     } catch {}
   }, 4000);
   return {
     code,
     peers,
     isHost: () => { const p = peers(); return p.length ? p[0].id === id : true; },
-    update: (patch) => { state = { ...state, ...patch }; return ch.track(state); },
+    update: (patch) => {
+      // nothing new: nothing to send (a burst of the same news is what gets a phone thrown out of the room)
+      if (Object.keys(patch).every((k) => JSON.stringify(state[k]) === JSON.stringify(patch[k]))) return tracking || Promise.resolve();
+      state = { ...state, ...patch }; return push();
+    },
     send: (event, payload) => ch.send({ type: "broadcast", event, payload: { ...payload, from: id } }),
     leave: () => { clearInterval(watch); return supabase.removeChannel(ch); },
   };

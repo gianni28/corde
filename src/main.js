@@ -3243,6 +3243,8 @@ async function syncConfig() {
   app.roomConfig = cfg;
   if (!cfg?.songId) return; // no song yet (maybe only the mode)
   if (app.loadedRoomSong === cfg.songId || app.loadingRoomSong === cfg.songId) return;
+  // a download that failed is tried again after a while, not on every change in the room (each try tells the room)
+  if (app.failedRoomSong?.id === cfg.songId && Date.now() - app.failedRoomSong.at < 8000) return;
   const song = await findSong(cfg.songId);
   if (!song) return;
   app.loadingRoomSong = cfg.songId;
@@ -3257,7 +3259,7 @@ async function syncConfig() {
     }
     app.song = song; app.loadedRoomSong = song.id;
     app.room.update({ ready: true, songId: song.id });
-  } catch (e) { toast(e.message); }
+  } catch (e) { toast(e.message); app.failedRoomSong = { id: song.id, at: Date.now() }; setTimeout(syncConfig, 8500); }
   app.loadingRoomSong = null;
   renderLobby();
 }
