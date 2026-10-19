@@ -385,12 +385,16 @@
         <label class="label" for="mpName">Tu nombre</label>
         <input type="text" id="mpName" maxlength="16" placeholder="Tu nombre" autocomplete="nickname">
       </div>
+      <div class="seg room-vis" id="newRoomVis"><button type="button" data-v="priv">Privada</button><button type="button" data-v="pub">Pública</button></div>
       <button class="primary" id="createRoom">Crear sala</button>
       <div class="or"><span>o únete con un código</span></div>
       <div class="join">
         <input type="text" id="joinCode" maxlength="4" placeholder="ABCD" autocomplete="off" autocapitalize="characters">
         <button id="joinRoom">Unirme</button>
       </div>
+      <div class="or"><span>o entra a una sala abierta</span></div>
+      <ul class="open-rooms" id="openRooms"></ul>
+      <p class="hint center" id="openEmpty">No hay salas públicas ahora. ¡Crea una y aparece aquí!</p>
       <p class="err" id="mpErr" hidden></p>
     </div>
   </section>
@@ -483,6 +487,8 @@
     <div class="panel">
       <header class="bar"><button class="back" id="leaveRoom">Salir</button><h2>Sala</h2></header>
       <button class="code" id="roomCode" title="Copiar código"></button>
+      <div class="seg room-vis" id="roomVis"><button type="button" data-v="priv">Privada</button><button type="button" data-v="pub">Pública</button></div>
+      <p class="hint center" id="roomVisHint"></p>
       <div class="invite">
         <button class="btn" id="inviteBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16a3 3 0 0 0-2.4 1.2l-6.7-3.4a3 3 0 0 0 0-1.6l6.7-3.4A3 3 0 1 0 15 7l-6.7 3.4a3 3 0 1 0 0 3.2L15 17a3 3 0 1 0 3-1z"/></svg>Invitar</button>
         <a class="btn" id="inviteWa" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .3-3.4-.7-2.9-1.2-4.7-4.1-4.9-4.3-.1-.2-1.2-1.6-1.2-3s.8-2.2 1-2.5c.3-.3.6-.4.8-.4h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .5l-.3.5-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.7-.1l.9-1.1c.2-.3.4-.2.6-.1l2 1c.3.1.5.2.5.3.1.2.1.7-.1 1.3z"/></svg>WhatsApp</a>
@@ -523,6 +529,11 @@
       </form>
       <!-- nothing below shows until the code is checked by the server -->
       <div id="adminBody" hidden>
+      <div class="field">
+        <span class="label">Salas en vivo</span>
+        <p class="hint" id="liveCount">Nadie está en multijugador ahora mismo.</p>
+        <ul class="open-rooms live-rooms" id="liveRooms"></ul>
+      </div>
       <div class="field inbox-admin">
         <span class="label">Pedidos de canciones</span>
         <p class="hint" id="reqEmpty"></p>

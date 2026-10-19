@@ -1407,3 +1407,16 @@ body.fx-quake #stage { animation: quake .11s linear infinite; }
 .streak-card .sc-bar { display: block; height: 4px; border-radius: 2px; background: rgba(255,255,255,.08); overflow: hidden; }
 .streak-card .sc-bar i { display: block; height: 100%; background: linear-gradient(90deg, #ff5a1a, #ffb020); }
 .streak-card.won .sc-bar i { background: var(--gold); }
+
+/* multiplayer: public or private rooms, the open rooms list, the admin's live rooms */
+.room-vis { margin-bottom: 4px; }
+.open-rooms { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.open-rooms li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 3px; background: linear-gradient(180deg, #221d1a, #161210); box-shadow: inset 0 0 0 1px #3d3733; }
+.open-rooms .or-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.open-rooms .or-text b { font: 700 17px var(--display); letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.open-rooms .or-text small { font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.open-rooms .or-n { font: 700 16px var(--display); color: var(--gold); }
+.open-rooms .btn { flex: none; padding: 8px 14px; }
+.open-rooms .btn:disabled { opacity: .5; }
+.live-rooms .lr-tag { flex: none; padding: 3px 7px 2px; border-radius: 2px; font: 700 12px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; color: #ddd; background: #3a3430; }
+.live-rooms .lr-tag.pub { color: #1a1004; background: var(--gold); }
