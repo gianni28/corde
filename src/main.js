@@ -3048,6 +3048,7 @@ function enterRoom(code, pub = null) {
   if (!name) { $("mpErr").textContent = "Escribe tu nombre."; $("mpErr").hidden = false; return; }
   if (!online) { $("mpErr").textContent = "El multijugador necesita que el juego esté conectado a Supabase."; $("mpErr").hidden = false; return; }
   settings.name = name; save();
+  if (app.room) { try { app.room.leave(); } catch {} app.room = null; } // never in two rooms (or twice in one) at once
   app.me = { id: uid(), name, lanes: deviceLanes(), device: touch ? "cel" : "pc" };
   app.mode = "mp";
   app.roomConfig = null; app.loadedRoomSong = null;
@@ -3369,12 +3370,15 @@ function tallyCup(force = false) {
   if (!amHost() || !app.roundId) return;
   const cfg = app.roomConfig || {};
   if (cfg.counted === app.roundId) return;
-  const fin = Object.entries(app.finals);
-  if (!fin.length || (!force && fin.length < app.peers.length)) return;
-  const cup = { ...(cfg.cup || {}) };
-  fin.sort((a, b) => b[1].score - a[1].score).forEach(([id, r], i) => {
-    const c = cup[id] || { name: r.name, pts: 0, wins: 0 };
-    cup[id] = { name: r.name, pts: c.pts + ([3, 2, 1][i] || 0), wins: c.wins + (i === 0 ? 1 : 0) };
+  // one result per player, by name: someone whose page reloaded comes back with a new connection, but is the same player
+  const best = {};
+  for (const r of Object.values(app.finals)) { const k = nameKey(r.name); if (!best[k] || r.score > best[k].score) best[k] = r; }
+  const fin = Object.values(best);
+  if (!fin.length || (!force && fin.length < new Set(app.peers.map((p) => nameKey(p.name))).size)) return;
+  const cup = cupByName(cfg.cup);
+  fin.sort((a, b) => b.score - a.score).forEach((r, i) => {
+    const k = nameKey(r.name), c = cup[k] || { name: r.name, pts: 0, wins: 0 };
+    cup[k] = { name: r.name, pts: c.pts + ([3, 2, 1][i] || 0), wins: c.wins + (i === 0 ? 1 : 0) };
   });
   const patch = { cup, counted: app.roundId };
   // a cup moves on to its next song (everyone starts downloading it), or ends
@@ -3384,6 +3388,16 @@ function tallyCup(force = false) {
     else patch.plan = { ...plan, done: true };
   }
   setRoomConfig(patch);
+}
+// the cup's table is by player name (a player whose page reloaded is still that player): rows from before that were by
+// connection, a player twice, are added up into one
+function cupByName(cup = {}) {
+  const out = {};
+  for (const r of Object.values(cup || {})) {
+    const k = nameKey(r.name), c = out[k];
+    out[k] = c ? { name: c.name, pts: c.pts + r.pts, wins: c.wins + r.wins } : { ...r };
+  }
+  return out;
 }
 // the host changes the room's setup: right away here, and for everyone through its presence
 function setRoomConfig(patch) {
@@ -3478,7 +3492,7 @@ $("cupPick").onclick = (e) => {
 };
 $("lobbyRandom").onclick = () => { if (amHost()) randomRoomSong(); };
 function renderCup(el, cfg) {
-  const rows = Object.values(cfg?.cup || {}).sort((a, b) => b.pts - a.pts || b.wins - a.wins);
+  const rows = Object.values(cupByName(cfg?.cup)).sort((a, b) => b.pts - a.pts || b.wins - a.wins);
   el.hidden = !rows.length;
   if (!rows.length) return;
   const plan = cfg?.plan;
