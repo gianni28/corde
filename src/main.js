@@ -12,7 +12,7 @@ import { motionAvailable, motionNeedsPermission, motionReady, requestMotion, onL
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
 import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, nameStyles, songRequest, myNotices, noticeSeen, noticeReply, myFulfilled, fulfilledSeen } from "./net.js";
 import { shareCard, retoUrl, readReto } from "./share.js";
-import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau, forBananas, BANANA_GIFTS, BANANA_LOGROS, forOneD, ONED_SONGS, ONED_STARS } from "./achievements.js";
+import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau, forBananas, BANANA_GIFTS, BANANA_LOGROS, forOneD, ONED_SONGS, ONED_STARS, ONED_DIFF } from "./achievements.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretOpen, secretBoard, songById, fetchMiauProgress, roomDirectory, commentPost, myComments, myCommentReplies, commentReplySeen } from "./net.js";
 import { VENUES, TO_ENCORE, TOUR_PRIZES, TOUR_THEMES, prizesWon, savedTourDiffs, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song, separateExisting } from "./admin.js";
@@ -1452,7 +1452,7 @@ function celebrateAchievements(list) {
 }
 // what your saved bests already prove (players from before the logros existed get theirs without replaying), silently
 function backfillAchievements() {
-  const ids = [...forMiau(miauIds(), bestAcc), ...forBananas(bananas), ...(oneDLive() ? forOneD(oneDIds(), maxStars) : [])], n = songsDone();
+  const ids = [...forMiau(miauIds(), bestAcc), ...forBananas(bananas), ...(oneDLive() ? forOneD(oneDIds(), oneDStars) : [])], n = songsDone();
   // the tour's prizes for venues already cleared (before there were prizes, or on another device)
   if (publicSongs().length) for (const d of savedTourDiffs()) { const t = tourFor(d, publicSongs()); if (t) ids.push(...prizesWon(tourProgress(t, bestOf))); }
   if (n >= 1) ids.push("primer-acorde");
@@ -1835,7 +1835,7 @@ function finishGame() {
   const run = app.bananaRun; app.bananaRun = null;
   $("bananaRes").hidden = !run; $("giftBtn").hidden = true;
   if (run) { bananas += run.got; saveBananas(); ids.push(...forBananas(bananas)); }
-  if (isOneD(app.song) && !sum.failed && oneDLive()) ids.push(...forOneD(oneDIds(), (id) => Math.max(maxStars(id), id === app.song.id ? sum.stars : 0)));
+  if (isOneD(app.song) && !sum.failed && oneDLive()) ids.push(...forOneD(oneDIds(), (id) => Math.max(oneDStars(id), id === app.song.id && diffOk(app.diff) ? sum.stars : 0)));
   const fresh = unlock(ids).sort((a, b) => !!b.surprise - !!a.surprise); // a surprise gift first: it's the big news
   if (run) {
     const gifts = fresh.filter((a) => a.surprise).map((a) => giftOf(a.id)).filter(Boolean);
@@ -2053,7 +2053,7 @@ function showNextNotice() {
     try { localStorage.setItem(ONED_INTRO_KEY, "1"); } catch {}
     notices.go = () => { app.mode = "solo"; app.libTab = oneDSongs()[0]?.secret ?? "all"; openLibrary(); };
     $("noticeKicker").textContent = "Evento · One Direction";
-    $("noticeBody").textContent = `¡Hay un evento en las canciones secretas!\n\nSaca ${ONED_STARS} estrellas o más en cada una de las ${ONED_SONGS} canciones de One Direction y te ganas un regalo sorpresa. ¿Qué será? Solo lo sabrás cuando lo ganes.`;
+    $("noticeBody").textContent = `¡Hay un evento en las canciones secretas!\n\nSaca ${ONED_STARS} estrellas o más en cada una de las ${ONED_SONGS} canciones de One Direction, en ${diffName(ONED_DIFF)} o más difícil, y te ganas un regalo sorpresa. ¿Qué será? Solo lo sabrás cuando lo ganes.`;
     $("noticeForm").querySelector(".notice-reply").hidden = true; $("noticeGo").hidden = false; $("noticeGo").textContent = "Ir a las canciones";
     $("noticeMsg").textContent = ""; $("noticeModal").hidden = false;
     return;
@@ -2144,18 +2144,21 @@ const isOneD = (s) => !!s && !!s.secret && /one\s*direction/i.test(s.artist || "
 const oneDSongs = () => app.songs.filter(isOneD);
 const oneDIds = () => oneDSongs().map((s) => s.id);
 const oneDLive = () => oneDSongs().length >= ONED_SONGS && !!giftOf("one-direction");
-const maxStars = (id) => Math.max(0, ...Object.values(bests[id] || {}).map((x) => x?.stars || 0));
+// a song's best stars on the event's difficulty or harder
+const diffName = (key) => DIFFS.find((d) => d.key === key)?.name || key;
+const diffOk = (key) => DIFFS.findIndex((d) => d.key === key) >= DIFFS.findIndex((d) => d.key === ONED_DIFF);
+const oneDStars = (id) => Math.max(0, ...Object.entries(bests[id] || {}).filter(([d]) => diffOk(d)).map(([, x]) => x?.stars || 0));
 function oneDCard() {
   const songs = oneDSongs(), won = !!achievementsWon()["one-direction"], gift = giftOf("one-direction");
-  const done = songs.filter((s) => maxStars(s.id) >= ONED_STARS).length;
+  const done = songs.filter((s) => oneDStars(s.id) >= ONED_STARS).length;
   const card = document.createElement("div"); card.className = "oned-card";
   card.innerHTML = `<div class="od-head"><span class="od-badge" aria-hidden="true">1D</span><div><b>Evento · One Direction</b><small></small></div><span class="od-count">${done}/${songs.length}</span></div>`
     + `<ol class="od-songs">${songs.map(() => `<li><span class="od-n"></span><span class="od-st"></span></li>`).join("")}</ol>`
     + `<button type="button" class="od-gift${won ? " won" : ""}" ${won && gift ? "" : "disabled"}>${won && gift ? `<span class="sw"></span>` : `<svg aria-hidden="true"><use href="#gift"/></svg><em>?</em>`}</button>`;
   card.querySelector(".od-head small").textContent = won ? (gift ? "¡Lo lograste! Tu regalo ya está en la Tienda." : "¡Lo lograste! Tu regalo sorpresa llega muy pronto.")
-    : `Saca ${ONED_STARS} estrellas o más en cada canción y gánate un regalo sorpresa.`;
+    : `Saca ${ONED_STARS} estrellas o más en cada canción, en ${diffName(ONED_DIFF)} o más difícil, y gánate un regalo sorpresa.`;
   card.querySelectorAll(".od-songs li").forEach((li, i) => {
-    const st = maxStars(songs[i].id);
+    const st = oneDStars(songs[i].id);
     li.classList.toggle("ok", st >= ONED_STARS);
     li.querySelector(".od-n").textContent = songs[i].name;
     li.querySelector(".od-st").innerHTML = starsHtml(st);
