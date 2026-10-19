@@ -127,7 +127,7 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
   torso.onBeforeRender = (r) => r.clearDepth();
   const parts = { torso, head: mk(G.head, 61), hair: mk(G.hair, 61), upL: mk(G.upper, 61), foreL: mk(G.fore, 61), upR: mk(G.upper, 61), foreR: mk(G.fore, 61) };
 
-  // phone lights / lighters held up in the quiet parts
+  // what the crowd holds up (lighters, phones, lasers…), each in its own moments of the song (see "and when" below)
   const lightPos = new Float32Array(alloc * 3), lightCol = new Float32Array(alloc * 3);
   const lgeo = new THREE.BufferGeometry();
   lgeo.setAttribute("position", new THREE.BufferAttribute(lightPos, 3));
@@ -140,9 +140,11 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
   // "fireflies" (they fly over the crowd and blink on the beat), "cats" (a crowd of cats: ears and tails)
   let lightKind = "lighters", liftFor = 0;
   const STICKS = [[0.35, 1, 0.2], [1, 0.25, 0.75], [0.2, 0.85, 1], [1, 0.9, 0.15], [0.65, 0.3, 1], [1, 0.5, 0.1]];
-  // who holds one up: a share of the crowd per kind (more phones than lighters, a few lasers); always: also in the loud parts
+  // who holds one up: a share of the crowd per kind (more phones than lighters, a few lasers); always: the whole song
   const HOLD = { lighters: 0.45, phones: 0.55, lasers: 0.3, sticks: 0.5, sparklers: 0.35 };
-  const ALWAYS = { lasers: true, sticks: true };
+  const ALWAYS = { sticks: true };
+  // and when, as at a real show: lighters in the calm parts; phones there (as torches) and in the big moments (filming
+  // the chorus); lasers in the intense parts; sparklers only at the peaks; glow sticks all song, waved on the beat
 
   // the things they hold: one textured card per person, drawn over the crowd (instanced; the look per kind)
   const propGeo = new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0); // grows up from the hand
@@ -273,10 +275,12 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
     // a really calm part (energy.js: soft for real, few notes): sway with the lights up; without that measure, quiet = calm
     const calm = f.C == null ? 1 - smooth(0.22, 0.5, E) : clamp01(f.C * (1 - star));
     liftFor = Math.max(-1, liftFor - dt);
-    const up = Math.max(calm, smooth(0, 0.6, liftFor)); // lights up: the quiet parts, or showLights
+    const lift = smooth(0, 0.6, liftFor), loud = (1 - calm) * (1 - smooth(0.25, 0.6, calm));
+    const up = { lighters: Math.max(calm, lift), phones: Math.max(calm, smooth(0.62, 0.8, E) * loud, lift),
+      lasers: Math.max(smooth(0.55, 0.75, E) * loud, lift), sparklers: Math.max(smooth(0.72, 0.88, E) * loud, lift) }[lightKind] ?? Math.max(calm, lift);
     uni.uRim.value.copy(f.rim);
-    // strobes: the whole crowd flashes white on the beat (harder the louder it is)
-    if (lightKind === "strobe") { const fl = Math.pow(kick(ph), 6) * (0.35 + 0.9 * lvl); uni.uRim.value.lerp(tmpC.setRGB(2.4, 2.4, 2.6), clamp01(fl)); }
+    // strobes: the whole crowd flashes white on the beat, in the loud parts (harder the louder it is), not in the calm ones
+    if (lightKind === "strobe") { const fl = Math.pow(kick(ph), 6) * (0.35 + 0.9 * lvl) * (0.1 + 0.9 * smooth(0.4, 0.65, E) * (1 - calm)); uni.uRim.value.lerp(tmpC.setRGB(2.4, 2.4, 2.6), clamp01(fl)); }
     const k = Math.min(1, dt * 8);
     let li = 0;
     for (let i = 0; i < people.length; i++) {
