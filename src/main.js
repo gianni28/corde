@@ -3043,13 +3043,19 @@ R.onGraphicsTrouble = gfxFail;
 
 /* ================= multiplayer ================= */
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
+// who you are in a room: the same in this tab however often you come in (reconnecting, the page coming back from
+// sleep), so the room and its cup never see you as somebody new
+function mpId() {
+  try { let s = sessionStorage.getItem("corde.mp.id"); if (!s) { s = uid(); sessionStorage.setItem("corde.mp.id", s); } return s; }
+  catch { return (app.mpId ||= uid()); }
+}
 function enterRoom(code, pub = null) {
   const name = $("mpName").value.trim().slice(0, 16);
   if (!name) { $("mpErr").textContent = "Escribe tu nombre."; $("mpErr").hidden = false; return; }
   if (!online) { $("mpErr").textContent = "El multijugador necesita que el juego esté conectado a Supabase."; $("mpErr").hidden = false; return; }
   settings.name = name; save();
   if (app.room) { try { app.room.leave(); } catch {} app.room = null; } // never in two rooms (or twice in one) at once
-  app.me = { id: uid(), name, lanes: deviceLanes(), device: touch ? "cel" : "pc" };
+  app.me = { id: mpId(), name, lanes: deviceLanes(), device: touch ? "cel" : "pc" };
   app.mode = "mp";
   app.roomConfig = null; app.loadedRoomSong = null;
   app.room = joinRoom(code, app.me, {
@@ -3299,6 +3305,7 @@ function onRoomEvent(ev, p) {
     app.rivals[p.from] = { name: p.name, score: p.score, combo: p.combo, acc: p.acc };
     renderRivals();
   } else if (ev === "final") {
+    if (p.round && app.roundId && p.round !== app.roundId) return; // a late one from the round before
     app.finals[p.from] = p;
     renderRanking();
   }
