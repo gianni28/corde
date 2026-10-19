@@ -355,11 +355,11 @@ export const noticeReply = (secret, id, body) => rpcJson("notice_reply", { p_sec
 export const myFulfilled = (secret) => rpcJson("my_fulfilled", { p_secret: secret });
 export const fulfilledSeen = (secret, id) => rpcJson("fulfilled_seen", { p_secret: secret, p_id: id });
 
-/* ---------------- the comments wall (comments.sql) ---------------- */
+/* ---------------- comments to the admin, private (comments.sql, comments_private.sql) ---------------- */
 /** A comment from this browser's account → { ok } | { error: "no_account" | "empty" | "limit" } */
 export const commentPost = (secret, body) => rpcJson("comment_post", { p_secret: secret, p_body: body });
-/** The wall, newest first → [{ id, name, body, at, reply, replied_at }] */
-export const commentsWall = () => rpcJson("comments_wall", { p_limit: 100 });
+/** This account's own comments and the admin's answers, newest first → [{ id, body, at, reply, replied_at }] */
+export const myComments = (secret) => rpcJson("my_comments", { p_secret: secret });
 /** This account's comments answered by the admin, not shown yet → [{ id, body, reply }] */
 export const myCommentReplies = (secret) => rpcJson("my_comment_replies", { p_secret: secret });
 export const commentReplySeen = (secret, id) => rpcJson("comment_reply_seen", { p_secret: secret, p_id: id });

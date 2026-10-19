@@ -13,7 +13,7 @@ import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from 
 import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, nameStyles, songRequest, myNotices, noticeSeen, noticeReply, myFulfilled, fulfilledSeen } from "./net.js";
 import { shareCard, retoUrl, readReto } from "./share.js";
 import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau, forBananas, BANANA_GIFTS, BANANA_LOGROS } from "./achievements.js";
-import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretOpen, secretBoard, songById, fetchMiauProgress, roomDirectory, commentPost, commentsWall, myCommentReplies, commentReplySeen } from "./net.js";
+import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretOpen, secretBoard, songById, fetchMiauProgress, roomDirectory, commentPost, myComments, myCommentReplies, commentReplySeen } from "./net.js";
 import { VENUES, TO_ENCORE, TOUR_PRIZES, TOUR_THEMES, prizesWon, savedTourDiffs, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song, separateExisting } from "./admin.js";
 import { fillDifficulties } from "./reduce.js";
@@ -2048,7 +2048,7 @@ function showNextNotice() {
   const answer = n.kind === "comment"; // the admin answered one of their comments: the answer, under what they wrote
   $("noticeKicker").textContent = answer ? `${ADMIN_NAME} te respondió` : "Mensaje";
   $("noticeBody").textContent = answer ? `«${n.body}»\n\n${n.reply}` : n.body;
-  $("noticeForm").querySelector(".notice-reply").hidden = answer; $("noticeGo").hidden = !answer; $("noticeGo").textContent = "Ver comentarios";
+  $("noticeForm").querySelector(".notice-reply").hidden = answer; $("noticeGo").hidden = !answer; $("noticeGo").textContent = "Ver mis mensajes";
   notices.go = answer ? openComments : null;
   $("noticeReply").value = ""; $("noticeSend").hidden = true; $("noticeMsg").textContent = "";
   $("noticeModal").hidden = false;
@@ -2199,24 +2199,23 @@ async function openComments() {
   await loadComments();
 }
 async function loadComments() {
-  if (!online) { $("cmEmpty").textContent = "Los comentarios necesitan conexión."; return; }
-  let list;
-  try { list = await commentsWall(); } catch (e) { $("cmEmpty").textContent = "No se pudieron cargar los comentarios."; return; }
   const ul = $("cmList"); ul.innerHTML = "";
-  $("cmEmpty").textContent = list.length ? "" : "Todavía no hay comentarios. ¡Escribe el primero!";
+  if (!online) { $("cmEmpty").textContent = "Los mensajes necesitan conexión."; return; }
+  if (!account) { $("cmEmpty").textContent = ""; return; }
+  let list;
+  try { list = await myComments(playerSecret()); } catch (e) { $("cmEmpty").textContent = "No se pudieron cargar tus mensajes."; return; }
+  $("cmEmpty").textContent = list.length ? "" : "Todavía no le has escrito nada.";
+  // only what this player wrote, and the answers
   for (const c of list) {
     const li = document.createElement("li");
-    li.innerHTML = `<div class="cm-head"><b class="cm-name"></b><small></small></div><p class="cm-body"></p>`;
-    styledName(li.querySelector(".cm-name"), c.name); li.querySelector(".cm-name").prepend(c.name);
+    li.innerHTML = `<div class="cm-head"><b class="cm-name">Tú</b><small></small></div><p class="cm-body"></p>`;
     li.querySelector("small").textContent = shortDate(c.at);
     li.querySelector(".cm-body").textContent = c.body;
-    if (c.reply) {
-      const r = document.createElement("div"); r.className = "cm-reply";
-      r.innerHTML = `<span class="cm-admin"></span><p></p>`;
-      r.querySelector(".cm-admin").textContent = `${ADMIN_NAME} · creador de Corde`;
-      r.querySelector("p").textContent = c.reply;
-      li.appendChild(r);
-    }
+    const r = document.createElement("div"); r.className = "cm-reply" + (c.reply ? "" : " cm-wait");
+    r.innerHTML = `<span class="cm-admin"></span><p></p>`;
+    r.querySelector(".cm-admin").textContent = c.reply ? `${ADMIN_NAME} · creador de Corde` : `Le llegó a ${ADMIN_NAME}`;
+    r.querySelector("p").textContent = c.reply || "Todavía no te ha respondido.";
+    li.appendChild(r);
     ul.appendChild(li);
   }
 }
@@ -2228,9 +2227,9 @@ $("cmForm").onsubmit = async (e) => {
   $("cmSend").disabled = true; $("cmMsg").textContent = "";
   try {
     const r = await commentPost(playerSecret(), body);
-    if (r?.ok) { $("cmText").value = ""; $("cmMsg").textContent = "¡Publicado!"; await loadComments(); }
-    else $("cmMsg").textContent = r?.error === "limit" ? "Ya escribiste 10 comentarios hoy. Vuelve mañana." : r?.error === "no_account" ? "Primero elige tu nombre en el juego." : "No se pudo publicar.";
-  } catch { $("cmMsg").textContent = "No se pudo publicar. Revisa tu conexión."; }
+    if (r?.ok) { $("cmText").value = ""; $("cmMsg").textContent = `¡Enviado! Solo lo lee ${ADMIN_NAME}.`; await loadComments(); }
+    else $("cmMsg").textContent = r?.error === "limit" ? "Ya escribiste 10 comentarios hoy. Vuelve mañana." : r?.error === "no_account" ? "Primero elige tu nombre en el juego." : "No se pudo enviar.";
+  } catch { $("cmMsg").textContent = "No se pudo enviar. Revisa tu conexión."; }
   $("cmSend").disabled = false;
 };
 
@@ -3867,16 +3866,16 @@ function renderRequests(list) {
     ul.appendChild(li);
   }
 }
-// the wall's comments: answer (it shows under the comment, and its writer is told), hide, delete
+// the players' comments, private (only here): answer (its writer sees it in their Comentarios and is told), delete
 function renderAdminComments(list) {
   const ul = $("cmaList"); ul.innerHTML = "";
-  $("cmaEmpty").textContent = list.length ? `${list.filter((c) => !c.reply && !c.hidden).length} sin responder de ${list.length}.` : "Todavía nadie ha comentado.";
+  $("cmaEmpty").textContent = list.length ? `${list.filter((c) => !c.reply).length} sin responder de ${list.length}. Solo tú los ves.` : "Todavía nadie ha comentado.";
   const code = () => $("adminCode").value.trim();
   for (const c of list) {
-    const li = document.createElement("li"); li.className = c.hidden ? "done" : "";
-    li.innerHTML = `<span class="n"><b></b><small></small><span class="req-body"></span><small class="req-song"></small></span><span class="req-act"><button type="button"></button><button type="button">Borrar</button></span>`
+    const li = document.createElement("li"); li.className = c.reply ? "done" : "";
+    li.innerHTML = `<span class="n"><b></b><small></small><span class="req-body"></span><small class="req-song"></small></span><span class="req-act"><button type="button">Borrar</button></span>`
       + `<span class="req-pick cma-reply"><textarea rows="2" maxlength="1000" aria-label="Tu respuesta"></textarea><span class="cma-row"><button type="button" class="cma-save"></button></span></span>`;
-    li.querySelector("b").textContent = c.name + (c.hidden ? " (oculto)" : ""); li.querySelector("small").textContent = ` · ${shortDate(c.at)}`;
+    li.querySelector("b").textContent = c.name; li.querySelector("small").textContent = ` · ${shortDate(c.at)}`;
     li.querySelector(".req-body").textContent = c.body;
     if (c.reply) li.querySelector(".req-song").textContent = c.seen ? "Ya vio tu respuesta" : "Verá tu respuesta al entrar";
     const ta = li.querySelector("textarea"), save = li.querySelector(".cma-save");
@@ -3884,12 +3883,10 @@ function renderAdminComments(list) {
     save.textContent = c.reply ? "Guardar respuesta" : "Responder";
     save.onclick = async () => {
       save.disabled = true;
-      try { await adminCall({ code: code(), action: "comment_reply", id: c.id, reply: ta.value.trim() }); toast(ta.value.trim() ? "Respuesta publicada" : "Respuesta quitada"); } catch (e) { toast(e.message); }
+      try { await adminCall({ code: code(), action: "comment_reply", id: c.id, reply: ta.value.trim() }); toast(ta.value.trim() ? "Respuesta enviada" : "Respuesta quitada"); } catch (e) { toast(e.message); }
       loadInbox();
     };
-    const [bHide, bDel] = li.querySelectorAll(".req-act button");
-    bHide.textContent = c.hidden ? "Mostrar" : "Ocultar";
-    bHide.onclick = async () => { bHide.disabled = true; try { await adminCall({ code: code(), action: "comment_hide", id: c.id, hidden: !c.hidden }); } catch (e) { toast(e.message); } loadInbox(); };
+    const bDel = li.querySelector(".req-act button");
     bDel.onclick = async () => { if (!confirm("¿Borrar este comentario?")) return; bDel.disabled = true; try { await adminCall({ code: code(), action: "comment_delete", id: c.id }); } catch (e) { toast(e.message); } loadInbox(); };
     ul.appendChild(li);
   }
