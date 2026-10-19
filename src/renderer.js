@@ -10,7 +10,7 @@ import { Pass, FullScreenQuad } from "three/examples/jsm/postprocessing/Pass.js"
 import { CopyShader } from "three/examples/jsm/shaders/CopyShader.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { createCrowd, createBand } from "./stagecrew.js";
-import { LANE_HEX, NECKS, GEMS, FLAMES, STRINGS, STARS, CROWDS, PETS, resolveSkin, grime } from "./skins.js";
+import { LANE_HEX, NECKS, GEMS, FLAMES, STRINGS, STARS, CROWDS, PETS, ONED, resolveSkin, grime } from "./skins.js";
 
 export { LANE_HEX };
 const HL = 24; // highway length (world units)
@@ -353,12 +353,7 @@ function makeNero() {
     return p;
   });
   const feet = [-1, 1].map((side) => { const f = add(new THREE.SphereGeometry(1, 12, 8), FEET, g); f.scale.set(0.07, 0.03, 0.08); f.position.set(side * 0.13, 0.03, 0.12); return f; });
-  // the z's of a nap
-  const zz = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, map: canvasTex(64, 64, (c) => {
-    c.fillStyle = "#fff"; c.strokeStyle = "#000"; c.lineWidth = 4; c.font = "bold 34px sans-serif"; c.strokeText("z", 6, 52); c.fillText("z", 6, 52);
-    c.font = "bold 24px sans-serif"; c.strokeText("z", 36, 26); c.fillText("z", 36, 26);
-  }) }));
-  zz.scale.set(0.34, 0.34, 1); g.add(zz);
+  const zz = napZ(); g.add(zz);
   g.pose = ({ lid, wing, feet: down, sleep, now }) => {
     lids.forEach((l) => (l.rotation.x = -1.45 + lid * 3.0));
     wings.forEach((w, i) => (w.rotation.z = (i ? 1 : -1) * (0.08 + wing * 2.1)));
@@ -368,7 +363,122 @@ function makeNero() {
   g.body = b;
   return g;
 }
-const petModels = { nero: makeNero };
+// the z's of a nap, over a pet's head
+function napZ() {
+  const zz = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, map: canvasTex(64, 64, (c) => {
+    c.fillStyle = "#fff"; c.strokeStyle = "#000"; c.lineWidth = 4; c.font = "bold 34px sans-serif"; c.strokeText("z", 6, 52); c.fillText("z", 6, 52);
+    c.font = "bold 24px sans-serif"; c.strokeText("z", 36, 26); c.fillText("z", 36, 26);
+  }) }));
+  zz.scale.set(0.34, 0.34, 1);
+  return zz;
+}
+// One Direction, as little figures (the event's gift; skins.js ONED): a big head, each one known by his hair (Harry's
+// curls, Liam's wavy mop falling over his forehead, Louis's fringe swept aside, Niall's blond swoop, Zayn's tall black
+// quiff) and his clothes. Built facing +z with the feet at 0, about 1.1 tall; pose() as Nero's: lids, arms up (wing), the z's.
+// They don't fly: with star power they jump and wave both arms over their heads (lift: how high the renderer raises them).
+function makeMember(m) {
+  const g = new THREE.Group(), b = new THREE.Group(); g.add(b); g.lift = 0.3;
+  const mat = (color, roughness = 0.6) => new THREE.MeshStandardMaterial({ color, roughness, metalness: 0 });
+  const SKIN = mat(m.skin, 0.55), HAIR = mat(m.hairC, 0.5), PANTS = mat(m.pants, 0.75), SHOE = mat(0x1a1a1e, 0.4);
+  const TOP = mat(m.pattern === "plaid" ? 0xffffff : m.top, 0.7);
+  if (m.pattern === "plaid") TOP.map = canvasTex(64, 64, (c) => {
+    c.fillStyle = "#" + m.top.toString(16).padStart(6, "0"); c.fillRect(0, 0, 64, 64);
+    c.fillStyle = "rgba(10,30,50,.45)"; for (let i = 0; i < 64; i += 16) { c.fillRect(i, 0, 6, 64); c.fillRect(0, i, 64, 6); }
+    c.fillStyle = "rgba(230,240,240,.35)"; for (let i = 8; i < 64; i += 16) { c.fillRect(i, 0, 2, 64); c.fillRect(0, i, 64, 2); }
+  }, { repeat: true });
+  const add = (geo, mt, parent = b) => { const o = new THREE.Mesh(geo, mt); parent.add(o); return o; };
+  const sph = (r, ws = 18, hs = 12) => new THREE.SphereGeometry(r, ws, hs);
+  // legs and shoes
+  for (const side of [-1, 1]) {
+    add(new THREE.CylinderGeometry(0.055, 0.06, 0.24, 12), PANTS).position.set(side * 0.07, 0.17, 0);
+    const sh = add(sph(1), SHOE); sh.scale.set(0.065, 0.04, 0.095); sh.position.set(side * 0.07, 0.04, 0.025);
+  }
+  // the body: the shirt or the jacket, and what shows at the front when it's open
+  add(new THREE.CylinderGeometry(0.13, 0.16, 0.3, 18), TOP).position.y = 0.43;
+  if (m.under != null) {
+    const f = add(new THREE.BoxGeometry(0.1, 0.27, 0.02), mat(m.under, 0.7)); f.position.set(0, 0.43, 0.137); f.rotation.x = -0.1;
+  }
+  if (m.pocket != null) { const q = add(new THREE.BoxGeometry(0.045, 0.03, 0.01), mat(m.pocket, 0.6)); q.position.set(0.085, 0.5, 0.125); q.rotation.set(-0.1, 0.5, 0); }
+  if (m.stripe != null) { const r = add(new THREE.CylinderGeometry(0.141, 0.144, 0.022, 18, 1, true), mat(m.stripe, 0.6)); r.position.y = 0.5; }
+  if (m.neck != null) { const r = add(new THREE.TorusGeometry(0.075, 0.022, 8, 18), mat(m.neck, 0.6)); r.position.set(0, 0.56, 0.01); r.rotation.x = Math.PI / 2 - 0.25; }
+  if (m.collar != null) for (const side of [-1, 1]) {
+    const c = add(new THREE.ConeGeometry(0.04, 0.07, 3), mat(m.collar, 0.6)); c.position.set(side * 0.04, 0.565, 0.1); c.rotation.set(0.5, 0, side * 2.6);
+  }
+  if (m.buttons != null) for (let i = 0; i < 3; i++) add(sph(0.011, 8, 6), mat(m.buttons, 0.4)).position.set(0, 0.54 - i * 0.045, 0.134 + i * 0.004);
+  add(new THREE.CylinderGeometry(0.045, 0.05, 0.07, 12), SKIN).position.y = 0.6;
+  // arms, hung from the shoulders (pose() raises them)
+  const arms = [-1, 1].map((side) => {
+    const p = new THREE.Group(); p.position.set(side * 0.155, 0.55, 0); b.add(p);
+    add(new THREE.CylinderGeometry(0.045, 0.042, 0.24, 10), TOP, p).position.y = -0.12;
+    add(sph(0.048), SKIN, p).position.y = -0.26;
+    return p;
+  });
+  // the head, a big one
+  const head = new THREE.Group(); head.position.y = 0.81; b.add(head);
+  add(sph(0.25, 28, 20), SKIN, head).scale.set(1, 0.96, 0.95);
+  for (const side of [-1, 1]) add(sph(0.05), SKIN, head).position.set(side * 0.243, -0.01, -0.01);
+  const lids = [];
+  for (const side of [-1, 1]) {
+    const e = new THREE.Group(); e.position.set(side * 0.088, -0.005, 0.218); head.add(e);
+    const eye = add(sph(0.036), mat(0x101012, 0.2), e); eye.scale.set(1, 1.2, 0.6);
+    const iris = add(sph(0.022), mat(m.eyes, 0.25), e); iris.position.set(0, -0.006, 0.014); iris.scale.set(1, 1.2, 0.5);
+    add(sph(0.011, 8, 6), mat(0xffffff, 0.2), e).position.set(side * -0.01, 0.014, 0.024);
+    const lid = new THREE.Group(); e.add(lid); lids.push(lid);
+    add(new THREE.SphereGeometry(0.046, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), SKIN, lid).scale.set(1, 1.15, 0.75);
+    const brow = add(new THREE.BoxGeometry(0.07, 0.014, 0.02), HAIR, head); brow.position.set(side * 0.088, 0.065, 0.225); brow.rotation.z = side * -0.12;
+  }
+  const mouth = add(new THREE.TorusGeometry(0.04, 0.009, 6, 14, Math.PI), mat(0x8a3a34, 0.5), head);
+  mouth.position.set(0, -0.085, 0.226); mouth.rotation.z = Math.PI;
+  // the hair: a cap tilted back so its edge runs above the brows (never down by the eyes), then each one's cut
+  const cap = (r, tilt) => { const c = add(new THREE.SphereGeometry(r, 28, 14, 0, Math.PI * 2, 0, Math.PI * 0.55), HAIR, head); c.rotation.x = tilt; c.scale.set(1, 1, 0.97); return c; };
+  if (m.hair === "buzz") {
+    cap(0.256, -0.5);
+  } else if (m.hair === "quiff") {
+    cap(0.262, -0.5);
+    // high at the front, swept up and back (short at the sides)
+    const q = add(sph(1, 20, 14), HAIR, head); q.scale.set(0.16, 0.07, 0.2); q.position.set(0, 0.2, 0.1); q.rotation.x = -0.15;
+    const q2 = add(sph(1, 16, 12), HAIR, head); q2.scale.set(0.13, 0.065, 0.1); q2.position.set(0, 0.235, 0.2); q2.rotation.x = 0.8;
+  } else if (m.hair === "swoop") {
+    // swept up and over at the front, soft and rounded (not Zayn's tall one)
+    cap(0.264, -0.5);
+    const w = add(sph(1, 20, 14), HAIR, head); w.scale.set(0.19, 0.09, 0.17); w.position.set(0.02, 0.23, 0.1); w.rotation.set(-0.35, 0, -0.15);
+    const t = add(sph(1, 16, 12), HAIR, head); t.scale.set(0.1, 0.07, 0.1); t.position.set(-0.1, 0.2, 0.15); t.rotation.set(-0.2, 0, 0.4);
+  } else if (m.hair === "mop") {
+    // a full wavy mop, its fringe falling over the forehead
+    cap(0.272, -0.47);
+    const top = add(sph(1, 20, 14), HAIR, head); top.scale.set(0.25, 0.12, 0.23); top.position.set(0, 0.17, 0.0);
+    [[-0.1, 0.18, 0.18, 0.4], [0.0, 0.17, 0.2, 0.1], [0.1, 0.18, 0.18, -0.3], [-0.19, 0.12, 0.13, 0.8]].forEach(([x, y, z, rz]) => {
+      const f = add(sph(1, 14, 10), HAIR, head); f.scale.set(0.07, 0.085, 0.05); f.position.set(x, y, z); f.rotation.set(0.5, 0, rz);
+    });
+    for (const side of [-1, 1]) add(sph(0.075, 12, 10), HAIR, head).position.set(side * 0.21, 0.07, -0.03);
+  } else if (m.hair === "fringe") {
+    cap(0.264, -0.47);
+    const f = add(sph(1, 20, 12), HAIR, head); f.scale.set(0.2, 0.06, 0.09); f.position.set(0.03, 0.17, 0.17); f.rotation.set(0.3, 0, -0.32);
+    const f2 = add(sph(1, 16, 10), HAIR, head); f2.scale.set(0.1, 0.045, 0.07); f2.position.set(0.17, 0.12, 0.15); f2.rotation.set(0.2, 0.4, -0.7);
+    const top = add(sph(1, 18, 12), HAIR, head); top.scale.set(0.2, 0.09, 0.2); top.position.set(0, 0.2, 0.03);
+  } else {
+    // curls: a mop of little balls over the top, the sides and down the back to the neck
+    cap(0.27, -0.45);
+    for (let i = 0; i < 34; i++) {
+      const a = (i / 34) * Math.PI * 2 * 3.3, t = i / 33, th = 0.25 + t * 1.45, r = 0.27;
+      const x = Math.sin(th) * Math.sin(a) * r, y = Math.cos(th) * r, z = Math.sin(th) * Math.cos(a) * r;
+      if (z > 0.1 && y < 0.15) continue; // the face stays clear
+      add(sph(0.06 + (i % 3) * 0.008, 10, 8), HAIR, head).position.set(x * 1.02, y + 0.02, z * 1.02 - 0.01);
+    }
+    for (const [x, y] of [[-0.12, 0.17], [0.1, 0.19], [-0.02, 0.21]]) add(sph(0.065, 10, 8), HAIR, head).position.set(x, y, 0.15);
+  }
+  if (m.earrings != null) for (const side of [-1, 1]) add(sph(0.018, 8, 6), mat(m.earrings, 0.2), head).position.set(side * 0.25, -0.05, 0.01);
+  const zz = napZ(); g.add(zz);
+  g.pose = ({ lid, wing, sleep, now }) => {
+    lids.forEach((l) => (l.rotation.x = -1.45 + lid * 3.0));
+    arms.forEach((a, i) => (a.rotation.z = (i ? 1 : -1) * (0.12 + wing * 2.5 + (wing > 0.4 ? Math.sin(now * 14 + i * 2) * 0.25 : 0))));
+    mouth.scale.set(1 + wing * 0.4, 1 + wing * 0.8, 1); mouth.visible = !sleep;
+    head.rotation.z = sleep ? 0.2 : Math.sin(now * 2.1) * 0.05;
+    zz.visible = sleep; zz.position.set(0.4, 1.15 + ((now * 0.4) % 1) * 0.2, 0); zz.material.opacity = 1 - ((now * 0.4) % 1);
+  };
+  return g;
+}
+const petModels = { nero: makeNero, ...Object.fromEntries(Object.entries(ONED).map(([id, m]) => [id, () => makeMember(m)])) };
 const starDotTex = () => canvasTex(64, 64, (g) => {
   const rg = g.createRadialGradient(32, 32, 0, 32, 32, 14); rg.addColorStop(0, "rgba(255,255,255,1)"); rg.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = rg; g.fillRect(0, 0, 64, 64);
   g.fillStyle = "#fff"; g.beginPath(); g.moveTo(32, 2); g.lineTo(36, 28); g.lineTo(62, 32); g.lineTo(36, 36); g.lineTo(32, 62); g.lineTo(28, 36); g.lineTo(2, 32); g.lineTo(28, 28); g.fill();
@@ -1227,7 +1337,9 @@ export function createRenderer(canvas) {
         // a wide screen: beside the neck, by the orange button; a phone held upright (the neck fills its width): sitting
         // in the corner under the buttons, where the notes are already gone
         const tall = h.aspect < 0.9, px = tall ? h.width() / 2 - 0.55 : pet.x, pz = tall ? 1.3 : 0.15, k = tall ? 0.85 : 1.05;
-        pet.g.position.set(px - pet.flap * 0.35 + Math.sin(now * 2.2) * 0.2 * pet.flap, 0.02 + pulse * 0.05 + hop + pet.flap * (0.9 + Math.sin(now * 3) * 0.1), pz);
+        // (a bird flies up over the neck; a person only jumps: lift)
+        const lift = pet.g.lift ?? 1, jump = lift < 1 ? Math.abs(Math.sin(now * 8)) * 0.25 * pet.flap : 0;
+        pet.g.position.set(px - pet.flap * 0.35 * lift + Math.sin(now * 2.2) * 0.2 * pet.flap * lift, 0.02 + pulse * 0.05 + hop + jump + pet.flap * lift * (0.9 + Math.sin(now * 3) * 0.1), pz);
         // turned a little toward the neck and the player (a phone looks down on it more: leaned back); bored, it looks about; asleep, its head nods
         pet.g.rotation.set((tall ? -0.45 : 0.15) + (pet.sleepy && !star ? 0.25 + Math.sin(now * 1.5) * 0.05 : 0), -0.35 + (happy || star || pet.sleepy ? 0 : Math.sin(now * 0.6) * 0.3), pulse * 0.04 * Math.sin(now * 4));
         const sq = 1 + pulse * 0.06, br = pet.sleepy ? 1 + Math.sin(now * 2) * 0.02 : 1;

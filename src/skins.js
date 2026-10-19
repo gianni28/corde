@@ -737,7 +737,17 @@ export const CROWDS = {
 };
 
 /* ================= pets: who keeps you company on the neck (renderer.js drawPet) ================= */
-export const PETS = { ninguna: null, nero: "nero" };
+export const PETS = { ninguna: null, nero: "nero", harry: "harry", liam: "liam", louis: "louis", niall: "niall", zayn: "zayn" };
+// One Direction (the event's gift, renderer.js makeMember, main.js memberSvg): each one known by his hair and his clothes,
+// as in the band's "Up All Night" photos. hair: the cut; top: shirt, sweater or blazer; under: what shows at the front
+// (null: closed); neck: a collar ring; pattern/stripe/pocket/earrings: the details
+export const ONED = {
+  harry: { hair: "curls", hairC: 0x3e2618, skin: 0xf2c6a4, eyes: 0x3d7a4c, top: 0xd9998c, under: 0xc8202a, pocket: 0x1b2a55, pants: 0xe6dcc6 },
+  liam: { hair: "mop", hairC: 0x8a5a33, skin: 0xedc19e, eyes: 0x5a3a22, top: 0x2f6878, pattern: "plaid", under: null, collar: 0x2f6878, pants: 0xe6dcc6 },
+  louis: { hair: "fringe", hairC: 0x5a3820, skin: 0xf0c4a1, eyes: 0x4a7cab, top: 0xf2f2ee, under: null, stripe: 0x2a3c6a, pants: 0x2c3550 },
+  niall: { hair: "swoop", hairC: 0xe6c983, skin: 0xf7d2b6, eyes: 0x3f74b0, top: 0xb5d1ea, under: null, neck: 0xb5d1ea, pants: 0xe6dcc6 },
+  zayn: { hair: "quiff", hairC: 0x141012, skin: 0xd9a37e, eyes: 0x3a2416, top: 0xd02a2a, under: null, neck: 0x18a2b8, earrings: 0x111111, pants: 0xe6dcc6 },
+};
 
 const SLOTS = { neck: NECKS, gems: GEMS, flames: FLAMES, strings: STRINGS, star: STARS, crowd: CROWDS, pet: PETS };
 /** The ids to show for an equipped set: anything missing or unknown is that slot's default. */

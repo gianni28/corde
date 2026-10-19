@@ -21,7 +21,7 @@ import * as sfx from "./sfx.js";
 import { energyCurve, energyAt } from "./energy.js";
 import { createMenuMusic } from "./music.js";
 import { SLOTS, STAGE_SLOTS, ITEMS, DEFAULTS as LOOK_DEFAULTS, itemOf, ownedKey, isDefault, resolveEquipped } from "./shop.js";
-import { cssVars } from "./skins.js";
+import { cssVars, ONED } from "./skins.js";
 
 const $ = (id) => document.getElementById(id);
 const LANE_CSS = ["--g", "--r", "--y", "--b", "--o"];
@@ -1446,7 +1446,8 @@ function celebrateAchievements(list) {
   const [a, ...rest] = list;
   sfx.unlock();
   const then = rest.length ? () => celebrateAchievements(rest) : null;
-  const gift = a.surprise && giftOf(a.id);
+  const gift = a.surprise && giftOf(a.id), many = gift ? ITEMS.filter((it) => it.req === a.id).length : 0;
+  if (many > 1) { R.pyro(); celebrate({ kicker: "¡Regalo sorpresa!", title: a.id === "one-direction" ? "One Direction" : a.name, sub: `Los ${many} ya son tuyos: elige a tu favorito en la Tienda, en ${SLOTS.find((x) => x.id === gift.slot)?.name || "la Tienda"}.`, ms: 4200, kind: "prize", then }); return; }
   if (gift) { R.pyro(); celebrate({ kicker: "¡Regalo sorpresa!", title: gift.name, sub: `Ya es tuyo: está en la Tienda, en ${SLOTS.find((x) => x.id === gift.slot)?.name || "la Tienda"}.`, ms: 3800, kind: "prize", then }); return; }
   celebrate({ kicker: "Logro desbloqueado", title: a.name, sub: a.desc, ms: 2600, kind: "ach", then });
 }
@@ -2494,6 +2495,28 @@ const NERO_SVG = `<svg class="nero" viewBox="0 0 120 110" aria-hidden="true"><pa
   + `<path d="M28 50q32-10 64 0l-2 16q-30 7-60 0z" fill="#7c2633"/>`
   + `<path d="M38 57h14M68 57h14" stroke="#140c10" stroke-width="3"/><circle cx="45" cy="61" r="3.4" fill="#140c10"/><circle cx="75" cy="61" r="3.4" fill="#140c10"/>`
   + `<path d="M53 64h14l-7 13z" fill="#0e0c10"/><ellipse cx="47" cy="108" rx="7" ry="3" fill="#c9a46a"/><ellipse cx="73" cy="108" rx="7" ry="3" fill="#c9a46a"/></svg>`;
+// One Direction for the cards (renderer.js makeMember): the same hair, clothes and colours
+const hex = (c) => "#" + c.toString(16).padStart(6, "0");
+function memberSvg(m) {
+  const H = hex(m.hairC), S = hex(m.skin);
+  const hair = {
+    curls: `<path d="M33 36c-6-14 6-27 17-26 6-8 22-8 27 1 12 0 18 14 12 25 6 8 0 20-6 20 2-10-2-14-6-18-8 4-28 4-38-2-4 6-6 12-4 20-8-4-8-14-2-20z"/>`
+      + [[36, 30], [46, 22], [58, 19], [70, 21], [80, 28], [86, 40], [34, 44]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="7"/>`).join(""),
+    mop: `<path d="M33 42c-4-20 10-30 27-30s31 10 27 30c-6-10-14-12-22-12-6 6-18 8-24 2-3 3-6 6-8 10z"/><path d="M44 30c4 6 10 8 16 6 4 4 10 6 16 4-4-6-12-10-20-10z"/>`,
+    fringe: `<path d="M33 40c-4-18 10-28 27-28s29 9 27 24c-10-4-26-2-40 6-6 2-10 2-14-2z"/>`,
+    swoop: `<path d="M34 40c-3-14 6-24 18-25 4-8 22-10 30 0 8 6 8 16 4 24-6-6-16-10-26-9-10 0-20 4-26 10z"/>`,
+    quiff: `<path d="M34 40c-3-12 4-22 14-24 0-10 14-18 30-12 8 4 10 14 4 20 6 4 6 10 4 16-8-6-20-8-32-6-8 0-16 2-20 6z"/>`,
+  }[m.hair];
+  const front = m.under != null ? `<path d="M54 74h12l-2 30h-8z" fill="${hex(m.under)}"/>` : "";
+  const extra = (m.stripe != null ? `<path d="M38 82h44v4H38z" fill="${hex(m.stripe)}"/>` : "") + (m.neck != null ? `<path d="M50 72q10 6 20 0" stroke="${hex(m.neck)}" stroke-width="5" fill="none"/>` : "")
+    + (m.pocket != null ? `<path d="M68 82h7v4h-7z" fill="${hex(m.pocket)}"/>` : "") + (m.pattern === "plaid" ? `<path d="M44 80h32M44 90h32M48 74v32M60 74v32M72 74v32" stroke="rgba(10,30,50,.45)" stroke-width="2.5"/>` : "")
+    + (m.earrings != null ? `<circle cx="33" cy="50" r="2.2" fill="#111"/><circle cx="87" cy="50" r="2.2" fill="#111"/>` : "");
+  return `<svg class="member" viewBox="0 0 120 110" aria-hidden="true"><path d="M44 102h14v8H44zM62 102h14v8H62z" fill="${hex(m.pants)}"/>`
+    + `<path d="M38 104c0-20 6-32 22-32s22 12 22 32z" fill="${hex(m.top)}"/>${front}${extra}`
+    + `<circle cx="34" cy="46" r="5" fill="${S}"/><circle cx="86" cy="46" r="5" fill="${S}"/><circle cx="60" cy="44" r="26" fill="${S}"/>`
+    + `<circle cx="51" cy="47" r="3.6" fill="#141012"/><circle cx="69" cy="47" r="3.6" fill="#141012"/><circle cx="52.2" cy="45.6" r="1.2" fill="#fff"/><circle cx="70.2" cy="45.6" r="1.2" fill="#fff"/>`
+    + `<path d="M54 56q6 5 12 0" stroke="#8a3a34" stroke-width="2.4" fill="none" stroke-linecap="round"/><g fill="${H}">${hair}</g></svg>`;
+}
 // an emperor tamarin for the card (renderer.js gemShape "titi"): the furry head in the lane colour, the black face, the
 // pink muzzle and the white moustache hanging down
 const TITI_SVG = `<svg viewBox="-40 -48 80 100" aria-hidden="true"><circle cy="-10" r="35" fill="#0a0809"/>`
@@ -2527,7 +2550,7 @@ function fillSwatch(el, it) {
     else el.innerHTML = it.cols.map((c) => `<svg aria-hidden="true" style="--c:${c}"><use href="#flame"/></svg>`).join("") + (it.art === "campfire" ? "<em></em>".repeat(6) : "");
   } else if (it.slot === "pet") {
     el.classList.add("pet-" + it.id);
-    el.innerHTML = it.id === "nero" ? NERO_SVG : `<span class="pet-none" aria-hidden="true"></span>`;
+    el.innerHTML = it.id === "nero" ? NERO_SVG : ONED[it.id] ? memberSvg(ONED[it.id]) : `<span class="pet-none" aria-hidden="true"></span>`;
   } else if (it.slot === "crowd") {
     // five people from behind, holding up what this crowd holds up (style.css .cw-*)
     el.classList.add("cw-" + it.id);
