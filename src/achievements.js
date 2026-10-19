@@ -5,7 +5,7 @@
 const KEY = "corde.achievements.v1";
 
 // bananas for each of the Otaku event's gifts (in order: the Tití notes, Nero, the antimagic flames)
-export const BANANA_GIFTS = [30, 90, 180];
+export const BANANA_GIFTS = [30, 60, 90];
 export const BANANA_LOGROS = ["otaku-titi", "otaku-nero", "otaku-antimagia"];
 /** The Otaku gifts these bananas reach. */
 export const forBananas = (n) => BANANA_LOGROS.filter((_, i) => n >= BANANA_GIFTS[i]);
