@@ -1185,10 +1185,16 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
   font: 700 .66em/1.6 var(--display); letter-spacing: .02em; text-shadow: none; animation: none; filter: none;
   color: #2a1a00; -webkit-text-fill-color: #2a1a00; background: linear-gradient(180deg, #fff1a0, #c9971a); }
 .lv i { font-style: normal; font-size: .78em; margin-right: .25em; opacity: .75; }
-/* tiers: bronze 1-9, silver 10-19, gold 20-29, purple 30+ */
+/* tiers: bronze 1-9, silver 10-19, gold 20-29, purple 30-39, fire 40-49, legend 50+ */
 .lv.t0 { color: #1a0c04; -webkit-text-fill-color: #1a0c04; background: linear-gradient(180deg, #f0b878, #9a6028); }
 .lv.t1 { color: #10141a; -webkit-text-fill-color: #10141a; background: linear-gradient(180deg, #ffffff, #a8b0bc); }
 .lv.t3 { color: #fff; -webkit-text-fill-color: #fff; background: linear-gradient(180deg, #d8a8ff, #7a3aff); }
+.lv.t4 { color: #fff; -webkit-text-fill-color: #fff; background: linear-gradient(180deg, #ffd04a, #ff5a10 45%, #a80c08); text-shadow: 0 1px 0 rgba(0,0,0,.45); }
+/* legend: black with gold letters and a shine that runs across */
+.lv.t5 { color: #ffd76a; -webkit-text-fill-color: #ffd76a; background: linear-gradient(110deg, #0c0a08 40%, #5a4410 50%, #0c0a08 60%) 0 0 / 300% 100%, #0c0a08;
+  box-shadow: inset 0 0 0 1px #c9971a; animation: lvShine 2.8s linear infinite; }
+@keyframes lvShine { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .lv.t5 { animation: none; } }
 .nm-dorado, .nm-corona { color: var(--gold); text-shadow: 0 0 10px rgba(245,197,24,.45); }
 .nm-rosa { color: #ff6fbf; text-shadow: 0 0 10px rgba(255,79,168,.4); }
 .nm-cian { color: #4fe3ff; text-shadow: 0 0 10px rgba(63,220,255,.4); }
@@ -1303,8 +1309,10 @@ body.streak-pirotecnia #hud .streak.show, .streak.st-pirotecnia.show { animation
 .song-ready h2 { margin: 0; font: 700 30px/1.05 var(--display); text-transform: uppercase; letter-spacing: .03em; }
 .sr-artist { margin: 0; color: var(--muted); font-size: 17px; }
 .req-song { color: var(--gold) !important; }
-.req-pick { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
-.req-pick input[type=search] { padding: 8px 10px; font-size: 15px; }
+/* choosing the song that answers a request: the whole width of the row (not the narrow text column) */
+.req-pick { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
+.req-pick[hidden] { display: none; }
+.uploads .req-pick input[type=search] { width: 100%; height: auto; padding: 10px 12px; font-size: 16px; accent-color: auto; }
 .req-hits { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 14px; }
 .req-hits button, .req-pick .req-none { text-align: left; text-transform: none !important; letter-spacing: 0 !important; font: 500 15px var(--body) !important; }
 .req-pick .req-none { align-self: flex-start; opacity: .8; }
@@ -1422,3 +1430,21 @@ body.fx-quake #stage { animation: quake .11s linear infinite; }
 .live-rooms .lr-tag.pub { color: #1a1004; background: var(--gold); }
 
 .players li.away { opacity: .55; }
+
+/* the comments wall */
+.cm-form textarea { width: 100%; resize: vertical; }
+.cm-send { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
+.cm-send .primary { width: auto; padding: 10px 22px; }
+.cm-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.cm-list li { padding: 10px 12px; background: rgba(0,0,0,.35); box-shadow: inset 0 0 0 1px #2a2420; border-radius: 3px; }
+.cm-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.cm-name { font: 700 17px var(--display); letter-spacing: .02em; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-head small { flex: none; font: 500 13px var(--body); color: var(--muted); }
+.cm-body { margin: 4px 0 0; font: 500 15px/1.45 var(--body); white-space: pre-wrap; overflow-wrap: anywhere; }
+.cm-reply { margin-top: 8px; padding: 8px 10px; border-left: 3px solid var(--gold); background: rgba(245,197,24,.07); }
+.cm-reply .cm-admin { font: 700 13px var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--gold); }
+.cm-reply p { margin: 2px 0 0; font: 500 15px/1.45 var(--body); white-space: pre-wrap; overflow-wrap: anywhere; }
+.cma-reply textarea { width: 100%; resize: vertical; font-size: 15px; }
+.cma-row { display: flex; justify-content: flex-end; }
+.notice-body { white-space: pre-wrap; }
+.notice-reply[hidden], #noticeGo[hidden] { display: none !important; }

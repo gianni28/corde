@@ -13,7 +13,7 @@ import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from 
 import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, nameStyles, songRequest, myNotices, noticeSeen, noticeReply, myFulfilled, fulfilledSeen } from "./net.js";
 import { shareCard, retoUrl, readReto } from "./share.js";
 import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau } from "./achievements.js";
-import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretOpen, secretBoard, songById, fetchMiauProgress, roomDirectory } from "./net.js";
+import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretOpen, secretBoard, songById, fetchMiauProgress, roomDirectory, commentPost, commentsWall, myCommentReplies, commentReplySeen } from "./net.js";
 import { VENUES, TO_ENCORE, TOUR_PRIZES, TOUR_THEMES, prizesWon, savedTourDiffs, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song, separateExisting } from "./admin.js";
 import { fillDifficulties } from "./reduce.js";
@@ -144,7 +144,7 @@ function setNameLevel(el, lv) {
   if (!(lv > 0)) { b?.remove(); return; }
   if (!b) { b = document.createElement("span"); el.append(b); }
   b.innerHTML = `<i>NV</i>${lv}`; b.title = `Nivel ${lv}`;
-  b.className = `lv t${Math.min(3, Math.floor(lv / 10))}`; // bronze, silver, gold, purple
+  b.className = `lv t${Math.min(5, Math.floor(lv / 10))}`; // bronze, silver, gold, purple, fire, legend
 }
 function styledName(el, name) { el.dataset.nk = nameKey(name); setNameClass(el, styleOfKey(el.dataset.nk)); setNameLevel(el, levelOfKey(el.dataset.nk)); }
 const restyleNames = () => document.querySelectorAll("[data-nk]").forEach((el) => { setNameClass(el, styleOfKey(el.dataset.nk)); setNameLevel(el, levelOfKey(el.dataset.nk)); });
@@ -167,7 +167,7 @@ const shop = { cat: "neck", sel: null, armed: null, armT: 0, streakT: 0, busy: f
 /* ================= menu music ================= */
 // A random library song plays while the menus are up (title and artist top right on a wide screen, under the
 // menu on a phone). It stops when a song starts and picks up again back in the menus.
-const MENU_MUSIC = ["home", "library", "setup", "settings", "logros", "mp", "lobby", "admin", "tutorial", "duo", "daily", "tour", "tienda"];
+const MENU_MUSIC = ["home", "library", "setup", "settings", "logros", "comments", "mp", "lobby", "admin", "tutorial", "duo", "daily", "tour", "tienda"];
 const wideMQ = matchMedia("(min-width: 1000px)");
 // admin uploads (declared up here: the menu music and the frame loop ask about them from the first moment)
 const adm = { songs: [], busy: false, groups: [] };
@@ -230,7 +230,7 @@ document.addEventListener("visibilitychange", () => syncMenuMusic());
 music.setMuted(settings.menuMusic === false);
 
 /* ================= navigation ================= */
-const SCREENS = ["home", "library", "setup", "settings", "logros", "mp", "lobby", "pause", "results", "loading", "admin", "tutorial", "duo", "daily", "tour", "tienda"];
+const SCREENS = ["home", "library", "setup", "settings", "logros", "comments", "mp", "lobby", "pause", "results", "loading", "admin", "tutorial", "duo", "daily", "tour", "tienda"];
 let motionTest = null; // the movement test in Settings, while it runs
 function show(name, push = true) {
   const transient = ["pause", "loading", "play", "results"];
@@ -269,6 +269,7 @@ document.querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => {
   else if (to === "settings") { renderSettings(); show("settings"); }
   else if (to === "tour") openTour();
   else if (to === "logros") { renderLogros(); show("logros"); }
+  else if (to === "comments") openComments();
   else if (to === "tienda") openShop();
   else if (to === "mp") { $("mpName").value = settings.name || ""; $("mpErr").hidden = true; $("duoCard").hidden = $("duoOr").hidden = touch; show("mp"); }
 }));
@@ -1995,23 +1996,27 @@ async function checkNotices() {
   notices.asked = true;
   try {
     // the songs they asked for that are in now go first, then the admin's messages
-    const [songs, list] = await Promise.all([myFulfilled(playerSecret()).catch(() => []), myNotices(playerSecret())]);
+    const [songs, list, answers] = await Promise.all([myFulfilled(playerSecret()).catch(() => []), myNotices(playerSecret()), myCommentReplies(playerSecret()).catch(() => [])]);
     if (Array.isArray(songs)) notices.queue.push(...songs.filter((r) => r && r.id && r.song?.id).map((r) => ({ ...r, kind: "song" })));
+    if (Array.isArray(answers)) notices.queue.push(...answers.filter((c) => c && c.id && c.reply).map((c) => ({ ...c, kind: "comment" })));
     if (Array.isArray(list)) notices.queue.push(...list.filter((n) => n && n.id && n.body));
   } catch (e) { console.warn("notices:", e.message); notices.asked = false; return; }
   showNextNotice();
 }
-const NOTICE_SCREENS = new Set(["home", "library", "setup", "logros", "tienda", "tour", "daily", "mp", "settings"]);
+const NOTICE_SCREENS = new Set(["home", "library", "setup", "logros", "comments", "tienda", "tour", "daily", "mp", "settings"]);
 function showNextNotice() {
   if (notices.current || !notices.queue.length) return;
   if (welcome.open || app.game || !NOTICE_SCREENS.has(app.screen)) return; // later, back in the menus
   const n = notices.current = notices.queue.shift();
   if (n.kind === "song") return showSongReady(n);
   if (n.kind === "reto") return showReto();
-  $("noticeBody").textContent = n.body;
+  const answer = n.kind === "comment"; // the admin answered one of their comments: the answer, under what they wrote
+  $("noticeKicker").textContent = answer ? `${ADMIN_NAME} te respondió` : "Mensaje";
+  $("noticeBody").textContent = answer ? `«${n.body}»\n\n${n.reply}` : n.body;
+  $("noticeForm").querySelector(".notice-reply").hidden = answer; $("noticeGo").hidden = !answer;
   $("noticeReply").value = ""; $("noticeSend").hidden = true; $("noticeMsg").textContent = "";
   $("noticeModal").hidden = false;
-  noticeSeen(playerSecret(), n.id).catch(() => {}); // shown: it won't come again
+  (answer ? commentReplySeen : noticeSeen)(playerSecret(), n.id).catch(() => {}); // shown: it won't come again
 }
 /* the kittens' challenge (coro-gatitos): told once, when the miau songs first show up (they come with a code) */
 // what this player already did on any device (the boards keep each name's runs): it counts here too
@@ -2081,6 +2086,7 @@ function closeNotice() {
   setTimeout(showNextNotice, 300);
 }
 $("noticeClose").onclick = closeNotice;
+$("noticeGo").onclick = () => { closeNotice(); openComments(); };
 $("noticeModal").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closeNotice(); } });
 $("noticeReply").addEventListener("input", () => { $("noticeSend").hidden = !$("noticeReply").value.trim(); });
 $("noticeForm").onsubmit = async (e) => {
@@ -2094,6 +2100,51 @@ $("noticeForm").onsubmit = async (e) => {
     else $("noticeMsg").textContent = r?.error === "limit" ? "Ya respondiste varias veces a este mensaje." : "No se pudo enviar.";
   } catch { $("noticeMsg").textContent = "No se pudo enviar. Revisa tu conexión."; }
   $("noticeSend").disabled = false;
+};
+
+/* ================= comments ================= */
+// The wall: whoever has a name writes whatever they want, everyone reads it, and the admin answers from the panel
+// (comments.sql). What people wrote always goes in as text, never as HTML.
+const ADMIN_NAME = "Gianni";
+async function openComments() {
+  show("comments");
+  $("cmMsg").textContent = ""; $("cmSend").disabled = false;
+  await loadComments();
+}
+async function loadComments() {
+  if (!online) { $("cmEmpty").textContent = "Los comentarios necesitan conexión."; return; }
+  let list;
+  try { list = await commentsWall(); } catch (e) { $("cmEmpty").textContent = "No se pudieron cargar los comentarios."; return; }
+  const ul = $("cmList"); ul.innerHTML = "";
+  $("cmEmpty").textContent = list.length ? "" : "Todavía no hay comentarios. ¡Escribe el primero!";
+  for (const c of list) {
+    const li = document.createElement("li");
+    li.innerHTML = `<div class="cm-head"><b class="cm-name"></b><small></small></div><p class="cm-body"></p>`;
+    styledName(li.querySelector(".cm-name"), c.name); li.querySelector(".cm-name").prepend(c.name);
+    li.querySelector("small").textContent = shortDate(c.at);
+    li.querySelector(".cm-body").textContent = c.body;
+    if (c.reply) {
+      const r = document.createElement("div"); r.className = "cm-reply";
+      r.innerHTML = `<span class="cm-admin"></span><p></p>`;
+      r.querySelector(".cm-admin").textContent = `${ADMIN_NAME} · creador de Corde`;
+      r.querySelector("p").textContent = c.reply;
+      li.appendChild(r);
+    }
+    ul.appendChild(li);
+  }
+}
+$("cmForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const body = $("cmText").value.trim();
+  if (!body) { $("cmText").focus(); return; }
+  if (!account) { $("cmMsg").textContent = "Primero elige tu nombre en el juego."; return; }
+  $("cmSend").disabled = true; $("cmMsg").textContent = "";
+  try {
+    const r = await commentPost(playerSecret(), body);
+    if (r?.ok) { $("cmText").value = ""; $("cmMsg").textContent = "¡Publicado!"; await loadComments(); }
+    else $("cmMsg").textContent = r?.error === "limit" ? "Ya escribiste 10 comentarios hoy. Vuelve mañana." : r?.error === "no_account" ? "Primero elige tu nombre en el juego." : "No se pudo publicar.";
+  } catch { $("cmMsg").textContent = "No se pudo publicar. Revisa tu conexión."; }
+  $("cmSend").disabled = false;
 };
 
 async function ensureAccount() {
@@ -3635,6 +3686,7 @@ async function loadInbox() {
   let r;
   try { r = await adminCall({ code, action: "inbox" }); } catch (e) { $("reqEmpty").textContent = e.message; return; }
   renderRequests(r.requests || []); renderNotices(r.notices || []);
+  try { renderAdminComments((await adminCall({ code, action: "comments" })).comments || []); } catch (e) { $("cmaEmpty").textContent = e.message; }
   if (!inbox.players) {
     try {
       inbox.players = (await adminCall({ code, action: "players" })).names || [];
@@ -3655,7 +3707,7 @@ function renderRequests(list) {
   };
   for (const x of list) {
     const li = document.createElement("li"); li.className = x.done ? "done" : "";
-    li.innerHTML = `<span class="n"><b></b><small></small><span class="req-body"></span><small class="req-song"></small><span class="req-pick" hidden></span></span><span class="req-act"><button type="button"></button><button type="button">Borrar</button></span>`;
+    li.innerHTML = `<span class="n"><b></b><small></small><span class="req-body"></span><small class="req-song"></small></span><span class="req-act"><button type="button"></button><button type="button">Borrar</button></span><span class="req-pick" hidden></span>`;
     li.querySelector("b").textContent = x.name; li.querySelector("small").textContent = ` · ${shortDate(x.at)}`;
     li.querySelector(".req-body").textContent = x.body;
     if (x.done && x.song) li.querySelector(".req-song").textContent = `→ ${x.song.name}${x.song.artist ? ` · ${x.song.artist}` : ""} · ${x.announced ? "ya le salió el anuncio" : "le saldrá el anuncio al entrar"}`;
@@ -3688,6 +3740,33 @@ function renderRequests(list) {
       pick.querySelector(".req-none").onclick = (e) => markDone(x, null, e.target);
     };
     bDel.onclick = async () => { if (!confirm("¿Borrar este pedido?")) return; bDel.disabled = true; try { await adminCall({ code: code(), action: "request_delete", id: x.id }); } catch {} loadInbox(); };
+    ul.appendChild(li);
+  }
+}
+// the wall's comments: answer (it shows under the comment, and its writer is told), hide, delete
+function renderAdminComments(list) {
+  const ul = $("cmaList"); ul.innerHTML = "";
+  $("cmaEmpty").textContent = list.length ? `${list.filter((c) => !c.reply && !c.hidden).length} sin responder de ${list.length}.` : "Todavía nadie ha comentado.";
+  const code = () => $("adminCode").value.trim();
+  for (const c of list) {
+    const li = document.createElement("li"); li.className = c.hidden ? "done" : "";
+    li.innerHTML = `<span class="n"><b></b><small></small><span class="req-body"></span><small class="req-song"></small></span><span class="req-act"><button type="button"></button><button type="button">Borrar</button></span>`
+      + `<span class="req-pick cma-reply"><textarea rows="2" maxlength="1000" aria-label="Tu respuesta"></textarea><span class="cma-row"><button type="button" class="cma-save"></button></span></span>`;
+    li.querySelector("b").textContent = c.name + (c.hidden ? " (oculto)" : ""); li.querySelector("small").textContent = ` · ${shortDate(c.at)}`;
+    li.querySelector(".req-body").textContent = c.body;
+    if (c.reply) li.querySelector(".req-song").textContent = c.seen ? "Ya vio tu respuesta" : "Verá tu respuesta al entrar";
+    const ta = li.querySelector("textarea"), save = li.querySelector(".cma-save");
+    ta.value = c.reply || ""; ta.placeholder = "Escribe tu respuesta";
+    save.textContent = c.reply ? "Guardar respuesta" : "Responder";
+    save.onclick = async () => {
+      save.disabled = true;
+      try { await adminCall({ code: code(), action: "comment_reply", id: c.id, reply: ta.value.trim() }); toast(ta.value.trim() ? "Respuesta publicada" : "Respuesta quitada"); } catch (e) { toast(e.message); }
+      loadInbox();
+    };
+    const [bHide, bDel] = li.querySelectorAll(".req-act button");
+    bHide.textContent = c.hidden ? "Mostrar" : "Ocultar";
+    bHide.onclick = async () => { bHide.disabled = true; try { await adminCall({ code: code(), action: "comment_hide", id: c.id, hidden: !c.hidden }); } catch (e) { toast(e.message); } loadInbox(); };
+    bDel.onclick = async () => { if (!confirm("¿Borrar este comentario?")) return; bDel.disabled = true; try { await adminCall({ code: code(), action: "comment_delete", id: c.id }); } catch (e) { toast(e.message); } loadInbox(); };
     ul.appendChild(li);
   }
 }

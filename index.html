@@ -127,10 +127,11 @@
   </div>
   <div class="secret-modal" id="noticeModal" hidden>
     <form class="panel narrow secret-box notice-box" id="noticeForm" autocomplete="off">
-      <span class="notice-kicker">Mensaje</span>
+      <span class="notice-kicker" id="noticeKicker">Mensaje</span>
       <p class="notice-body" id="noticeBody"></p>
       <div class="notice-reply"><input type="text" id="noticeReply" maxlength="500" placeholder="Responder" aria-label="Responder"><button type="submit" id="noticeSend" hidden>Enviar</button></div>
       <p class="hint" id="noticeMsg" aria-live="polite"></p>
+      <button type="button" class="primary" id="noticeGo" hidden>Ver comentarios</button>
       <button type="button" class="primary" id="noticeClose">Cerrar</button>
     </form>
   </div>
@@ -185,6 +186,7 @@
         <button data-go="tienda">Tienda<span class="menu-picks" id="homePicks" hidden><svg aria-hidden="true"><use href="#pick"/></svg><b></b></span></button>
         <button data-go="logros">Logros</button>
         <button id="openRequest">Pedir canciones</button>
+        <button data-go="comments">Comentarios</button>
         <button data-go="settings">Ajustes</button>
       </nav>
       <button class="daily-card" id="dailyCard" hidden>
@@ -278,6 +280,19 @@
     <div class="panel wide">
       <header class="bar"><button class="back" data-back>Volver</button><h2>Logros</h2><span class="hint logros-count" id="logrosCount"></span></header>
       <ul class="logros" id="logrosList"></ul>
+    </div>
+  </section>
+
+  <!-- ===== COMMENTS ===== -->
+  <section class="screen panel-screen" id="s-comments" hidden>
+    <div class="panel wide">
+      <header class="bar"><button class="back" data-back>Volver</button><h2>Comentarios</h2></header>
+      <form class="field cm-form" id="cmForm" autocomplete="off">
+        <textarea id="cmText" rows="3" maxlength="500" placeholder="Escribe lo que quieras: qué te gusta, qué mejorarías, una idea…" aria-label="Tu comentario"></textarea>
+        <div class="cm-send"><span class="hint" id="cmMsg" aria-live="polite"></span><button type="submit" class="primary" id="cmSend">Publicar</button></div>
+      </form>
+      <p class="hint" id="cmEmpty"></p>
+      <ul class="cm-list" id="cmList"></ul>
     </div>
   </section>
 
@@ -538,6 +553,11 @@
         <span class="label">Pedidos de canciones</span>
         <p class="hint" id="reqEmpty"></p>
         <ul class="uploads auto-list req-list" id="reqList"></ul>
+      </div>
+      <div class="field inbox-admin">
+        <span class="label">Comentarios</span>
+        <p class="hint" id="cmaEmpty"></p>
+        <ul class="uploads auto-list req-list cma-list" id="cmaList"></ul>
       </div>
       <div class="field inbox-admin">
         <span class="label">Enviar un aviso</span>
