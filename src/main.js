@@ -20,7 +20,7 @@ import { fillDifficulties } from "./reduce.js";
 import * as sfx from "./sfx.js";
 import { energyCurve, energyAt } from "./energy.js";
 import { createMenuMusic } from "./music.js";
-import { SLOTS, STAGE_SLOTS, ITEMS, DEFAULTS as LOOK_DEFAULTS, itemOf, ownedKey, isDefault, resolveEquipped } from "./shop.js";
+import { SLOTS, STAGE_SLOTS, ITEMS, GROUPS, DEFAULTS as LOOK_DEFAULTS, itemOf, ownedKey, isDefault, resolveEquipped } from "./shop.js";
 import { cssVars, ONED } from "./skins.js";
 
 const $ = (id) => document.getElementById(id);
@@ -162,7 +162,7 @@ async function loadNameStyles(force = false) {
   restyleNames();
 }
 // the shop screen: the category open, the item picked (shown on the stage behind), a purchase waiting for "¿Seguro?"
-const shop = { cat: "neck", sel: null, armed: null, armT: 0, streakT: 0, busy: false, preview: false, seq: 0 };
+const shop = { cat: "neck", group: null, sel: null, armed: null, armT: 0, streakT: 0, busy: false, preview: false, seq: 0 };
 
 /* ================= menu music ================= */
 // A random library song plays while the menus are up (title and artist top right on a wide screen, under the
@@ -2387,6 +2387,7 @@ async function refreshWallet() {
 function openShop() {
   if (app.game) return; // never mid-song
   shop.armed = null; shop.sel = equipped[shop.cat];
+  if (shop.group && !ITEMS.some((it) => it.group === shop.group && it.slot === shop.cat)) shop.group = null;
   show("tienda");
   shop.preview = true;
   renderShop();
@@ -2395,7 +2396,7 @@ function openShop() {
 }
 // straight to one item (the kittens' card in the library)
 function openShopAt(cat, id) {
-  shop.cat = cat; openShop();
+  shop.cat = cat; shop.group = itemOf(cat, id)?.group || null; openShop();
   if ($("shopGrid").querySelector(`[data-id="${id}"]`)) selectShopItem(id);
 }
 // the stage behind the panel shows the picked item with everything else you have on
@@ -2451,8 +2452,20 @@ function renderShop() {
     : "No pude cargar tus púas. Revisa tu conexión y vuelve a entrar.";
   $("shopAccount").hidden = !noAcc;
   const grid = $("shopGrid"); grid.innerHTML = "";
-  // a secret prize only for whoever can win it (the kittens: the miau songs' players), or has it
-  for (const it of ITEMS) if (it.slot === shop.cat && shopVisible(it)) grid.appendChild(shopCard(it));
+  // a secret prize only for whoever can win it (the kittens: the miau songs' players), or has it. A group (a band) is
+  // one card; opened, its members and a way back
+  const shown = ITEMS.filter((it) => it.slot === shop.cat && shopVisible(it));
+  if (shop.group && !shown.some((it) => it.group === shop.group)) shop.group = null;
+  if (shop.group) {
+    grid.appendChild(groupBackCard());
+    for (const it of shown) if (it.group === shop.group) grid.appendChild(shopCard(it));
+  } else {
+    const seen = new Set();
+    for (const it of shown) {
+      if (!it.group) { grid.appendChild(shopCard(it)); continue; }
+      if (!seen.has(it.group)) { seen.add(it.group); grid.appendChild(groupCard(it.group, shown.filter((x) => x.group === it.group))); }
+    }
+  }
   renderShopDetail();
   revealShopSel();
 }
@@ -2463,6 +2476,35 @@ function revealShopSel() {
   const g = grid.getBoundingClientRect(), r = el.getBoundingClientRect();
   if (r.right > g.right) grid.scrollLeft += r.right - g.right + 12; else if (r.left < g.left) grid.scrollLeft -= g.left - r.left + 12;
   if (r.bottom > g.bottom) grid.scrollTop += r.bottom - g.bottom + 4; else if (r.top < g.top) grid.scrollTop -= g.top - r.top + 4;
+}
+// a band's card: its members' little pictures side by side; opened, you pick one
+function groupCard(g, members) {
+  const b = document.createElement("button"), on = members.find((it) => equipped[it.slot] === it.id);
+  b.type = "button"; b.dataset.group = g;
+  b.className = "shop-item shop-group excl" + (on ? " on" : "");
+  b.setAttribute("role", "option"); b.setAttribute("aria-selected", "false");
+  b.innerHTML = `<span class="sw sw-${members[0].slot} sw-group"></span><span class="si-name"></span><span class="si-state"></span>`;
+  const sw = b.querySelector(".sw");
+  for (const it of members) { const m = document.createElement("span"); fillSwatch(m, it); m.className = "sg-m"; sw.appendChild(m); }
+  b.querySelector(".si-name").textContent = GROUPS[g]?.name || g;
+  const st = b.querySelector(".si-state");
+  if (on) { st.textContent = `${on.name} · Equipado`; st.className += " is-on"; } else st.textContent = `Elige · ${members.length}`;
+  b.onclick = () => {
+    shop.group = g; shop.armed = null;
+    shop.sel = on ? on.id : members[0].id;
+    $("shopGrid").scrollTop = 0; $("shopGrid").scrollLeft = 0;
+    renderShop(); previewShop();
+  };
+  return b;
+}
+function groupBackCard() {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "shop-item shop-back";
+  b.innerHTML = `<span class="sb-arrow" aria-hidden="true">‹</span><span class="si-name"></span><span class="si-state"></span>`;
+  b.querySelector(".si-name").textContent = GROUPS[shop.group]?.name || "";
+  b.querySelector(".si-state").textContent = "Volver";
+  b.onclick = () => { shop.group = null; shop.armed = null; shop.sel = equipped[shop.cat]; renderShop(); previewShop(); };
+  return b;
 }
 function shopCard(it) {
   const b = document.createElement("button");
@@ -2609,7 +2651,7 @@ function renderShopDetail() {
 $("shopCats").onclick = (e) => {
   const b = e.target.closest("button[data-c]");
   if (!b || b.dataset.c === shop.cat) return;
-  shop.cat = b.dataset.c; shop.sel = equipped[shop.cat]; shop.armed = null;
+  shop.cat = b.dataset.c; shop.sel = equipped[shop.cat]; shop.armed = null; shop.group = null;
   $("shopGrid").scrollTop = 0; $("shopGrid").scrollLeft = 0;
   renderShop();
   // the chip in view too (on a phone the categories scroll sideways)

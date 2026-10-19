@@ -32,6 +32,8 @@ const glow = (c) => `radial-gradient(circle at 50% 50%, #fff 0 7%, ${c} 20%, tra
  *  difficulty), secret? (only shown to
  *  who can win it: see main.js), desc?, sw?, cols? } — req: the logro that gives it (it's claimed, not bought);
  *  sw: the card's CSS background; cols: the colours of the card's little gems / flames / name / streak. */
+// items shown in the shop as one card that opens to its members (a band: pick your favourite); main.js renderShop
+export const GROUPS = { "one-direction": { name: "One Direction" } };
 export const ITEMS = [
   // mástiles (the neck the notes come down)
   { slot: "neck", id: "palo-rosa", name: "Palo de rosa", price: 0, sw: `${dots("#e9e1d0")}, ${wood("#26110a", "#47230f", "#2c140b")}` },
@@ -75,11 +77,11 @@ export const ITEMS = [
   { slot: "pet", id: "ninguna", name: "Sin mascota", price: 0, desc: "Nadie te acompaña en el mástil." },
   { slot: "pet", id: "nero", name: "Nero", price: 0, req: "otaku-nero", secret: true, surprise: true, desc: "El anti-pájaro: se sienta junto al mástil con cara de aburrido, se duerme si fallas, aletea con tus rachas y vuela con el poder estrella. Regalo de la expedición Otaku." },
   // One Direction: the event's gift, all five (whoever wins picks their favourite)
-  { slot: "pet", id: "harry", name: "Harry", price: 0, req: "one-direction", secret: true, surprise: true, desc: "Harry, con sus rizos, el blazer rosado y el polo rojo. Se aburre, se duerme si fallas, celebra tus rachas y salta con el poder estrella. Regalo del evento One Direction." },
-  { slot: "pet", id: "liam", name: "Liam", price: 0, req: "one-direction", secret: true, surprise: true, desc: "Liam, con su flequillo ondulado y la camisa a cuadros. Se aburre, se duerme si fallas, celebra tus rachas y salta con el poder estrella. Regalo del evento One Direction." },
-  { slot: "pet", id: "louis", name: "Louis", price: 0, req: "one-direction", secret: true, surprise: true, desc: "Louis, con el flequillo de lado y su camiseta blanca. Se aburre, se duerme si fallas, celebra tus rachas y salta con el poder estrella. Regalo del evento One Direction." },
-  { slot: "pet", id: "niall", name: "Niall", price: 0, req: "one-direction", secret: true, surprise: true, desc: "Niall, con su copete rubio y el suéter celeste. Se aburre, se duerme si fallas, celebra tus rachas y salta con el poder estrella. Regalo del evento One Direction." },
-  { slot: "pet", id: "zayn", name: "Zayn", price: 0, req: "one-direction", secret: true, surprise: true, desc: "Zayn, con su tupé negro y el suéter rojo. Se aburre, se duerme si fallas, celebra tus rachas y salta con el poder estrella. Regalo del evento One Direction." },
+  { slot: "pet", id: "harry", name: "Harry", price: 0, req: "one-direction", group: "one-direction", secret: true, surprise: true, desc: "Harry, con sus rizos, el blazer rosado y el polo rojo. Se aburre, se duerme si fallas, celebra tus rachas y salta con el poder estrella. Regalo del evento One Direction." },
+  { slot: "pet", id: "liam", name: "Liam", price: 0, req: "one-direction", group: "one-direction", secret: true, surprise: true, desc: "Liam, con su flequillo ondulado y la camisa a cuadros. Se aburre, se duerme si fallas, celebra tus rachas y salta con el poder estrella. Regalo del evento One Direction." },
+  { slot: "pet", id: "louis", name: "Louis", price: 0, req: "one-direction", group: "one-direction", secret: true, surprise: true, desc: "Louis, con el flequillo de lado y su camiseta blanca. Se aburre, se duerme si fallas, celebra tus rachas y salta con el poder estrella. Regalo del evento One Direction." },
+  { slot: "pet", id: "niall", name: "Niall", price: 0, req: "one-direction", group: "one-direction", secret: true, surprise: true, desc: "Niall, con su copete rubio y el suéter celeste. Se aburre, se duerme si fallas, celebra tus rachas y salta con el poder estrella. Regalo del evento One Direction." },
+  { slot: "pet", id: "zayn", name: "Zayn", price: 0, req: "one-direction", group: "one-direction", secret: true, surprise: true, desc: "Zayn, con su tupé negro y el suéter rojo. Se aburre, se duerme si fallas, celebra tus rachas y salta con el poder estrella. Regalo del evento One Direction." },
   { slot: "gems", id: "gatitos", name: "Gatitos", price: 0, req: "coro-gatitos", secret: true, cols: LANES, shape: "cat", desc: "Las notas se vuelven caritas de gato. Premio del logro «Coro de gatitos»." },
   { slot: "gems", id: "diamante", name: "Diamante", price: 0, req: "virtuoso", cols: LANES, shape: "diamond", desc: "Brillan como diamantes. Premio por sacar 5 estrellas en Experto." },
   { slot: "gems", id: "vinilo", name: "Vinilos", price: 0, req: "gira-medium-stadium", tour: "medium", cols: LANES, shape: "vinyl", desc: "Las notas son discos de vinilo con la etiqueta de su color. Premio de la gira en Media: supera El Estadio." },
