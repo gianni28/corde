@@ -76,44 +76,79 @@ export function newRoomCode() {
 }
 
 /**
- * Joins a room. Everyone in the channel shares presence {name, lanes, ready, joinedAt}.
+ * Joins a room. Everyone in the channel shares presence {name, lanes, ready, songId, joinedAt, config (the host's)}.
  * The host (earliest joinedAt) picks the song and starts the round.
+ * The realtime server may close a channel on its own (too many messages at once, a blip in the connection) without the
+ * page noticing: the others see you leave while you still see yourself. So the channel is watched and, if it closes,
+ * opened again as the same player (same presence key, same state).
  */
 export function joinRoom(code, me, h) {
   if (!supabase) throw new Error("El multijugador necesita Supabase configurado.");
   const id = me.id;
-  const ch = supabase.channel(`corde:${code}`, { config: { presence: { key: id }, broadcast: { self: false, ack: false } } });
   let state = { ...me, ready: false, joinedAt: Date.now() };
+  let ch = null, left = false, retry = null, everIn = false;
+  // Someone who drops out of the room for a moment (their channel closing and opening again) stays in the list for a
+  // while, marked away: nobody else becomes host and nothing resets meanwhile. Leaving for real says so (event "bye").
+  const GRACE = 10000, seen = new Map(); // id → { p, gone }
+  let graceT = null;
   const peers = () => {
-    const ps = ch.presenceState();
-    return Object.entries(ps).map(([k, arr]) => ({ id: k, ...arr[arr.length - 1] })).sort((a, b) => a.joinedAt - b.joinedAt);
+    const now = Date.now(), cur = ch ? ch.presenceState() : {};
+    for (const [k, arr] of Object.entries(cur)) seen.set(k, { p: { id: k, ...arr[arr.length - 1] }, gone: 0 });
+    for (const [k, v] of seen) if (!cur[k]) { if (!v.gone) v.gone = now; if (now - v.gone > GRACE) seen.delete(k); }
+    const out = [...seen.values()].map((v) => (v.gone ? { ...v.p, away: true } : v.p)).sort((a, b) => a.joinedAt - b.joinedAt);
+    if (out.some((p) => p.away) && !graceT) graceT = setTimeout(() => { graceT = null; if (!left) h.onPeers(peers()); }, GRACE + 200);
+    return out;
   };
-  ch.on("presence", { event: "sync" }, () => h.onPeers(peers()));
-  ["config", "start", "score", "final", "abort", "attack"].forEach((ev) => ch.on("broadcast", { event: ev }, ({ payload }) => h.onEvent(ev, payload)));
-  // Telling the room how we are: one update at a time, the latest state, a few in a row folded into one. Changing the
-  // song sends three at once (the song, "loading", "ready"), and the realtime server could lose the host in that burst.
+  // Telling the room how we are: one update at a time, the latest state, a few in a row folded into one
   let tracking = null, again = false;
   const push = () => {
     if (tracking) { again = true; return tracking; }
     tracking = (async () => {
-      do { again = false; await new Promise((r) => setTimeout(r, 150)); try { await ch.track(state); } catch {} } while (again);
+      do { again = false; await new Promise((r) => setTimeout(r, 150)); try { if (ch?.state === "joined") await ch.track(state); } catch {} } while (again);
       tracking = null;
     })();
     return tracking;
   };
-  ch.subscribe(async (status) => {
-    if (status === "SUBSCRIBED") { await push(); h.onStatus && h.onStatus("ok"); }
-    else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") h.onStatus && h.onStatus("error");
-  });
-  // a phone can lose its place in the room without noticing (a busy moment, a blip in the connection): the others see
-  // it leave while it still sees itself. Every few seconds: if the room doesn't have us, say we're here again.
-  // And every 20 s anyway: someone else's view of the room may have lost us without ours noticing.
+  const open = () => {
+    const mine = supabase.channel(`corde:${code}`, { config: { presence: { key: id }, broadcast: { self: false, ack: false } } });
+    ch = mine;
+    mine.on("presence", { event: "sync" }, () => { if (ch === mine) h.onPeers(peers()); });
+    ["config", "start", "score", "final", "abort", "attack"].forEach((ev) => mine.on("broadcast", { event: ev }, ({ payload }) => { if (ch === mine) h.onEvent(ev, payload); }));
+    mine.on("broadcast", { event: "bye" }, ({ payload }) => { if (ch === mine && payload?.from) { seen.delete(payload.from); h.onPeers(peers()); } });
+    mine.subscribe(async (status) => {
+      if (ch !== mine || left) return;
+      if (status === "SUBSCRIBED") { everIn = true; await push(); h.onStatus && h.onStatus("ok"); }
+      else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        if (!everIn) h.onStatus && h.onStatus("error");
+        reopen();
+      }
+    });
+  };
+  // closed by the server: out with the dead channel (the client hands back the same one for the same name while it's
+  // there), in with a new one
+  const reopen = () => {
+    if (left || retry) return;
+    retry = setTimeout(async () => {
+      const old = ch; ch = null;
+      if (old) {
+        try { await old.unsubscribe(2000); } catch {} // a dead channel doesn't answer: don't wait the usual 10 s
+        try { old.teardown(); } catch {}
+        try { if (supabase.realtime.getChannels().includes(old)) supabase.realtime._remove(old); } catch {}
+      }
+      retry = null;
+      if (!left) open();
+    }, 1500);
+  };
+  open();
+  // every few seconds: the connection up, the channel joined, and us in it (else say we're here again); and every 30 s
+  // anyway, since someone else's view of the room may have lost us without ours noticing
   let ticks = 0;
   const watch = setInterval(() => {
     try {
       ticks++;
       if (!supabase.realtime.isConnected()) supabase.realtime.connect();
-      else if (ch.state === "joined" && (!ch.presenceState()[id] || ticks % 5 === 0)) push();
+      else if (ch && (ch.state === "closed" || ch.state === "errored")) reopen();
+      else if (ch?.state === "joined" && (!ch.presenceState()[id] || ticks % 8 === 0)) push();
     } catch {}
   }, 4000);
   return {
@@ -121,30 +156,45 @@ export function joinRoom(code, me, h) {
     peers,
     isHost: () => { const p = peers(); return p.length ? p[0].id === id : true; },
     update: (patch) => {
-      // nothing new: nothing to send (a burst of the same news is what gets a phone thrown out of the room)
+      // nothing new: nothing to send (bursts of messages are what get a player thrown out of the room)
       if (Object.keys(patch).every((k) => JSON.stringify(state[k]) === JSON.stringify(patch[k]))) return tracking || Promise.resolve();
       state = { ...state, ...patch }; return push();
     },
-    send: (event, payload) => ch.send({ type: "broadcast", event, payload: { ...payload, from: id } }),
-    leave: () => { clearInterval(watch); return supabase.removeChannel(ch); },
+    send: (event, payload) => (ch ? ch.send({ type: "broadcast", event, payload: { ...payload, from: id } }) : Promise.resolve()),
+    leave: () => {
+      left = true; clearInterval(watch); clearTimeout(retry); clearTimeout(graceT);
+      const c = ch; ch = null;
+      if (!c) return Promise.resolve();
+      try { c.send({ type: "broadcast", event: "bye", payload: { from: id } }); } catch {}
+      return new Promise((r) => setTimeout(r, 120)).then(() => supabase.removeChannel(c));
+    },
   };
 }
 
 /**
  * The open rooms: one shared channel where each room's host tells how it's going (code and players for a public room;
  * for a private one, no code). Whoever only watches doesn't show up in it. onList gets every room on each change.
+ * It has its own connection: nothing it sends can count against the room's (or close it).
  */
+let dirClient = null;
 export function roomDirectory(onList) {
   if (!supabase) return null;
-  const ch = supabase.channel("corde:salas", { config: { presence: { key: Math.random().toString(36).slice(2) } } });
-  let mine = null, ok = false;
+  dirClient ||= createClient(URL, KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "corde-salas" } });
+  const ch = dirClient.channel("corde:salas", { config: { presence: { key: Math.random().toString(36).slice(2) } } });
+  let mine = null, ok = false, sent = 0, later = null;
   const list = () => Object.values(ch.presenceState()).map((a) => a[a.length - 1]).filter((r) => r && r.at);
+  const send = () => { later = null; sent = Date.now(); (mine ? ch.track(mine) : ch.untrack()).catch?.(() => {}); };
   ch.on("presence", { event: "sync" }, () => onList(list()));
-  ch.subscribe((st) => { if (st === "SUBSCRIBED") { ok = true; if (mine) ch.track(mine); } });
+  ch.subscribe((st) => { if (st === "SUBSCRIBED") { ok = true; if (mine) send(); } });
   return {
-    /** This browser's room (null: none). */
-    set(info) { mine = info; if (ok) (info ? ch.track(info) : ch.untrack()).catch?.(() => {}); },
-    close: () => supabase.removeChannel(ch),
+    /** This browser's room (null: none). At most one update every 3 s. */
+    set(info) {
+      mine = info; if (!ok) return;
+      clearTimeout(later);
+      const wait = sent + 3000 - Date.now();
+      if (wait <= 0) send(); else later = setTimeout(send, wait);
+    },
+    close: () => { clearTimeout(later); return dirClient.removeChannel(ch); },
   };
 }
 

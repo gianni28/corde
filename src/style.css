@@ -1420,3 +1420,5 @@ body.fx-quake #stage { animation: quake .11s linear infinite; }
 .open-rooms .btn:disabled { opacity: .5; }
 .live-rooms .lr-tag { flex: none; padding: 3px 7px 2px; border-radius: 2px; font: 700 12px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; color: #ddd; background: #3a3430; }
 .live-rooms .lr-tag.pub { color: #1a1004; background: var(--gold); }
+
+.players li.away { opacity: .55; }
