@@ -50,6 +50,14 @@ function sides(g, w, h, a = 0.65, rgb = "0,0,0", reach = 0.12) {
   e.addColorStop(0, `rgba(${rgb},${a})`); e.addColorStop(reach, `rgba(${rgb},0)`); e.addColorStop(1 - reach, `rgba(${rgb},0)`); e.addColorStop(1, `rgba(${rgb},${a})`);
   g.fillStyle = e; g.fillRect(0, 0, w, h);
 }
+// the play area kept calm: darkens everything but the very edges (a = how dark across the lanes), so whatever is
+// painted on the board stays under the notes instead of fighting them
+function calm(g, w, h, a, edge = 0.03) {
+  const e = g.createLinearGradient(0, 0, w, 0);
+  e.addColorStop(0, "rgba(0,0,0,0)"); e.addColorStop(edge, "rgba(0,0,0,0)"); e.addColorStop(edge + 0.1, `rgba(0,0,0,${a})`);
+  e.addColorStop(1 - edge - 0.1, `rgba(0,0,0,${a})`); e.addColorStop(1 - edge, "rgba(0,0,0,0)"); e.addColorStop(1, "rgba(0,0,0,0)");
+  g.fillStyle = e; g.fillRect(0, 0, w, h);
+}
 // the usual position markers: one dot, then two (like frets 3 and 5)
 const dots = (w, h, dot) => { dot(w / 2, h * 0.25); dot(w * 0.3, h * 0.75); dot(w * 0.7, h * 0.75); };
 function pearlDot(g, x, y, r = 14, glow = 1) {
@@ -245,19 +253,21 @@ function ice(g, w, h) {
   blots(g, w, h, 40, "120,190,255", [0.05, 0.12], [20, 70]);
   blots(g, w, h, 24, "0,8,30", [0.15, 0.3], [20, 60]);
   // a few long straight fractures with short splinters, and frost blooming around them
-  const cs = cracks(w, h, 9, 9, 0.35, 0.28, [22, 60]);
-  strokeAll(g, h, cs, "rgba(150,215,255,.07)", 16);
-  strokeAll(g, h, cs, "rgba(170,225,255,.14)", 6);
-  strokeAll(g, h, cs, "rgba(215,242,255,.45)", 2.2);
-  strokeAll(g, h, cs, "rgba(255,255,255,.95)", 0.9);
-  for (let i = 0; i < 900; i++) { g.fillStyle = `rgba(230,246,255,${rnd(0.04, 0.3)})`; const r = rnd(0.4, 1.4); g.fillRect(rnd(0, w), rnd(0, h), r, r * TALL); } // frost
+  // (soft: bright white lines all over the board, rushing by, fought the notes)
+  const cs = cracks(w, h, 6, 9, 0.3, 0.28, [22, 60]);
+  strokeAll(g, h, cs, "rgba(150,215,255,.06)", 14);
+  strokeAll(g, h, cs, "rgba(170,225,255,.1)", 5);
+  strokeAll(g, h, cs, "rgba(215,242,255,.28)", 2);
+  strokeAll(g, h, cs, "rgba(255,255,255,.45)", 0.8);
+  calm(g, w, h, 0.25);
+  for (let i = 0; i < 500; i++) { g.fillStyle = `rgba(230,246,255,${rnd(0.03, 0.18)})`; const r = rnd(0.4, 1.4); g.fillRect(rnd(0, w), rnd(0, h), r, r * TALL); } // frost
   sides(g, w, h, 0.45, "210,236,255", 0.1); // frosted along the sides
 }
 
 // black basalt crust split by glowing lava (the glow is the texture itself: it lights the neck)
 function lava(g, w, h) {
   // plates of crust (a Voronoi map, wrapping along the neck): the closer to a seam, the hotter; some seams run cooler
-  const lw = w / 2, lh = h / 2, cell = 48, nx = Math.ceil(lw / cell), ny = Math.round(lh / cell), cy = lh / ny;
+  const lw = w / 2, lh = h / 2, cell = 76, nx = Math.ceil(lw / cell), ny = Math.round(lh / cell), cy = lh / ny;
   const seeds = [];
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) seeds.push([(i + rnd(0.1, 0.9)) * cell, (j + rnd(0.1, 0.9)) * cy, rnd(0.35, 1)]);
   shade(g, w, h, (u, t, out, x, y) => {
@@ -273,12 +283,13 @@ function lava(g, w, h) {
     }
     const e = Math.sqrt(f2) - Math.sqrt(f1), hot = Math.min(s1[2], s2[2]); // distance to the seam, that seam's heat
     const heat = Math.exp(-e / (0.9 + 1.2 * hot)) * (0.45 + 0.55 * hot), warm = Math.exp(-e / 7) * hot;
-    out[0] = Math.min(255, 14 + 255 * heat + 150 * warm); out[1] = Math.min(255, 9 + 210 * heat * heat + 22 * warm); out[2] = Math.min(255, 8 + 120 * heat * heat * heat);
+    out[0] = Math.min(255, 14 + 225 * heat + 110 * warm); out[1] = Math.min(255, 9 + 175 * heat * heat + 16 * warm); out[2] = Math.min(255, 8 + 95 * heat * heat * heat);
   });
   // the crust: rough specks, darker hollows
   for (let i = 0; i < 6000; i++) { g.fillStyle = `rgba(${Math.random() < 0.5 ? "70,60,56" : "0,0,0"},${rnd(0.1, 0.35)})`; g.fillRect(rnd(0, w), rnd(0, h), rnd(1, 3), rnd(1, 3)); }
   blots(g, w, h, 30, "0,0,0", [0.2, 0.4], [10, 40]);
   blots(g, w, h, 8, "255,80,10", [0.06, 0.12], [30, 70]); // heat under the crust
+  calm(g, w, h, 0.3);
   sides(g, w, h, 0.7);
 }
 
@@ -291,7 +302,8 @@ function paintedFlames(g, w, h) {
   // long tongues leave each side and sweep away from the player to a pointed tip, each one over the one ahead of it
   // (yellow where it starts, red at the tip, a blue pinstripe round it). The canvas is squashed 1.8× along the neck.
   const n = 4, step = h / n, licks = [];
-  for (let k = 0; k < n; k++) licks.push({ len: rnd(520, 700), dep: rnd(72, 108), wid: rnd(150, 210), off: rnd(-30, 30), hook: rnd(-16, 10) });
+  // they stay close to the edges (the outer notes run over them) and darken towards the lanes, so the notes keep their contrast
+  for (let k = 0; k < n; k++) licks.push({ len: rnd(480, 640), dep: rnd(44, 62), wid: rnd(120, 170), off: rnd(-30, 30), hook: rnd(-10, 6) });
   const path = (yb, { len, dep, wid, hook }) => {
     const tip = yb - len;
     g.beginPath(); g.moveTo(-14, yb);
@@ -308,14 +320,15 @@ function paintedFlames(g, w, h) {
     for (let k = -3; k <= n + 1; k++) { // far ones first (the canvas's top is the far end), repeated past both ends
       const L = licks[((k % n) + n) % n], yb = k * step + L.off + (side ? step * 0.5 : 0);
       path(yb, L);
-      g.strokeStyle = "rgba(0,0,0,.85)"; g.lineWidth = 10; g.stroke();
-      g.strokeStyle = "#3cb8ff"; g.lineWidth = 4; g.stroke(); // the pinstripe (its inner half gets covered)
+      g.strokeStyle = "rgba(0,0,0,.85)"; g.lineWidth = 7; g.stroke();
+      g.strokeStyle = "rgba(60,184,255,.55)"; g.lineWidth = 2.5; g.stroke(); // the pinstripe (its inner half gets covered)
       const f = g.createLinearGradient(0, yb, L.dep * 0.6, yb - L.len);
-      f.addColorStop(0, "#fff6a0"); f.addColorStop(0.2, "#ffd23a"); f.addColorStop(0.45, "#ff8c1a"); f.addColorStop(0.75, "#e8380e"); f.addColorStop(1, "#a80c08");
+      f.addColorStop(0, "#f0c040"); f.addColorStop(0.25, "#e88a1a"); f.addColorStop(0.55, "#c43a0e"); f.addColorStop(1, "#6a0806");
       g.fillStyle = f; g.fill();
     }
     g.restore();
   }
+  calm(g, w, h, 0.55, 0.02);
   sides(g, w, h, 0.45, "0,0,0", 0.04);
 }
 
@@ -329,7 +342,7 @@ function neonGrid(g, w, h) {
     for (const [lw, a] of [[9, 0.07], [4, 0.16], [1.4, 0.85]]) { g.strokeStyle = `rgba(${rgb},${a})`; g.lineWidth = lw; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); }
   };
   const gy = h / 8; // across: every 0.75 units, so it never lines up with the beat bars for long
-  for (let k = 0; k <= 8; k++) line(0, k * gy, w, k * gy, "255,50,210");
+  g.globalAlpha = 0.4; for (let k = 0; k <= 8; k++) line(0, k * gy, w, k * gy, "255,50,210"); g.globalAlpha = 1; // dim: lines across rush at you
   for (let k = 1; k < 8; k++) line((k * w) / 8, 0, (k * w) / 8, h, "40,230,255");
   sides(g, w, h, 0.5, "0,0,0", 0.06);
 }
@@ -445,11 +458,11 @@ function stickers(g, w, h) {
   // a grid with jitter so they spread over the whole tile (and wrap across its ends)
   const rows = 7, colsN = 3;
   for (let ry = 0; ry < rows; ry++) for (let cx = 0; cx < colsN; cx++) {
-    if (Math.random() < 0.45) continue;
+    if (Math.random() < 0.6) continue; // sparse: they're under the notes
     const x = ((cx + 0.5) / colsN) * w + rnd(-40, 40), y0 = ((ry + 0.5) / rows) * h + rnd(-30, 30), rot = rnd(-0.5, 0.5);
-    const kind = pick(["star", "bolt", "word", "dot", "pick", "word"]), c = pick(cols), r = rnd(22, 32);
+    const kind = pick(["star", "bolt", "word", "dot", "pick", "word"]), c = pick(cols), r = rnd(17, 24);
     wrap(h, y0, r * TALL * 1.4, (y) => {
-      g.save(); g.translate(x, y); g.scale(1, TALL); g.rotate(rot); g.globalAlpha = 0.6; // faded, so the notes stay on top
+      g.save(); g.translate(x, y); g.scale(1, TALL); g.rotate(rot); g.globalAlpha = 0.42; // faded, so the notes stay on top
       g.shadowColor = "rgba(0,0,0,.6)"; g.shadowBlur = 6; g.shadowOffsetY = 2;
       if (kind === "word") {
         const t = pick(words); g.font = `900 ${Math.round(r * 0.75)}px Impact, "Arial Black", sans-serif`;
@@ -569,7 +582,7 @@ function skullNeck(g, w, h) {
     g.strokeStyle = "#0c0a0a"; g.lineWidth = 2.4; for (let x = -15; x <= 15; x += 7.5) { g.beginPath(); g.moveTo(x, 26); g.lineTo(x, 38); g.stroke(); } // the teeth
     g.restore();
   };
-  g.globalAlpha = 0.8; skull(w / 2, h * 0.3, 1.05); skull(w / 2, h * 0.8, 0.7); g.globalAlpha = 1;
+  g.globalAlpha = 0.42; skull(w / 2, h * 0.3, 1.05); skull(w / 2, h * 0.8, 0.7); g.globalAlpha = 1; // faint: right under the yellow notes
 }
 
 // draw: the canvas; emissive: how much the neck lights itself (light woods less, so the notes keep their contrast);
