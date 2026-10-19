@@ -664,11 +664,11 @@ export const GEMS = {
     ring: { color: 0x9a9aa8, metal: 0.7, rough: 0.12, emissive: 0x30303a, ei: 0.6 }, base: { color: 0x050506, metal: 0.4, rough: 0.15 },
     halo: { size: 1.1, mul: 0.5 },
   },
-  // emperor tamarins: a round head in the lane colour, a pale face, the long white moustache (the "ring", it moves with
-  // the music: renderer.js uWig), dark eyes and nose (in the base's piece)
+  // emperor tamarins: a furry head in the lane colour (grizzled), the black face with its eyes and nostrils (the base's
+  // piece), a pink muzzle, the long white moustache hanging down (the "ring", it sways with the music: renderer.js uWig)
   titi: {
-    lanes: LANE_HEX, shape: "titi", body: { metal: 0, rough: 0.65, mix: 0.12, to: 0x303030 }, dome: { metal: 0, rough: 0.5, mix: 0.7, to: 0xf0d8c8 },
-    ring: { color: 0xffffff, metal: 0, rough: 0.4, emissive: 0xffffff, ei: 0.35 }, base: { color: 0x101010, metal: 0.05, rough: 0.5 },
+    lanes: LANE_HEX, shape: "titi", body: { metal: 0, rough: 0.85, mix: 0.3, to: 0x5a4a3c }, dome: { metal: 0, rough: 0.45, mix: 0.92, to: 0xe3a29c },
+    ring: { color: 0xffffff, metal: 0, rough: 0.5, emissive: 0xffffff, ei: 0.4 }, base: { color: 0x0a0809, metal: 0, rough: 0.55 },
   },
   // kittens: matte fur in the lane colour, a pale muzzle, a dark face (the "ring")
   gatitos: {

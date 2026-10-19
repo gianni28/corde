@@ -2438,13 +2438,26 @@ function shopCard(it) {
   b.onclick = () => selectShopItem(it.id);
   return b;
 }
-// Nero for the shop's card and the Otaku bar (the stage draws him in renderer.js neroTex)
+// Nero for the shop's card and the Otaku bar (the stage has him in 3D: renderer.js makeNero)
 const NERO_SVG = `<svg class="nero" viewBox="0 0 120 110" aria-hidden="true"><path d="M82 92l30 6-13 4 15 8-34-7z" fill="#1d2342"/>`
   + `<ellipse cx="60" cy="68" rx="40" ry="40" fill="#1d2342"/><ellipse cx="60" cy="84" rx="29" ry="24" fill="#f1eee6"/>`
   + `<path d="M62 30c-2-16 14-24 22-15 5 6-4 11-8 6" fill="none" stroke="#1d2342" stroke-width="5" stroke-linecap="round"/>`
   + `<path d="M28 50q32-10 64 0l-2 16q-30 7-60 0z" fill="#7c2633"/>`
   + `<path d="M38 57h14M68 57h14" stroke="#140c10" stroke-width="3"/><circle cx="45" cy="61" r="3.4" fill="#140c10"/><circle cx="75" cy="61" r="3.4" fill="#140c10"/>`
   + `<path d="M53 64h14l-7 13z" fill="#0e0c10"/><ellipse cx="47" cy="108" rx="7" ry="3" fill="#c9a46a"/><ellipse cx="73" cy="108" rx="7" ry="3" fill="#c9a46a"/></svg>`;
+// an emperor tamarin for the card (renderer.js gemShape "titi"): the furry head in the lane colour, the black face, the
+// pink muzzle and the white moustache hanging down
+const TITI_SVG = `<svg viewBox="-40 -48 80 100" aria-hidden="true"><circle cy="-10" r="35" fill="#0a0809"/>`
+  + `<ellipse cx="-30" cy="-24" rx="8" ry="9" fill="#0a0809"/><ellipse cx="30" cy="-24" rx="8" ry="9" fill="#0a0809"/>`
+  + `<ellipse cx="-30" cy="-24" rx="5" ry="6" style="fill:var(--c)"/><ellipse cx="30" cy="-24" rx="5" ry="6" style="fill:var(--c)"/>`
+  + `<circle cy="-10" r="29" style="fill:var(--c);stroke:var(--c)" stroke-width="6" stroke-dasharray="2.5 2.5"/>`
+  + `<path d="M0-22q15 0 23 14 2 15-10 23-13 6-26 0-12-8-10-23 8-14 23-14z" fill="#0a0809"/>`
+  + `<circle cx="-8.5" cy="-7.5" r="4.2" fill="#2a1a16"/><circle cx="8.5" cy="-7.5" r="4.2" fill="#2a1a16"/>`
+  + `<circle cx="-7.2" cy="-8.8" r="1.6" fill="#fff"/><circle cx="9.8" cy="-8.8" r="1.6" fill="#fff"/>`
+  + `<ellipse cy="5.5" rx="7.5" ry="6" fill="#e3a29c"/><path d="M-2.5 3.5h1M1.5 3.5h1M-4 8.5h8" stroke="#0a0809" stroke-width="1.4"/>`
+  + `<g fill="none" stroke="#fff" stroke-linecap="round"><path d="M3 6c12 1 23 5 29 13s1 22 4 31M-3 6c-12 1-23 5-29 13s-1 22-4 31" stroke-width="4.5"/>`
+  + `<path d="M4 8c10 3 18 9 21 19s1 12 3 16M-4 8c-10 3-18 9-21 19s-1 12-3 16" stroke-width="3"/>`
+  + `<path d="M4 10c7 5 12 12 13 22M-4 10c-7 5-12 12-13 22" stroke-width="2"/></g></svg>`;
 // the card's little picture: the catalog's CSS, plus gems, flames, a name or a streak drawn with elements
 function fillSwatch(el, it) {
   el.className = `sw sw-${it.slot}`;
@@ -2452,7 +2465,7 @@ function fillSwatch(el, it) {
   if (it.slot === "gems") {
     el.classList.add("g-" + (it.shape || "round"));
     if (it.ring) el.style.setProperty("--ring", it.ring);
-    el.innerHTML = it.cols.map((c) => `<i style="--c:${c}"></i>`).join("");
+    el.innerHTML = it.cols.map((c) => `<i style="--c:${c}">${it.shape === "titi" ? TITI_SVG : ""}</i>`).join("");
   } else if (it.slot === "flames") {
     el.classList.toggle("rainbow", !!it.rainbow);
     if (it.glow) el.style.setProperty("--glow", it.glow);
