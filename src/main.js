@@ -613,11 +613,11 @@ function renderSongs() {
 }
 $("libSearch").oninput = renderSongs;
 // ▶ on a cover: listen to the song's chorus before picking it (the menu music switches to it); ■ stops it
-async function previewSong(s) {
+async function previewSong(s, toggle = true) {
   unlockAudio();
-  if (previewing === s.id || previewLoading === s.id) { previewing = previewLoading = null; music.stopSong(); markPreview(); return; }
+  if (previewing === s.id || previewLoading === s.id) { if (toggle) { previewing = previewLoading = null; music.stopSong(); markPreview(); } return; }
   previewLoading = s.id; markPreview();
-  try { if (await music.playSong(s)) previewing = s.id; }
+  try { if (await music.playSong(s, () => !app.game && MENU_MUSIC.includes(app.screen))) previewing = s.id; }
   catch (e) { toast("No se pudo cargar la canción para escucharla."); }
   if (previewLoading === s.id) previewLoading = null;
   markPreview();
@@ -781,6 +781,12 @@ function defaultDiff(chart, lanes) {
 function openSongScreen() { app.mode === "duo" ? openDuoSetup() : openSetup(); }
 function openSetup() {
   const s = app.song, lanes = deviceLanes();
+  // the song starts playing (its chorus) while the difficulty is picked; not a song from the device, not when a song
+  // is about to start anyway (the random song opens this screen on its way in)
+  setTimeout(() => {
+    const lib = app.songs.find((x) => x.id === s.id);
+    if (online && lib && app.screen === "setup" && !app.game && app.song === s) previewSong(lib, false);
+  }, 0);
   $("setupName").textContent = s.name;
   $("setupArtist").textContent = [s.artist, s.album].filter(Boolean).join(" · ");
   const cov = s.coverUrl || coverOf(s);

@@ -224,10 +224,10 @@ export function createMenuMusic({ onChange }) {
     skip() { if (muted || !songs.length || loadingNext) return; advance(0.6); },
     /** A preview of this song right now (the ▶ on a cover in the song list): its chorus, crossfading from what
      *  played, even with the menu music muted. Resolves false when another preview was asked meanwhile. */
-    async playSong(s) {
+    async playSong(s, still = () => true) {
       const token = ++previewSeq;
       const n = await loadPiece(s, ctx());
-      if (token !== previewSeq) return false;
+      if (token !== previewSeq || !still()) return false; // another preview, or a song started while this one loaded
       next = null; stopSources(0.4); cur = n; lastId = s.id; seek = 0; want = true;
       startSources(0);
       return true;
