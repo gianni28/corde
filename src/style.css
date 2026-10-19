@@ -252,6 +252,17 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .rivals .n { font: 600 16px var(--display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rivals .s { font: 700 19px/1 var(--display); font-variant-numeric: tabular-nums; text-align: right; }
 .rivals .m { grid-column: 1 / -1; font: 500 13px var(--body); color: var(--muted); }
+/* a phone: one thin line per player (name and score), see-through, in the corner above where the notes come in; with
+   many players, the top three and you (a phone turned sideways too) */
+@media (max-width: 760px), (orientation: portrait), (max-height: 500px) {
+  .rivals { right: 8px; top: calc(max(14px, env(safe-area-inset-top)) + 54px); width: min(132px, 34vw); gap: 2px; opacity: .88; }
+  .rivals li { padding: 2px 6px; gap: 0 6px; background: rgba(14,12,12,.62); box-shadow: 0 0 0 1px rgba(0,0,0,.6); }
+  .rivals li.me { box-shadow: 0 0 0 1px rgba(0,0,0,.6), inset 0 0 0 1px var(--red-hi); }
+  .rivals .n { font-size: 12px; }
+  .rivals .s { font-size: 13px; line-height: 1.25; }
+  .rivals .m { display: none; }
+  .rivals li:nth-child(n+4):not(.me) { display: none; }
+}
 .judge { position: absolute; left: 50%; transform: translateX(-50%); font: 700 26px var(--display); text-transform: uppercase; letter-spacing: .08em; opacity: 0; transition: opacity .3s; text-shadow: 0 2px 0 #000, 0 0 14px currentColor; }
 .judge.show { opacity: 1; transition: none; }
 .streak { position: absolute; left: 50%; top: 30%; transform: translate(-50%, -50%) scale(.6); opacity: 0; white-space: nowrap; text-align: center;
@@ -426,9 +437,9 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 @keyframes rockDanger { 50% { filter: drop-shadow(0 3px 0 #000) drop-shadow(0 0 16px rgba(255,42,34,.95)); } }
 @media (max-width: 760px), (orientation: portrait) {
   .rock { top: calc(max(14px, env(safe-area-inset-top)) + 58px); right: 12px; bottom: auto; width: 88px; }
-  #hud.mp .rock { right: auto; left: 16px; top: calc(max(14px, env(safe-area-inset-top)) + 76px); }
 }
-#hud.mp .rock { bottom: 12%; }
+/* multiplayer: nobody can fail there, so no meter (and the room's table has its corner) */
+#hud.mp .rock { display: none; }
 
 /* ---------- song failed ---------- */
 .fail-fx { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at 50% 55%, rgba(120,0,0,0) 30%, rgba(150,0,0,.55) 100%); }
