@@ -12,7 +12,7 @@ import { motionAvailable, motionNeedsPermission, motionReady, requestMotion, onL
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
 import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, nameStyles, songRequest, myNotices, noticeSeen, noticeReply, myFulfilled, fulfilledSeen } from "./net.js";
 import { shareCard, retoUrl, readReto } from "./share.js";
-import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau, forBananas, BANANA_GIFTS, BANANA_LOGROS, forOneD, ONED_SONGS, ONED_STARS, ONED_DIFF } from "./achievements.js";
+import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau, forBananas, BANANA_GIFTS, BANANA_LOGROS, BANDS, BAND_STARS, BAND_DIFF, forBand } from "./achievements.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretOpen, secretBoard, songById, fetchMiauProgress, roomDirectory, commentPost, myComments, myCommentReplies, commentReplySeen } from "./net.js";
 import { VENUES, TO_ENCORE, TOUR_PRIZES, TOUR_THEMES, prizesWon, savedTourDiffs, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song, separateExisting } from "./admin.js";
@@ -21,7 +21,7 @@ import * as sfx from "./sfx.js";
 import { energyCurve, energyAt } from "./energy.js";
 import { createMenuMusic } from "./music.js";
 import { SLOTS, STAGE_SLOTS, ITEMS, GROUPS, DEFAULTS as LOOK_DEFAULTS, itemOf, ownedKey, isDefault, resolveEquipped } from "./shop.js";
-import { cssVars, ONED } from "./skins.js";
+import { cssVars, MEMBERS } from "./skins.js";
 
 const $ = (id) => document.getElementById(id);
 const LANE_CSS = ["--g", "--r", "--y", "--b", "--o"];
@@ -177,7 +177,7 @@ let previewing = null, previewLoading = null; // the song list's ▶ (see previe
 const mp = { fx: { terremoto: 0, niebla: 0, apagon: 0, turbo: 0 }, on: "", lastPos: 0, posAt: 0, bannerT: 0 }; // multiplayer battle (see launchAttack)
 const ROOM_MAX = 4, dir = { ch: null, list: [], last: "" }; // the open rooms (see syncDir): up here, show() keeps it in step
 // the Otaku event's golden bananas picked up so far (see markBananas): up here, the account's sync reads them early
-const BANANA_KEY = "corde.bananas.v1", OTAKU_INTRO_KEY = "corde.otaku.intro.v1", ONED_INTRO_KEY = "corde.oned.intro.v1";
+const BANANA_KEY = "corde.bananas.v1", OTAKU_INTRO_KEY = "corde.otaku.intro.v1";
 let bananas = (() => { try { return Math.max(0, Math.floor(+localStorage.getItem(BANANA_KEY) || 0)); } catch { return 0; } })();
 function saveBananas() { try { localStorage.setItem(BANANA_KEY, String(bananas)); } catch {} }
 // while the admin uploads or separates songs, the stage and the menu music rest (they'd take the processor from it)
@@ -357,7 +357,7 @@ renderHomeBoard();
 Promise.resolve().then(() => {
   if (!online) return;
   loadLibrary()
-    .then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); backfillAchievements(); queueMiauIntro(); queueOtakuIntro(); queueOneDIntro(); refreshMiau(); })
+    .then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); backfillAchievements(); queueMiauIntro(); queueOtakuIntro(); queueBandIntros(); refreshMiau(); })
     .catch((e) => console.warn("library:", e.message))
     .finally(() => loadDaily());
 });
@@ -494,7 +494,7 @@ $("secretForm").onsubmit = async (e) => {
     const n = g.songs.length;
     if (g.songs.some((x) => x.miau)) { queueMiauIntro(3200); refreshMiau(); } // after the celebration
     if (nameKey(g.name) === "otaku") queueOtakuIntro(3200);
-    queueOneDIntro(3200);
+    queueBandIntros(3200);
     celebrate({ kicker: "Código correcto", title: g.name, kind: "secret", ms: 2800,
       sub: n ? `${n} ${n === 1 ? "canción desbloqueada" : "canciones desbloqueadas"}. Las encuentras en «${g.name}».` : "Ya quedaron desbloqueadas, aunque todavía no hay ninguna." });
   } catch (err) {
@@ -581,7 +581,7 @@ function renderSongs() {
   // the Otaku event's bar, on top of its tab
   if (secretTab && app.libTab === otakuGroup()) box.appendChild(otakuCard());
   // the One Direction event's card, on top of the tab that has its songs
-  if (secretTab && oneDLive() && tab.some(isOneD)) box.appendChild(oneDCard());
+  for (const b of BANDS) if (secretTab && bandLive(b) && tab.some((s) => bandOf(s) === b)) box.appendChild(bandCard(b));
   // the kittens' challenge, on top of the tab that has the miau songs
   if (secretTab && tab.some((s) => s.miau)) {
     const p = miauProgress(), card = document.createElement("div");
@@ -1447,13 +1447,13 @@ function celebrateAchievements(list) {
   sfx.unlock();
   const then = rest.length ? () => celebrateAchievements(rest) : null;
   const gift = a.surprise && giftOf(a.id), many = gift ? ITEMS.filter((it) => it.req === a.id).length : 0;
-  if (many > 1) { R.pyro(); celebrate({ kicker: "¡Regalo sorpresa!", title: a.id === "one-direction" ? "One Direction" : a.name, sub: `Los ${many} ya son tuyos: elige a tu favorito en la Tienda, en ${SLOTS.find((x) => x.id === gift.slot)?.name || "la Tienda"}.`, ms: 4200, kind: "prize", then }); return; }
+  if (many > 1) { R.pyro(); celebrate({ kicker: "¡Regalo sorpresa!", title: BANDS.find((b) => b.id === a.id)?.name || a.name, sub: `Los ${many} ya son tuyos: elige a tu favorito en la Tienda, en ${SLOTS.find((x) => x.id === gift.slot)?.name || "la Tienda"}.`, ms: 4200, kind: "prize", then }); return; }
   if (gift) { R.pyro(); celebrate({ kicker: "¡Regalo sorpresa!", title: gift.name, sub: `Ya es tuyo: está en la Tienda, en ${SLOTS.find((x) => x.id === gift.slot)?.name || "la Tienda"}.`, ms: 3800, kind: "prize", then }); return; }
   celebrate({ kicker: "Logro desbloqueado", title: a.name, sub: a.desc, ms: 2600, kind: "ach", then });
 }
 // what your saved bests already prove (players from before the logros existed get theirs without replaying), silently
 function backfillAchievements() {
-  const ids = [...forMiau(miauIds(), bestAcc), ...forBananas(bananas), ...(oneDLive() ? forOneD(oneDIds(), oneDStars) : [])], n = songsDone();
+  const ids = [...forMiau(miauIds(), bestAcc), ...forBananas(bananas), ...BANDS.flatMap((b) => (bandLive(b) ? forBand(b, bandIds(b), bandStars) : []))], n = songsDone();
   // the tour's prizes for venues already cleared (before there were prizes, or on another device)
   if (publicSongs().length) for (const d of savedTourDiffs()) { const t = tourFor(d, publicSongs()); if (t) ids.push(...prizesWon(tourProgress(t, bestOf))); }
   if (n >= 1) ids.push("primer-acorde");
@@ -1836,7 +1836,8 @@ function finishGame() {
   const run = app.bananaRun; app.bananaRun = null;
   $("bananaRes").hidden = !run; $("giftBtn").hidden = true;
   if (run) { bananas += run.got; saveBananas(); ids.push(...forBananas(bananas)); }
-  if (isOneD(app.song) && !sum.failed && oneDLive()) ids.push(...forOneD(oneDIds(), (id) => Math.max(oneDStars(id), id === app.song.id && diffOk(app.diff) ? sum.stars : 0)));
+  const band = bandOf(app.song);
+  if (band && !sum.failed && bandLive(band)) ids.push(...forBand(band, bandIds(band), (id) => Math.max(bandStars(id), id === app.song.id && diffOk(app.diff) ? sum.stars : 0)));
   const fresh = unlock(ids).sort((a, b) => !!b.surprise - !!a.surprise); // a surprise gift first: it's the big news
   if (run) {
     const gifts = fresh.filter((a) => a.surprise).map((a) => giftOf(a.id)).filter(Boolean);
@@ -2050,11 +2051,12 @@ function showNextNotice() {
     $("noticeMsg").textContent = ""; $("noticeModal").hidden = false;
     return;
   }
-  if (n.kind === "oned") {
-    try { localStorage.setItem(ONED_INTRO_KEY, "1"); } catch {}
-    notices.go = () => { app.mode = "solo"; app.libTab = oneDSongs()[0]?.secret ?? "all"; openLibrary(); };
-    $("noticeKicker").textContent = "Evento · One Direction";
-    $("noticeBody").textContent = `¡Hay un evento en las canciones secretas!\n\nSaca ${ONED_STARS} estrellas o más en cada una de las ${ONED_SONGS} canciones de One Direction, en ${diffName(ONED_DIFF)} o más difícil, y te ganas un regalo sorpresa. ¿Qué será? Solo lo sabrás cuando lo ganes.`;
+  if (n.kind === "band") {
+    const band = BANDS.find((b) => b.id === n.band);
+    try { localStorage.setItem(bandIntroKey(band), "1"); } catch {}
+    notices.go = () => { app.mode = "solo"; app.libTab = bandSongs(band)[0]?.secret ?? "all"; openLibrary(); };
+    $("noticeKicker").textContent = `Evento · ${band.name}`;
+    $("noticeBody").textContent = `¡Hay un evento en las canciones secretas!\n\n${bandRule(band)}, y te ganas un regalo sorpresa. ¿Qué será? Solo lo sabrás cuando lo ganes.`;
     $("noticeForm").querySelector(".notice-reply").hidden = true; $("noticeGo").hidden = false; $("noticeGo").textContent = "Ir a las canciones";
     $("noticeMsg").textContent = ""; $("noticeModal").hidden = false;
     return;
@@ -2137,42 +2139,48 @@ function queueOtakuIntro(delay = 0) {
   notices.queue.unshift({ kind: "otaku" });
   setTimeout(showNextNotice, delay);
 }
-/* ================= the One Direction event ================= */
-// Its songs live in a secret group (whoever has that code sees the event); it opens once all ONED_SONGS are up and
-// its gift (a pet: shop.js, req "one-direction") is in the catalog.
-// 3 stars or more on each wins a surprise gift (achievements.js forOneD), shown nowhere until it's won.
-const isOneD = (s) => !!s && !!s.secret && /one\s*direction/i.test(s.artist || "");
-const oneDSongs = () => app.songs.filter(isOneD);
-const oneDIds = () => oneDSongs().map((s) => s.id);
-const oneDLive = () => oneDSongs().length >= ONED_SONGS && !!giftOf("one-direction");
-// a song's best stars on the event's difficulty or harder
+/* ================= the bands' events (One Direction, BTS) ================= */
+// A band's songs live in a secret group (whoever has that code sees its event), told apart by the artist; it opens
+// once all its songs are up and its gift (the band as pets: shop.js, req = the band's id) is in the catalog. 4 stars
+// or more on each wins the surprise gift (achievements.js BANDS, forBand), shown nowhere until it's won.
+const bandSongs = (b) => app.songs.filter((s) => s.secret && b.artist.test(s.artist || ""));
+const bandOf = (s) => (s && s.secret ? BANDS.find((b) => b.artist.test(s.artist || "")) : null);
+const bandIds = (b) => bandSongs(b).map((s) => s.id);
+const bandLive = (b) => bandSongs(b).length >= b.songs && !!giftOf(b.id);
+const bandIntroKey = (b) => (b.id === "one-direction" ? "corde.oned.intro.v1" : `corde.band.${b.id}.intro.v1`);
+const bandRule = (b) => `Saca ${BAND_STARS} estrellas o más en cada una de las ${b.songs} canciones de ${b.name}, en ${diffName(BAND_DIFF)} o más difícil`;
+// a song's best stars on the events' difficulty or harder
 const diffName = (key) => DIFFS.find((d) => d.key === key)?.name || key;
-const diffOk = (key) => DIFFS.findIndex((d) => d.key === key) >= DIFFS.findIndex((d) => d.key === ONED_DIFF);
-const oneDStars = (id) => Math.max(0, ...Object.entries(bests[id] || {}).filter(([d]) => diffOk(d)).map(([, x]) => x?.stars || 0));
-function oneDCard() {
-  const songs = oneDSongs(), won = !!achievementsWon()["one-direction"], gift = giftOf("one-direction");
-  const done = songs.filter((s) => oneDStars(s.id) >= ONED_STARS).length;
+const diffOk = (key) => DIFFS.findIndex((d) => d.key === key) >= DIFFS.findIndex((d) => d.key === BAND_DIFF);
+const bandStars = (id) => Math.max(0, ...Object.entries(bests[id] || {}).filter(([d]) => diffOk(d)).map(([, x]) => x?.stars || 0));
+function bandCard(band) {
+  const songs = bandSongs(band), won = !!achievementsWon()[band.id], gift = giftOf(band.id);
+  const done = songs.filter((s) => bandStars(s.id) >= BAND_STARS).length;
   const card = document.createElement("div"); card.className = "oned-card";
-  card.innerHTML = `<div class="od-head"><span class="od-badge" aria-hidden="true">1D</span><div><b>Evento · One Direction</b><small></small></div><span class="od-count">${done}/${songs.length}</span></div>`
+  card.innerHTML = `<div class="od-head"><span class="od-badge${band.badge.length > 2 ? " long" : ""}" aria-hidden="true"></span><div><b></b><small></small></div><span class="od-count">${done}/${songs.length}</span></div>`
     + `<ol class="od-songs">${songs.map(() => `<li><span class="od-n"></span><span class="od-st"></span></li>`).join("")}</ol>`
     + `<button type="button" class="od-gift${won ? " won" : ""}" ${won && gift ? "" : "disabled"}>${won && gift ? `<span class="sw"></span>` : `<svg aria-hidden="true"><use href="#gift"/></svg><em>?</em>`}</button>`;
-  card.querySelector(".od-head small").textContent = won ? (gift ? "¡Lo lograste! Tu regalo ya está en la Tienda." : "¡Lo lograste! Tu regalo sorpresa llega muy pronto.")
-    : `Saca ${ONED_STARS} estrellas o más en cada canción, en ${diffName(ONED_DIFF)} o más difícil, y gánate un regalo sorpresa.`;
+  card.querySelector(".od-badge").textContent = band.badge;
+  card.querySelector(".od-head b").textContent = `Evento · ${band.name}`;
+  card.querySelector(".od-head small").textContent = won ? "¡Lo lograste! Tu regalo ya está en la Tienda."
+    : `Saca ${BAND_STARS} estrellas o más en cada canción, en ${diffName(BAND_DIFF)} o más difícil, y gánate un regalo sorpresa.`;
   card.querySelectorAll(".od-songs li").forEach((li, i) => {
-    const st = oneDStars(songs[i].id);
-    li.classList.toggle("ok", st >= ONED_STARS);
+    const st = bandStars(songs[i].id);
+    li.classList.toggle("ok", st >= BAND_STARS);
     li.querySelector(".od-n").textContent = songs[i].name;
     li.querySelector(".od-st").innerHTML = starsHtml(st);
   });
   if (won && gift) { const b = card.querySelector(".od-gift"); fillSwatch(b.querySelector(".sw"), gift); b.onclick = () => openShopAt(gift.slot, gift.id); }
   return card;
 }
-// told once, the first time all its songs show up (after entering the code, or once the last one is uploaded)
-function queueOneDIntro(delay = 0) {
-  let seen = false; try { seen = !!localStorage.getItem(ONED_INTRO_KEY); } catch {}
-  if (seen || !oneDLive() || achievementsWon()["one-direction"] || notices.queue.some((x) => x.kind === "oned") || notices.current?.kind === "oned") return;
-  notices.queue.unshift({ kind: "oned" });
-  setTimeout(showNextNotice, delay);
+// each told once, the first time all its songs show up (after entering the code, or once the last one is uploaded)
+function queueBandIntros(delay = 0) {
+  for (const b of BANDS) {
+    let seen = false; try { seen = !!localStorage.getItem(bandIntroKey(b)); } catch {}
+    if (seen || !bandLive(b) || achievementsWon()[b.id] || [notices.current, ...notices.queue].some((x) => x?.kind === "band" && x.band === b.id)) continue;
+    notices.queue.unshift({ kind: "band", band: b.id });
+    setTimeout(showNextNotice, delay);
+  }
 }
 function queueMiauIntro(delay = 0) {
   const p = miauProgress();
@@ -2537,7 +2545,7 @@ const NERO_SVG = `<svg class="nero" viewBox="0 0 120 110" aria-hidden="true"><pa
   + `<path d="M28 50q32-10 64 0l-2 16q-30 7-60 0z" fill="#7c2633"/>`
   + `<path d="M38 57h14M68 57h14" stroke="#140c10" stroke-width="3"/><circle cx="45" cy="61" r="3.4" fill="#140c10"/><circle cx="75" cy="61" r="3.4" fill="#140c10"/>`
   + `<path d="M53 64h14l-7 13z" fill="#0e0c10"/><ellipse cx="47" cy="108" rx="7" ry="3" fill="#c9a46a"/><ellipse cx="73" cy="108" rx="7" ry="3" fill="#c9a46a"/></svg>`;
-// One Direction for the cards (renderer.js makeMember): the same hair, clothes and colours
+// the bands for the cards (renderer.js makeMember): the same hair, clothes and colours
 const hex = (c) => "#" + c.toString(16).padStart(6, "0");
 function memberSvg(m) {
   const H = hex(m.hairC), S = hex(m.skin);
@@ -2548,16 +2556,24 @@ function memberSvg(m) {
     fringe: `<path d="M33 40c-4-18 10-28 27-28s29 9 27 24c-10-4-26-2-40 6-6 2-10 2-14-2z"/>`,
     swoop: `<path d="M34 40c-3-14 6-24 18-25 4-8 22-10 30 0 8 6 8 16 4 24-6-6-16-10-26-9-10 0-20 4-26 10z"/>`,
     quiff: `<path d="M34 40c-3-12 4-22 14-24 0-10 14-18 30-12 8 4 10 14 4 20 6 4 6 10 4 16-8-6-20-8-32-6-8 0-16 2-20 6z"/>`,
+    short: `<path d="M34 38c-2-14 10-22 26-22s28 8 26 22c-8-6-18-8-26-8s-18 2-26 8z"/>`,
+    neat: `<path d="M34 38c-2-14 10-22 26-22s28 8 26 22c-6-8-20-12-34-8-6 2-12 4-18 8z"/>`,
+    part: `<path d="M34 42c-4-16 8-26 26-26s30 10 26 26c-4-6-10-10-18-12-4 2-6 4-8 8-2-4-4-6-8-8-8 2-14 6-18 12z"/>`,
+    waves: `<path d="M33 42c-4-18 10-28 27-28s31 10 27 28c-8-8-20-12-27-12s-19 4-27 12z"/>` + [[38, 32], [48, 24], [60, 21], [72, 24], [82, 32]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="7"/>`).join(""),
+    mullet: `<path d="M32 58c-6-26 6-42 28-42s34 16 28 42c-2-10-4-18-8-22-6-4-14-6-20-6s-14 2-20 6c-4 4-6 12-8 22z"/>`,
   }[m.hair];
   const front = m.under != null ? `<path d="M54 74h12l-2 30h-8z" fill="${hex(m.under)}"/>` : "";
   const extra = (m.stripe != null ? `<path d="M38 82h44v4H38z" fill="${hex(m.stripe)}"/>` : "") + (m.neck != null ? `<path d="M50 72q10 6 20 0" stroke="${hex(m.neck)}" stroke-width="5" fill="none"/>` : "")
     + (m.pocket != null ? `<path d="M68 82h7v4h-7z" fill="${hex(m.pocket)}"/>` : "") + (m.pattern === "plaid" ? `<path d="M44 80h32M44 90h32M48 74v32M60 74v32M72 74v32" stroke="rgba(10,30,50,.45)" stroke-width="2.5"/>` : "")
-    + (m.earrings != null ? `<circle cx="33" cy="50" r="2.2" fill="#111"/><circle cx="87" cy="50" r="2.2" fill="#111"/>` : "");
+    + (m.earrings != null ? `<circle cx="33" cy="50" r="2.2" fill="${hex(m.earrings)}"/><circle cx="87" cy="50" r="2.2" fill="${hex(m.earrings)}"/>` : "");
+  const over = (m.glasses != null ? `<g fill="none" stroke="${hex(m.glasses)}" stroke-width="2"><circle cx="51" cy="47" r="7"/><circle cx="69" cy="47" r="7"/><path d="M58 46h4"/></g>` : "")
+    + (m.hat != null ? `<path d="M38 24q22-18 44 0v8H38z" fill="${hex(m.hat)}"/><path d="M28 36q32-10 64 0l-4 4q-28-8-56 0z" fill="${hex(m.hat)}"/>` : "")
+    + (m.beret != null ? `<ellipse cx="57" cy="20" rx="26" ry="8" fill="${hex(m.beret)}"/>` : "");
   return `<svg class="member" viewBox="0 0 120 110" aria-hidden="true"><path d="M44 102h14v8H44zM62 102h14v8H62z" fill="${hex(m.pants)}"/>`
     + `<path d="M38 104c0-20 6-32 22-32s22 12 22 32z" fill="${hex(m.top)}"/>${front}${extra}`
     + `<circle cx="34" cy="46" r="5" fill="${S}"/><circle cx="86" cy="46" r="5" fill="${S}"/><circle cx="60" cy="44" r="26" fill="${S}"/>`
     + `<circle cx="51" cy="47" r="3.6" fill="#141012"/><circle cx="69" cy="47" r="3.6" fill="#141012"/><circle cx="52.2" cy="45.6" r="1.2" fill="#fff"/><circle cx="70.2" cy="45.6" r="1.2" fill="#fff"/>`
-    + `<path d="M54 56q6 5 12 0" stroke="#8a3a34" stroke-width="2.4" fill="none" stroke-linecap="round"/><g fill="${H}">${hair}</g></svg>`;
+    + `<path d="M54 56q6 5 12 0" stroke="#8a3a34" stroke-width="2.4" fill="none" stroke-linecap="round"/><g fill="${H}">${hair}</g>${over}</svg>`;
 }
 // an emperor tamarin for the card (renderer.js gemShape "titi"): the furry head in the lane colour, the black face, the
 // pink muzzle and the white moustache hanging down
@@ -2592,7 +2608,7 @@ function fillSwatch(el, it) {
     else el.innerHTML = it.cols.map((c) => `<svg aria-hidden="true" style="--c:${c}"><use href="#flame"/></svg>`).join("") + (it.art === "campfire" ? "<em></em>".repeat(6) : "");
   } else if (it.slot === "pet") {
     el.classList.add("pet-" + it.id);
-    el.innerHTML = it.id === "nero" ? NERO_SVG : ONED[it.id] ? memberSvg(ONED[it.id]) : `<span class="pet-none" aria-hidden="true"></span>`;
+    el.innerHTML = it.id === "nero" ? NERO_SVG : MEMBERS[it.id] ? memberSvg(MEMBERS[it.id]) : `<span class="pet-none" aria-hidden="true"></span>`;
   } else if (it.slot === "crowd") {
     // five people from behind, holding up what this crowd holds up (style.css .cw-*)
     el.classList.add("cw-" + it.id);

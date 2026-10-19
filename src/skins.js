@@ -737,16 +737,25 @@ export const CROWDS = {
 };
 
 /* ================= pets: who keeps you company on the neck (renderer.js drawPet) ================= */
-export const PETS = { ninguna: null, nero: "nero", harry: "harry", liam: "liam", louis: "louis", niall: "niall", zayn: "zayn" };
-// One Direction (the event's gift, renderer.js makeMember, main.js memberSvg): each one known by his hair and his clothes,
-// as in the band's "Up All Night" photos. hair: the cut; top: shirt, sweater or blazer; under: what shows at the front
-// (null: closed); neck: a collar ring; pattern/stripe/pocket/earrings: the details
-export const ONED = {
+export const PETS = { ninguna: null, nero: "nero", harry: "harry", liam: "liam", louis: "louis", niall: "niall", zayn: "zayn",
+  rm: "rm", jin: "jin", suga: "suga", jhope: "jhope", jimin: "jimin", v: "v", jungkook: "jungkook" };
+// the bands as little figures (the bands' events' gifts; renderer.js makeMember, main.js memberSvg): each one known by
+// his hair and his clothes. hair: the cut; top: shirt, sweater or blazer; under: what shows at the front (null:
+// closed); neck: a collar ring; pattern/stripe/pocket/earrings/glasses/hat/beret/tattoo: the details.
+// One Direction as in the "Up All Night" photos; BTS each by his best-known trait
+export const MEMBERS = {
   harry: { hair: "curls", hairC: 0x3e2618, skin: 0xf2c6a4, eyes: 0x3d7a4c, top: 0xd9998c, under: 0xc8202a, pocket: 0x1b2a55, pants: 0xe6dcc6 },
   liam: { hair: "mop", hairC: 0x8a5a33, skin: 0xedc19e, eyes: 0x5a3a22, top: 0x2f6878, pattern: "plaid", under: null, collar: 0x2f6878, pants: 0xe6dcc6 },
   louis: { hair: "fringe", hairC: 0x5a3820, skin: 0xf0c4a1, eyes: 0x4a7cab, top: 0xf2f2ee, under: null, stripe: 0x2a3c6a, pants: 0x2c3550 },
   niall: { hair: "swoop", hairC: 0xe6c983, skin: 0xf7d2b6, eyes: 0x3f74b0, top: 0xb5d1ea, under: null, neck: 0xb5d1ea, pants: 0xe6dcc6 },
   zayn: { hair: "quiff", hairC: 0x141012, skin: 0xd9a37e, eyes: 0x3a2416, top: 0xd02a2a, under: null, neck: 0x18a2b8, earrings: 0x111111, pants: 0xe6dcc6 },
+  rm: { hair: "short", hairC: 0x2a2226, skin: 0xe9c29e, eyes: 0x2a1a12, top: 0x2f4a3a, under: 0xf2f2ee, glasses: 0x1a1a1e, pants: 0x2a2a30 },
+  jin: { hair: "neat", hairC: 0x3a2a22, skin: 0xf1cfb2, eyes: 0x2a1a12, top: 0xeaa2b6, under: 0xffffff, pants: 0xeaa2b6 },
+  suga: { hair: "part", hairC: 0x9fe0c8, skin: 0xf6dcc8, eyes: 0x2a1a12, top: 0x1c1c22, under: 0xf2f2ee, pants: 0x1c1c22 },
+  jhope: { hair: "short", hairC: 0x3a2a22, skin: 0xe6bc96, eyes: 0x2a1a12, top: 0xf26b2a, under: null, neck: 0xf26b2a, hat: 0xf2c230, pants: 0xe6dcc6 },
+  jimin: { hair: "part", hairC: 0xf2a0b8, skin: 0xf3d2b8, eyes: 0x2a1a12, top: 0xf4f4f0, under: null, collar: 0xf4f4f0, pants: 0x1c1c22 },
+  v: { hair: "waves", hairC: 0x2a1c18, skin: 0xe8bf98, eyes: 0x2a1a12, top: 0x2b5d8a, under: 0x1c1c22, beret: 0x8a1c2a, pants: 0x2b5d8a },
+  jungkook: { hair: "mullet", hairC: 0x111115, skin: 0xedc6a2, eyes: 0x2a1a12, top: 0x15151a, under: null, neck: 0x15151a, earrings: 0xd8d8e0, tattoo: true, pants: 0x15151a },
 };
 
 const SLOTS = { neck: NECKS, gems: GEMS, flames: FLAMES, strings: STRINGS, star: STARS, crowd: CROWDS, pet: PETS };
