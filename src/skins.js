@@ -173,36 +173,31 @@ function camo(g, w, h) {
 }
 
 // dark rosewood with big mother-of-pearl blocks (a Les Paul Custom)
+// Nácar: dark wood bound in mother-of-pearl along both edges, small pearl inlays. Everything bright runs along the neck,
+// none of it across: wide light blocks rushing at you flicker as they pass, and that made people dizzy.
 function pearlBlocks(g, w, h) {
   g.fillStyle = "#1f120c"; g.fillRect(0, 0, w, h);
   grain(g, w, h, 380, ["86,50,30", "8,3,2", "60,34,20"], [0.04, 0.16], [0.5, 2.6], 5);
   blots(g, w, h, 40, "0,0,0", [0.1, 0.2], [6, 34]);
-  sides(g, w, h, 0.7);
-  const block = (cy, bh) => {
-    const x0 = w * 0.19, bw = w * 0.62, y0 = cy - bh / 2;
-    g.save();
-    g.beginPath(); g.rect(x0, y0, bw, bh); g.clip();
-    g.fillStyle = "#a39b8e"; g.fillRect(x0, y0, bw, bh);
-    // the shell's colours drift in patches, with streaks across them
-    for (let i = 0; i < 90; i++) {
-      const x = rnd(x0, x0 + bw), y = rnd(y0, y0 + bh), r = rnd(10, 46);
-      const c = pick(["255,150,200", "120,255,210", "140,180,255", "235,230,220", "255,226,140", "70,64,58", "70,64,58"]);
-      const rg = g.createRadialGradient(x, y, 0, x, y, r);
-      rg.addColorStop(0, `rgba(${c},${rnd(0.15, 0.4)})`); rg.addColorStop(1, `rgba(${c},0)`);
-      g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2);
+  sides(g, w, h, 0.5, "0,0,0", 0.16);
+  // the binding: a pearly strip on each side whose colours drift slowly along it (whole cycles: the texture repeats)
+  const bw = w * 0.055;
+  for (const x0 of [w * 0.035, w - w * 0.035 - bw]) {
+    g.fillStyle = "#a8a296"; g.fillRect(x0, 0, bw, h);
+    const cols = ["255,170,215", "130,255,215", "150,190,255", "255,230,160"];
+    for (let y = 0; y < h; y += 4) {
+      cols.forEach((c, k) => {
+        const a = 0.22 * Math.max(0, Math.sin((y / h) * TAU * (2 + k) + k * 1.7 + x0));
+        if (a > 0.01) { g.fillStyle = `rgba(${c},${a.toFixed(3)})`; g.fillRect(x0, y, bw, 4); }
+      });
     }
-    for (let i = 0; i < 26; i++) {
-      g.strokeStyle = `rgba(${Math.random() < 0.6 ? "255,255,255" : "90,80,70"},${rnd(0.08, 0.22)})`; g.lineWidth = rnd(0.6, 2.2);
-      const y = rnd(y0, y0 + bh); g.beginPath(); g.moveTo(x0, y); g.bezierCurveTo(x0 + bw * 0.3, y + rnd(-20, 20), x0 + bw * 0.7, y + rnd(-20, 20), x0 + bw, y + rnd(-14, 14)); g.stroke();
-    }
-    // set into the wood: shaded inside the edge, a thin dark line around
     const sh = g.createLinearGradient(x0, 0, x0 + bw, 0);
-    sh.addColorStop(0, "rgba(40,25,15,.45)"); sh.addColorStop(0.06, "rgba(40,25,15,0)"); sh.addColorStop(0.94, "rgba(40,25,15,0)"); sh.addColorStop(1, "rgba(40,25,15,.45)");
-    g.fillStyle = sh; g.fillRect(x0, y0, bw, bh);
-    g.restore();
-    g.strokeStyle = "rgba(10,5,3,.85)"; g.lineWidth = 3; g.strokeRect(x0, y0, bw, bh);
-  };
-  block(h * 0.25, 120); block(h * 0.74, 150);
+    sh.addColorStop(0, "rgba(30,18,10,.55)"); sh.addColorStop(0.35, "rgba(255,255,255,.12)"); sh.addColorStop(0.65, "rgba(255,255,255,0)"); sh.addColorStop(1, "rgba(30,18,10,.55)");
+    g.fillStyle = sh; g.fillRect(x0, 0, bw, h);
+    g.strokeStyle = "rgba(10,5,3,.85)"; g.lineWidth = 2; g.strokeRect(x0, -2, bw, h + 4);
+  }
+  // the position markers: small and soft, pearl with a hint of colour
+  g.globalAlpha = 0.75; dots(w, h, (x, y) => pearlDot(g, x, y, 11, 0.8)); g.globalAlpha = 1;
 }
 
 // carbon fibre: 2×2 twill, a soft sheen down the middle
