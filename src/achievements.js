@@ -9,6 +9,9 @@ export const BANANA_GIFTS = [30, 90, 180];
 export const BANANA_LOGROS = ["otaku-titi", "otaku-nero", "otaku-antimagia"];
 /** The Otaku gifts these bananas reach. */
 export const forBananas = (n) => BANANA_LOGROS.filter((_, i) => n >= BANANA_GIFTS[i]);
+// the One Direction event (its songs in a secret group): 3 stars or more on each of its songs, once there are all six
+export const ONED_SONGS = 6, ONED_STARS = 3;
+export const forOneD = (ids, stars) => (ids.length >= ONED_SONGS && ids.every((id) => stars(id) >= ONED_STARS) ? ["one-direction"] : []);
 
 export const ACHIEVEMENTS = [
   { id: "primer-acorde", name: "Primer acorde", desc: "Termina tu primera canción." },
@@ -43,6 +46,8 @@ export const ACHIEVEMENTS = [
   { id: "otaku-titi", name: "Bigotes del Emperador", desc: `Junta ${BANANA_GIFTS[0]} bananas doradas en las canciones Otaku.`, secret: true, surprise: true },
   { id: "otaku-nero", name: "El anti-pájaro", desc: `Junta ${BANANA_GIFTS[1]} bananas doradas en las canciones Otaku.`, secret: true, surprise: true },
   { id: "otaku-antimagia", name: "Antimagia", desc: `Junta ${BANANA_GIFTS[2]} bananas doradas en las canciones Otaku.`, secret: true, surprise: true },
+  // the One Direction event: a surprise gift (a pet) for 3 stars on each of its songs
+  { id: "one-direction", name: "Directioner", desc: "Saca 3 estrellas o más en las 6 canciones de One Direction.", secret: true, surprise: true },
 ];
 const BY_ID = Object.fromEntries(ACHIEVEMENTS.map((a) => [a.id, a]));
 

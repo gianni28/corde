@@ -12,7 +12,7 @@ import { motionAvailable, motionNeedsPermission, motionReady, requestMotion, onL
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
 import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, nameStyles, songRequest, myNotices, noticeSeen, noticeReply, myFulfilled, fulfilledSeen } from "./net.js";
 import { shareCard, retoUrl, readReto } from "./share.js";
-import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau, forBananas, BANANA_GIFTS, BANANA_LOGROS } from "./achievements.js";
+import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau, forBananas, BANANA_GIFTS, BANANA_LOGROS, forOneD, ONED_SONGS, ONED_STARS } from "./achievements.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretOpen, secretBoard, songById, fetchMiauProgress, roomDirectory, commentPost, myComments, myCommentReplies, commentReplySeen } from "./net.js";
 import { VENUES, TO_ENCORE, TOUR_PRIZES, TOUR_THEMES, prizesWon, savedTourDiffs, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song, separateExisting } from "./admin.js";
@@ -177,7 +177,7 @@ let previewing = null, previewLoading = null; // the song list's ▶ (see previe
 const mp = { fx: { terremoto: 0, niebla: 0, apagon: 0, turbo: 0 }, on: "", lastPos: 0, posAt: 0, bannerT: 0 }; // multiplayer battle (see launchAttack)
 const ROOM_MAX = 4, dir = { ch: null, list: [], last: "" }; // the open rooms (see syncDir): up here, show() keeps it in step
 // the Otaku event's golden bananas picked up so far (see markBananas): up here, the account's sync reads them early
-const BANANA_KEY = "corde.bananas.v1", OTAKU_INTRO_KEY = "corde.otaku.intro.v1";
+const BANANA_KEY = "corde.bananas.v1", OTAKU_INTRO_KEY = "corde.otaku.intro.v1", ONED_INTRO_KEY = "corde.oned.intro.v1";
 let bananas = (() => { try { return Math.max(0, Math.floor(+localStorage.getItem(BANANA_KEY) || 0)); } catch { return 0; } })();
 function saveBananas() { try { localStorage.setItem(BANANA_KEY, String(bananas)); } catch {} }
 // while the admin uploads or separates songs, the stage and the menu music rest (they'd take the processor from it)
@@ -357,7 +357,7 @@ renderHomeBoard();
 Promise.resolve().then(() => {
   if (!online) return;
   loadLibrary()
-    .then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); backfillAchievements(); queueMiauIntro(); queueOtakuIntro(); refreshMiau(); })
+    .then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); backfillAchievements(); queueMiauIntro(); queueOtakuIntro(); queueOneDIntro(); refreshMiau(); })
     .catch((e) => console.warn("library:", e.message))
     .finally(() => loadDaily());
 });
@@ -494,6 +494,7 @@ $("secretForm").onsubmit = async (e) => {
     const n = g.songs.length;
     if (g.songs.some((x) => x.miau)) { queueMiauIntro(3200); refreshMiau(); } // after the celebration
     if (nameKey(g.name) === "otaku") queueOtakuIntro(3200);
+    queueOneDIntro(3200);
     celebrate({ kicker: "Código correcto", title: g.name, kind: "secret", ms: 2800,
       sub: n ? `${n} ${n === 1 ? "canción desbloqueada" : "canciones desbloqueadas"}. Las encuentras en «${g.name}».` : "Ya quedaron desbloqueadas, aunque todavía no hay ninguna." });
   } catch (err) {
@@ -579,6 +580,8 @@ function renderSongs() {
   box.innerHTML = "";
   // the Otaku event's bar, on top of its tab
   if (secretTab && app.libTab === otakuGroup()) box.appendChild(otakuCard());
+  // the One Direction event's card, on top of the tab that has its songs
+  if (secretTab && oneDLive() && tab.some(isOneD)) box.appendChild(oneDCard());
   // the kittens' challenge, on top of the tab that has the miau songs
   if (secretTab && tab.some((s) => s.miau)) {
     const p = miauProgress(), card = document.createElement("div");
@@ -1449,7 +1452,7 @@ function celebrateAchievements(list) {
 }
 // what your saved bests already prove (players from before the logros existed get theirs without replaying), silently
 function backfillAchievements() {
-  const ids = [...forMiau(miauIds(), bestAcc), ...forBananas(bananas)], n = songsDone();
+  const ids = [...forMiau(miauIds(), bestAcc), ...forBananas(bananas), ...(oneDLive() ? forOneD(oneDIds(), maxStars) : [])], n = songsDone();
   // the tour's prizes for venues already cleared (before there were prizes, or on another device)
   if (publicSongs().length) for (const d of savedTourDiffs()) { const t = tourFor(d, publicSongs()); if (t) ids.push(...prizesWon(tourProgress(t, bestOf))); }
   if (n >= 1) ids.push("primer-acorde");
@@ -1832,6 +1835,7 @@ function finishGame() {
   const run = app.bananaRun; app.bananaRun = null;
   $("bananaRes").hidden = !run; $("giftBtn").hidden = true;
   if (run) { bananas += run.got; saveBananas(); ids.push(...forBananas(bananas)); }
+  if (isOneD(app.song) && !sum.failed && oneDLive()) ids.push(...forOneD(oneDIds(), (id) => Math.max(maxStars(id), id === app.song.id ? sum.stars : 0)));
   const fresh = unlock(ids).sort((a, b) => !!b.surprise - !!a.surprise); // a surprise gift first: it's the big news
   if (run) {
     const gifts = fresh.filter((a) => a.surprise).map((a) => giftOf(a.id)).filter(Boolean);
@@ -2045,6 +2049,15 @@ function showNextNotice() {
     $("noticeMsg").textContent = ""; $("noticeModal").hidden = false;
     return;
   }
+  if (n.kind === "oned") {
+    try { localStorage.setItem(ONED_INTRO_KEY, "1"); } catch {}
+    notices.go = () => { app.mode = "solo"; app.libTab = oneDSongs()[0]?.secret ?? "all"; openLibrary(); };
+    $("noticeKicker").textContent = "Evento · One Direction";
+    $("noticeBody").textContent = `¡Hay un evento en las canciones secretas!\n\nSaca ${ONED_STARS} estrellas o más en cada una de las ${ONED_SONGS} canciones de One Direction y te ganas un regalo sorpresa. ¿Qué será? Solo lo sabrás cuando lo ganes.`;
+    $("noticeForm").querySelector(".notice-reply").hidden = true; $("noticeGo").hidden = false; $("noticeGo").textContent = "Ir a las canciones";
+    $("noticeMsg").textContent = ""; $("noticeModal").hidden = false;
+    return;
+  }
   const answer = n.kind === "comment"; // the admin answered one of their comments: the answer, under what they wrote
   $("noticeKicker").textContent = answer ? `${ADMIN_NAME} te respondió` : "Mensaje";
   $("noticeBody").textContent = answer ? `«${n.body}»\n\n${n.reply}` : n.body;
@@ -2121,6 +2134,40 @@ function queueOtakuIntro(delay = 0) {
   let seen = false; try { seen = !!localStorage.getItem(OTAKU_INTRO_KEY); } catch {}
   if (seen || otakuGroup() == null || notices.queue.some((x) => x.kind === "otaku") || notices.current?.kind === "otaku") return;
   notices.queue.unshift({ kind: "otaku" });
+  setTimeout(showNextNotice, delay);
+}
+/* ================= the One Direction event ================= */
+// Its songs live in a secret group (whoever has that code sees the event); it opens once all ONED_SONGS are up and
+// its gift (a pet: shop.js, req "one-direction") is in the catalog.
+// 3 stars or more on each wins a surprise gift (achievements.js forOneD), shown nowhere until it's won.
+const isOneD = (s) => !!s && !!s.secret && /one\s*direction/i.test(s.artist || "");
+const oneDSongs = () => app.songs.filter(isOneD);
+const oneDIds = () => oneDSongs().map((s) => s.id);
+const oneDLive = () => oneDSongs().length >= ONED_SONGS && !!giftOf("one-direction");
+const maxStars = (id) => Math.max(0, ...Object.values(bests[id] || {}).map((x) => x?.stars || 0));
+function oneDCard() {
+  const songs = oneDSongs(), won = !!achievementsWon()["one-direction"], gift = giftOf("one-direction");
+  const done = songs.filter((s) => maxStars(s.id) >= ONED_STARS).length;
+  const card = document.createElement("div"); card.className = "oned-card";
+  card.innerHTML = `<div class="od-head"><span class="od-badge" aria-hidden="true">1D</span><div><b>Evento · One Direction</b><small></small></div><span class="od-count">${done}/${songs.length}</span></div>`
+    + `<ol class="od-songs">${songs.map(() => `<li><span class="od-n"></span><span class="od-st"></span></li>`).join("")}</ol>`
+    + `<button type="button" class="od-gift${won ? " won" : ""}" ${won && gift ? "" : "disabled"}>${won && gift ? `<span class="sw"></span>` : `<svg aria-hidden="true"><use href="#gift"/></svg><em>?</em>`}</button>`;
+  card.querySelector(".od-head small").textContent = won ? (gift ? "¡Lo lograste! Tu regalo ya está en la Tienda." : "¡Lo lograste! Tu regalo sorpresa llega muy pronto.")
+    : `Saca ${ONED_STARS} estrellas o más en cada canción y gánate un regalo sorpresa.`;
+  card.querySelectorAll(".od-songs li").forEach((li, i) => {
+    const st = maxStars(songs[i].id);
+    li.classList.toggle("ok", st >= ONED_STARS);
+    li.querySelector(".od-n").textContent = songs[i].name;
+    li.querySelector(".od-st").innerHTML = starsHtml(st);
+  });
+  if (won && gift) { const b = card.querySelector(".od-gift"); fillSwatch(b.querySelector(".sw"), gift); b.onclick = () => openShopAt(gift.slot, gift.id); }
+  return card;
+}
+// told once, the first time all its songs show up (after entering the code, or once the last one is uploaded)
+function queueOneDIntro(delay = 0) {
+  let seen = false; try { seen = !!localStorage.getItem(ONED_INTRO_KEY); } catch {}
+  if (seen || !oneDLive() || achievementsWon()["one-direction"] || notices.queue.some((x) => x.kind === "oned") || notices.current?.kind === "oned") return;
+  notices.queue.unshift({ kind: "oned" });
   setTimeout(showNextNotice, delay);
 }
 function queueMiauIntro(delay = 0) {
