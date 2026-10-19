@@ -175,7 +175,7 @@ const split = { on: false, stop: false, rows: [] }; // the library's songs whose
 const notices = { queue: [], current: null, asked: false }; // the admin's messages waiting for this player (see checkNotices)
 let previewing = null, previewLoading = null; // the song list's ▶ (see previewSong): up here, the menu music asks from the start
 const mp = { fx: { terremoto: 0, niebla: 0, apagon: 0, turbo: 0 }, on: "", lastPos: 0, posAt: 0, bannerT: 0 }; // multiplayer battle (see launchAttack)
-const PUBLIC_MAX = 4, dir = { ch: null, list: [], last: "" }; // the open rooms (see syncDir): up here, show() keeps it in step
+const ROOM_MAX = 4, dir = { ch: null, list: [], last: "" }; // the open rooms (see syncDir): up here, show() keeps it in step
 // the Otaku event's golden bananas picked up so far (see markBananas): up here, the account's sync reads them early
 const BANANA_KEY = "corde.bananas.v1", OTAKU_INTRO_KEY = "corde.otaku.intro.v1";
 let bananas = (() => { try { return Math.max(0, Math.floor(+localStorage.getItem(BANANA_KEY) || 0)); } catch { return 0; } })();
@@ -3237,9 +3237,9 @@ function enterRoom(code, pub = null) {
   app.room = joinRoom(code, app.me, {
     onPeers: (ps) => {
       app.peers = ps; syncConfig(); renderLobby(); if (app.screen === "results") renderCup($("cupRes"), app.roomConfig);
-      // a public room holds PUBLIC_MAX: whoever came in past that (two at once) goes back out
+      // a room, public or private, holds ROOM_MAX (realtime is on the free plan): whoever came in past that goes back out
       const i = ps.findIndex((p) => p.id === app.me?.id);
-      if (ps[0]?.config?.pub && i >= PUBLIC_MAX) { leaveRoom("mp"); toast("Esa sala ya se llenó."); return; }
+      if (i >= ROOM_MAX) { leaveRoom("mp"); toast("Esa sala ya se llenó."); return; }
       announceRoom();
     },
     onEvent: onRoomEvent,
@@ -3373,11 +3373,11 @@ function renderOpenRooms() {
   const ul = $("openRooms"); ul.innerHTML = "";
   $("openEmpty").hidden = rooms.length > 0;
   rooms.forEach((r) => {
-    const li = document.createElement("li"), full = r.n >= PUBLIC_MAX;
+    const li = document.createElement("li"), full = r.n >= ROOM_MAX;
     li.innerHTML = `<div class="or-text"><b></b><small></small></div><span class="or-n"></span><button class="btn"></button>`;
     li.querySelector("b").textContent = `Sala de ${r.names?.[0] || "alguien"}`;
     li.querySelector("small").textContent = roomWhat(r);
-    li.querySelector(".or-n").textContent = `${r.n}/${PUBLIC_MAX}`;
+    li.querySelector(".or-n").textContent = `${r.n}/${ROOM_MAX}`;
     const b = li.querySelector("button");
     b.textContent = full ? "Llena" : r.playing ? "Jugando" : "Entrar";
     b.disabled = full || r.playing; // in the middle of a song: wait for the round to end
@@ -3444,7 +3444,7 @@ function renderLobby() {
   const roomCfg = app.roomConfig || {}, cfg = roomCfg.songId ? roomCfg : null;
   renderLobbyMode(roomCfg); renderCup($("cupLobby"), roomCfg); renderRoomSongs(amHost(), roomCfg);
   $("roomVis").querySelectorAll("button").forEach((b) => { b.setAttribute("aria-pressed", String((b.dataset.v === "pub") === !!roomCfg.pub)); b.disabled = !amHost(); });
-  $("roomVisHint").textContent = roomCfg.pub ? `Aparece en la lista de salas abiertas (máximo ${PUBLIC_MAX}).` : "Solo entra quien tenga el código o el enlace.";
+  $("roomVisHint").textContent = roomCfg.pub ? `Aparece en la lista de salas abiertas (máximo ${ROOM_MAX}).` : `Solo entra quien tenga el código o el enlace (máximo ${ROOM_MAX}).`;
   app.peers.forEach((p, i) => {
     const li = document.createElement("li");
     const ready = cfg && p.ready && p.songId === cfg.songId;
