@@ -1484,11 +1484,8 @@ body.fx-quake #stage { animation: quake .11s linear infinite; }
 .ok-gift.won .sw > * { transform: scale(.55); }
 .ok-gift.won small { color: #ffd23a; }
 /* the gifts' cards in the shop */
-.sw-gems.g-titi i { aspect-ratio: 1.1; border-radius: 50%; box-shadow: 0 3px 0 #000;
-  background: radial-gradient(circle at 36% 42%, #140c10 0 7%, transparent 8%), radial-gradient(circle at 64% 42%, #140c10 0 7%, transparent 8%),
-    radial-gradient(ellipse 40% 34% at 50% 52%, #f0d8c8 95%, transparent 100%), var(--c); position: relative; overflow: visible; }
-.sw-gems.g-titi i::after { content: ""; position: absolute; left: -22%; right: -22%; top: 58%; height: 45%;
-  border: 3px solid #fff; border-top: 0; border-radius: 0 0 50% 50% / 0 0 100% 100%; clip-path: polygon(0 0, 42% 0, 50% 30%, 58% 0, 100% 0, 100% 100%, 0 100%); }
+.sw-gems.g-titi i { aspect-ratio: .8; border-radius: 0; background: none; box-shadow: none; }
+.sw-gems.g-titi svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 2px 0 #000); }
 .sw-flames.fa-antimagic svg { fill: #120608; filter: drop-shadow(0 0 2px #ff2a3a) drop-shadow(0 0 7px rgba(255,30,50,.7)); }
 .sw-pet { background: radial-gradient(ellipse 70% 60% at 50% 100%, rgba(120,140,220,.12), transparent 70%), linear-gradient(180deg, #16141c, #0c0b10); }
 .sw-pet .nero { height: 88%; filter: drop-shadow(0 3px 0 rgba(0,0,0,.6)); }

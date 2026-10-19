@@ -302,64 +302,73 @@ function studioTex() {
   t.mapping = THREE.EquirectangularReflectionMapping;
   return t;
 }
-// Nero, the anti-bird (the Otaku event's pet): drawn once per face. A round navy bird with a white chest, a maroon mask
-// over sleepy half-shut eyes, a small black beak, one curl of a feather on top and a forked tail.
-// face: "bored" | "blink" | "sleep" | "happy" | "fly1" | "fly2"
-function neroTex(face) {
-  return canvasTex(256, 256, (g) => {
-    const NAVY = "#1d2342", NAVY2 = "#2c3560", MASK = "#7c2633", WHITE = "#f1eee6";
-    const ell = (x, y, rx, ry, c, rot = 0) => { g.fillStyle = c; g.beginPath(); g.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); g.fill(); };
-    const flying = face.startsWith("fly"), up = face === "fly1";
-    // the forked tail, behind
-    g.fillStyle = NAVY; g.beginPath(); g.moveTo(170, 200); g.lineTo(232, 214); g.lineTo(206, 222); g.lineTo(236, 240); g.lineTo(168, 226); g.closePath(); g.fill();
-    // wings: at rest along the sides; raised when happy; spread out flying
-    const wing = (side) => {
-      g.save(); g.translate(128 + side * 66, 150); g.scale(side, 1);
-      if (flying) g.rotate(up ? -1.2 : -0.35); else if (face === "happy") g.rotate(-0.7); else g.rotate(0.15);
-      ell(flying ? 34 : 6, flying ? -6 : 18, flying ? 52 : 26, flying ? 22 : 50, NAVY2);
-      g.strokeStyle = "rgba(0,0,0,.35)"; g.lineWidth = 3;
-      for (let k = 0; k < 3; k++) { g.beginPath(); g.arc(flying ? 40 + k * 14 : 6, flying ? 8 : 40 + k * 10, 14, 0.2, 2.6); g.stroke(); }
-      g.restore();
-    };
-    wing(-1); wing(1);
-    // body and chest
-    ell(128, 150, 80, 84, NAVY);
-    g.save(); g.beginPath(); g.ellipse(128, 182, 60, 50, 0, 0, Math.PI * 2); g.clip();
-    g.fillStyle = WHITE; g.fillRect(60, 120, 140, 120);
-    g.strokeStyle = "rgba(120,110,100,.45)"; g.lineWidth = 3; // feathers
-    for (let r = 0; r < 3; r++) for (let k = -3; k <= 3; k++) { g.beginPath(); g.arc(128 + k * 18 + (r % 2) * 9, 160 + r * 20, 10, 0.2, Math.PI - 0.2); g.stroke(); }
-    g.restore();
-    // a highlight on the head, the curl on top
-    ell(104, 100, 26, 14, "rgba(120,140,220,.18)", -0.4);
-    g.strokeStyle = NAVY; g.lineWidth = 8; g.lineCap = "round";
-    g.beginPath(); g.moveTo(132, 72); g.bezierCurveTo(128, 40, 160, 22, 176, 40); g.bezierCurveTo(186, 54, 168, 64, 160, 54); g.stroke();
-    // the maroon mask across the eyes
-    g.fillStyle = MASK; g.beginPath(); g.moveTo(66, 108); g.quadraticCurveTo(128, 88, 190, 108); g.lineTo(186, 138); g.quadraticCurveTo(128, 150, 70, 138); g.closePath(); g.fill();
-    // eyes
-    for (const side of [-1, 1]) {
-      const ex = 128 + side * 30, ey = 118;
-      if (face === "sleep" || face === "blink") {
-        g.strokeStyle = "#140c10"; g.lineWidth = 4; g.beginPath(); g.arc(ex, ey - 2, 12, 0.25, Math.PI - 0.25); g.stroke();
-      } else if (face === "happy" || flying) {
-        ell(ex, ey, 13, 14, "#fffbe8"); ell(ex + side * 2, ey + 2, 6, 7, "#140c10"); ell(ex + side * 2 - 2, ey - 1, 2, 2, "#fff");
-      } else {
-        // bored: half shut, the lid heavy over the eye
-        g.save(); g.beginPath(); g.ellipse(ex, ey, 13, 12, 0, 0, Math.PI * 2); g.clip();
-        ell(ex, ey, 13, 12, "#fffbe8"); ell(ex - side * 1, ey + 5, 6, 6, "#140c10");
-        g.fillStyle = MASK; g.fillRect(ex - 14, ey - 14, 28, 13);
-        g.restore();
-        g.strokeStyle = "#140c10"; g.lineWidth = 3.5; g.beginPath(); g.moveTo(ex - 13, ey - 1); g.lineTo(ex + 13, ey - 1); g.stroke();
-      }
-    }
-    // beak
-    g.fillStyle = "#0e0c10"; g.beginPath(); g.moveTo(114, 132); g.lineTo(142, 132); g.lineTo(128, 160); g.closePath(); g.fill();
-    // feet (tucked up when flying)
-    if (!flying) for (const side of [-1, 1]) { ell(128 + side * 26, 232, 14, 7, "#c9a46a"); }
-    if (face === "sleep") { g.fillStyle = "#fff"; g.font = "bold 30px sans-serif"; g.fillText("z", 196, 74); g.font = "bold 22px sans-serif"; g.fillText("z", 218, 50); }
+// Nero, the anti-bird (the Otaku event's pet), in 3D: a round navy bird with a white feathered chest, a maroon mask
+// over heavy-lidded eyes, a small black beak, one curl of a feather on top, a forked tail and wings that flap. Built
+// facing +z with its feet at 0, about 1 tall. pose(): lids 0 open … 1 shut, wings 0 folded … 1 up, feet, sleep (z's).
+function makeNero() {
+  const g = new THREE.Group(), b = new THREE.Group(); g.add(b);
+  const mat = (color, roughness, o = {}) => new THREE.MeshStandardMaterial({ color, roughness, metalness: 0, ...o });
+  const NAVY = mat(0x26306a, 0.5, { emissive: 0x0a0e26 }), WING = mat(0x34408a, 0.55, { emissive: 0x0a0e26 }), MASK = mat(0x8a2a3a, 0.4);
+  const DARK = mat(0x0e0c10, 0.25), EYE = mat(0xfffbe8, 0.2), FEET = mat(0xc9a46a, 0.6);
+  const CHEST = mat(0xffffff, 0.7, { map: canvasTex(128, 128, (c) => {
+    c.fillStyle = "#f1eee6"; c.fillRect(0, 0, 128, 128);
+    c.strokeStyle = "rgba(120,110,100,.5)"; c.lineWidth = 3;
+    for (let r = 0; r < 5; r++) for (let k = -1; k < 8; k++) { c.beginPath(); c.arc(k * 18 + (r % 2) * 9, 30 + r * 20, 10, 0.2, Math.PI - 0.2); c.stroke(); }
+  }) });
+  const add = (geo, m, parent = b) => { const o = new THREE.Mesh(geo, m); parent.add(o); return o; };
+  const R = 0.4, CY = 0.44, Z = new THREE.Vector3(0, 0, 1);
+  // a point on the head, theta down from the top, phi round from the front (+z), and its outward normal
+  const on = (theta, phi, r = R) => new THREE.Vector3(Math.sin(theta) * Math.sin(phi), Math.cos(theta), Math.sin(theta) * Math.cos(phi)).multiplyScalar(r);
+  b.position.y = CY;
+  add(new THREE.SphereGeometry(R, 32, 24), NAVY);
+  // the chest and the mask: bands of a slightly bigger sphere (SphereGeometry's front, +z, is phi = pi/2)
+  const band = (r, phiLen, t0, t1) => new THREE.SphereGeometry(r, 32, 12, Math.PI / 2 - phiLen / 2, phiLen, t0, t1 - t0);
+  add(band(R * 1.01, 2.0, Math.PI * 0.5, Math.PI * 0.93), CHEST);
+  add(band(R * 1.02, 2.9, Math.PI * 0.28, Math.PI * 0.43), MASK);
+  // eyes: a white ball, a pupil, a lid in the mask's colour that turns down over it
+  const lids = [];
+  for (const side of [-1, 1]) {
+    const e = new THREE.Group(), n = on(Math.PI * 0.355, side * 0.4).normalize();
+    e.position.copy(n).multiplyScalar(R * 1.0); e.quaternion.setFromUnitVectors(Z, n); b.add(e);
+    add(new THREE.SphereGeometry(0.075, 18, 12), EYE, e);
+    add(new THREE.SphereGeometry(0.036, 12, 8), DARK, e).position.set(-side * 0.008, -0.012, 0.042);
+    const lid = new THREE.Group(); e.add(lid); lids.push(lid);
+    add(new THREE.SphereGeometry(0.083, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), MASK, lid);
+  }
+  // the beak, pointing out and a little down
+  const beak = add(new THREE.ConeGeometry(0.055, 0.13, 12), DARK);
+  beak.geometry.rotateX(Math.PI / 2 + 0.35); beak.position.copy(on(Math.PI * 0.5, 0, R * 1.04));
+  // the curl on top
+  const curl = new THREE.CatmullRomCurve3([[0, R * 0.96, 0.03], [0.01, R + 0.12, 0.0], [0.08, R + 0.21, -0.03], [0.15, R + 0.15, -0.04], [0.11, R + 0.09, -0.04]].map((p) => new THREE.Vector3(...p)));
+  add(new THREE.TubeGeometry(curl, 24, 0.022, 8), NAVY);
+  // the forked tail, behind
+  for (const side of [-1, 1]) {
+    const t = add(new THREE.ConeGeometry(0.06, 0.3, 4), NAVY);
+    t.scale.set(1, 1, 0.35); t.rotation.set(-1.9, 0, side * 0.35); t.position.set(side * 0.05, -0.27, -0.36);
+  }
+  // wings: hung from the shoulders, swung out and up by pose()
+  const wings = [-1, 1].map((side) => {
+    const p = new THREE.Group(); p.position.set(side * R * 0.9, 0.04, -0.02); b.add(p);
+    const w = add(new THREE.SphereGeometry(1, 16, 12), WING, p); w.scale.set(0.07, 0.24, 0.2); w.position.set(side * 0.02, -0.18, 0);
+    return p;
   });
+  const feet = [-1, 1].map((side) => { const f = add(new THREE.SphereGeometry(1, 12, 8), FEET, g); f.scale.set(0.07, 0.03, 0.08); f.position.set(side * 0.13, 0.03, 0.12); return f; });
+  // the z's of a nap
+  const zz = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, map: canvasTex(64, 64, (c) => {
+    c.fillStyle = "#fff"; c.strokeStyle = "#000"; c.lineWidth = 4; c.font = "bold 34px sans-serif"; c.strokeText("z", 6, 52); c.fillText("z", 6, 52);
+    c.font = "bold 24px sans-serif"; c.strokeText("z", 36, 26); c.fillText("z", 36, 26);
+  }) }));
+  zz.scale.set(0.34, 0.34, 1); g.add(zz);
+  g.pose = ({ lid, wing, feet: down, sleep, now }) => {
+    lids.forEach((l) => (l.rotation.x = -1.45 + lid * 3.0));
+    wings.forEach((w, i) => (w.rotation.z = (i ? 1 : -1) * (0.08 + wing * 2.1)));
+    feet.forEach((f) => (f.visible = down));
+    zz.visible = sleep; zz.position.set(0.42, 0.95 + ((now * 0.4) % 1) * 0.2, 0); zz.material.opacity = 1 - ((now * 0.4) % 1);
+  };
+  g.body = b;
+  return g;
 }
-const petFaces = {};
-const petTex = (id, face) => (petFaces[id + face] ||= neroTex(face));
+const petModels = { nero: makeNero };
 const starDotTex = () => canvasTex(64, 64, (g) => {
   const rg = g.createRadialGradient(32, 32, 0, 32, 32, 14); rg.addColorStop(0, "rgba(255,255,255,1)"); rg.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = rg; g.fillRect(0, 0, 64, 64);
   g.fillStyle = "#fff"; g.beginPath(); g.moveTo(32, 2); g.lineTo(36, 28); g.lineTo(62, 32); g.lineTo(36, 36); g.lineTo(32, 62); g.lineTo(28, 36); g.lineTo(2, 32); g.lineTo(28, 28); g.fill();
@@ -730,15 +739,16 @@ export function createRenderer(canvas) {
   const gemDomeMat = glowInstance(new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.05, roughness: 0.1 }), 0);
   // the white band (lane-coloured and glowing in some skins: white instance colours and no glow by default)
   const gemRingMat = glowInstance(new THREE.MeshStandardMaterial({ color: 0xf2eee6, metalness: 0.1, roughness: 0.25, emissive: 0xffffff, emissiveIntensity: 0.12 }), 0);
-  // the tamarins' moustache flicks up on the beat (uWig: 0 for every other skin): the far ends of the band move, along
-  // the face's "up" (the gem leans 0.95 rad toward the player)
+  // the tamarins' moustaches sway out on the beat (uWig: 0 for every other skin): the lower down the face a hair
+  // reaches, the more it flares out to its side and lifts (the gem leans 0.95 rad toward the player: "up" the face)
   {
     const wig = (gemRingMat.userData.wig = { value: 0 }), base = gemRingMat.onBeforeCompile;
     gemRingMat.onBeforeCompile = (s) => {
       base(s);
       s.uniforms.uWig = wig;
       s.vertexShader = "uniform float uWig;\n" + s.vertexShader.replace("#include <begin_vertex>",
-        "#include <begin_vertex>\n transformed += vec3(0.0, 0.813, -0.582) * uWig * smoothstep(0.1, 0.42, abs(position.x)) * 0.09;");
+        "#include <begin_vertex>\n vec3 up = vec3(0.0, 0.813, -0.582);\n float droop = 1.0 - smoothstep(-0.5, -0.08, dot(position - vec3(0.0, 0.29, 0.04), up));\n"
+        + " transformed += (vec3(sign(position.x) * 0.07, 0.0, 0.0) + up * 0.035) * uWig * droop;");
     };
     gemRingMat.customProgramCacheKey = () => "glow-wig";
   }
@@ -845,15 +855,22 @@ export function createRenderer(canvas) {
       });
       G = { base: mergeGeometries(wrap.map((g) => g.index ? g.toNonIndexed() : g)), body, dome: mergeGeometries(swirl), ring: null };
     } else if (key === "titi") {
-      // an emperor tamarin: a round head, a pale face, dark eyes and nose (in the base's piece: it's dark) and the long
-      // white moustache curling down both sides (the band's part). It sits up like the kittens, toward the player.
+      // an emperor tamarin, as in the photos: a round furry head in the lane colour with two small ears, the black face
+      // (in the base's piece, with the eyes and the nostrils), the pink muzzle (the dome) and the long white moustache
+      // falling from it down past the chin on both sides, a wisp of beard (the band's part: it sways with the music,
+      // renderer uWig). It sits up like the kittens, toward the player.
       const slab = (shape, depth, y, bevel = 0) => {
         const g = new THREE.ExtrudeGeometry(shape, { depth, curveSegments: 14, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel * 0.8, bevelSegments: 3 });
         g.rotateX(-Math.PI / 2); g.translate(0, y, 0);
-        g.rotateX(0.95); g.translate(0, 0.25, 0.04); return g;
+        g.rotateX(0.95); g.translate(0, 0.29, 0.04); return g;
       };
       const ellipse = (x, y, rx, ry) => { const s = new THREE.Shape(); s.absellipse(x, y, rx, ry, 0, Math.PI * 2, false, 0); return s; };
       const poly = (pts) => { const s = new THREE.Shape(); pts.forEach(([x, y], i) => (i ? s.lineTo(x, y) : s.moveTo(x, y))); return s; };
+      // the head's outline: round, ragged with tufts of fur
+      const furry = (r) => poly(Array.from({ length: 44 }, (_, i) => {
+        const a = (i / 44) * Math.PI * 2, k = r * (i % 2 ? 1.07 : 1) * (1 + 0.05 * Math.sin(a * 3 + 1));
+        return [Math.cos(a) * k, 0.1 + Math.sin(a) * k * 0.94];
+      }));
       // a stroke of a curve as a filled shape, thick at its root, thin at its tip
       const strand = (pts, w0, w1) => {
         const L = [], R = [];
@@ -864,17 +881,22 @@ export function createRenderer(canvas) {
         });
         return poly([...L, ...R.reverse()]);
       };
-      const curve = (k) => new THREE.CatmullRomCurve3([[0.03, -0.1], [0.16, -0.13], [0.3, -0.16], [0.38, -0.27], [0.36, -0.37], [0.29, -0.36]]
-        .map(([x, y]) => new THREE.Vector3(k * x, y, 0))).getPoints(18).map((v) => [v.x, v.y]);
-      const darks = [
-        slab(ellipse(-0.1, 0.06, 0.05, 0.058), 0.025, 0.165), slab(ellipse(0.1, 0.06, 0.05, 0.058), 0.025, 0.165),
-        slab(poly([[-0.04, -0.03], [0.04, -0.03], [0, -0.075]]), 0.025, 0.165),
-      ];
+      const curve = (k, pts) => new THREE.CatmullRomCurve3(pts.map(([x, y]) => new THREE.Vector3(k * x, y, 0))).getPoints(20).map((v) => [v.x, v.y]);
+      const hairs = [-1, 1].flatMap((k) => [
+        strand(curve(k, [[0.03, -0.06], [0.15, -0.08], [0.26, -0.13], [0.32, -0.25], [0.33, -0.39], [0.36, -0.5]]), 0.08, 0.014),
+        strand(curve(k, [[0.04, -0.08], [0.14, -0.11], [0.22, -0.19], [0.25, -0.32], [0.28, -0.43]]), 0.05, 0.012),
+        strand(curve(k, [[0.04, -0.1], [0.11, -0.15], [0.16, -0.24], [0.18, -0.34]]), 0.035, 0.01),
+      ]);
+      const shine = [-1, 1].map((k) => ellipse(k * 0.085 + 0.013, 0.088, 0.017, 0.017));
+      // the black face: brow to chin, wider at the cheeks
+      const face = poly(curve(1, [[0, 0.22], [0.15, 0.2], [0.23, 0.08], [0.21, -0.07], [0.13, -0.16], [0, -0.19], [-0.13, -0.16], [-0.21, -0.07], [-0.23, 0.08], [-0.15, 0.2], [0, 0.22]]));
       G = {
-        base: mergeGeometries([slab(ellipse(0, 0, 0.375, 0.36), 0.09, -0.045), ...darks]),
-        body: slab(ellipse(0, 0, 0.335, 0.32), 0.12, 0.02, 0.02),
-        dome: slab(ellipse(0, -0.01, 0.23, 0.21), 0.02, 0.14, 0.03),
-        ring: mergeGeometries([-1, 1].map((k) => slab(strand(curve(k), 0.075, 0.022), 0.025, 0.17))),
+        base: mergeGeometries([slab(furry(0.335), 0.09, -0.045), ...[-1, 1].map((k) => slab(ellipse(k * 0.3, 0.24, 0.085, 0.095), 0.09, -0.045)),
+          slab(face, 0.02, 0.16, 0.012), ...[-1, 1].map((k) => slab(ellipse(k * 0.085, 0.075, 0.042, 0.04), 0.02, 0.18, 0.012)),
+          ...[-1, 1].map((k) => slab(ellipse(k * 0.022, -0.035, 0.012, 0.009), 0.015, 0.225)), slab(ellipse(0, -0.085, 0.04, 0.008), 0.015, 0.225)]),
+        body: mergeGeometries([slab(furry(0.3), 0.12, 0.02, 0.02), ...[-1, 1].map((k) => slab(ellipse(k * 0.3, 0.24, 0.055, 0.065), 0.12, 0.02, 0.015))]),
+        dome: slab(ellipse(0, -0.055, 0.075, 0.06), 0.03, 0.18, 0.015),
+        ring: mergeGeometries([...hairs.map((h) => slab(h, 0.02, 0.2)), ...shine.map((s) => slab(s, 0.02, 0.21))]),
       };
     } else if (key === "cat") {
       // a kitten's head: round, two ears, a pale muzzle (dome) and the face (the band's part, dark: eyes, nose and
@@ -1065,9 +1087,7 @@ export function createRenderer(canvas) {
       sp.center.set(0.5, 0.04); hwy.add(sp); flames.push({ sp, t: 9, f: 0 });
     }
     // the pet (shop: Mascotas) sits by the neck, at the strike line on the right, where no note ever passes
-    const petSp = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }));
-    petSp.center.set(0.5, 0); petSp.visible = false; petSp.renderOrder = 3; hwy.add(petSp);
-    const pet = { sp: petSp, x: 0, flap: 0, sleepy: 0 };
+    const pet = { g: null, id: null, x: 0, flap: 0, sleepy: 0 };
     // star power ready: blue fire burning at both ends of the strike line
     const readyFire = [];
     for (let k = 0; k < 4; k++) {
@@ -1187,22 +1207,31 @@ export function createRenderer(canvas) {
       gemRingMat.userData.wig.value = sk.wig ? pulse * 1.1 + Math.sin(now * 3) * 0.15 : 0; // the tamarins' moustaches, on the beat
       // the pet: bobs on the beat, bored; asleep after a few misses in a row; flapping happy on a long streak; flying
       // above the neck with star power
-      pet.sp.visible = !!sk.pet;
-      if (sk.pet) {
+      if (pet.id !== sk.pet) {
+        // made the first time it's worn (and only then: most never wear one)
+        if (pet.g) { hwy.remove(pet.g); pet.g = null; }
+        pet.id = sk.pet;
+        if (sk.pet) { pet.g = petModels[sk.pet](); hwy.add(pet.g); }
+      }
+      if (pet.g) {
         const combo = s.combo || 0, misses = s.missRun || 0;
         pet.sleepy = misses >= 3 ? 1 : combo > 0 ? 0 : pet.sleepy;
-        const face = star ? (Math.sin(now * 18) > 0 ? "fly1" : "fly2") : pet.sleepy ? "sleep" : combo >= 30 ? "happy"
-          : now % 4.2 < 0.13 ? "blink" : "bored";
-        pet.sp.material.map = petTex(sk.pet, face);
-        const fly = star ? 1 : 0;
-        pet.flap += (fly - pet.flap) * Math.min(1, dt * 4);
-        const hop = combo >= 30 && !star ? Math.abs(Math.sin(now * 7)) * 0.08 : 0;
+        const happy = !star && !pet.sleepy && combo >= 30;
+        pet.flap += ((star ? 1 : 0) - pet.flap) * Math.min(1, dt * 4);
+        pet.g.pose({
+          lid: pet.sleepy || (!star && now % 4.2 < 0.13) ? 1 : happy || star ? 0 : 0.5,
+          wing: star ? 0.55 + Math.sin(now * 18) * 0.45 : happy ? 0.25 + Math.abs(Math.sin(now * 7)) * 0.35 : pulse * 0.06,
+          feet: pet.flap < 0.5, sleep: !!pet.sleepy && !star, now,
+        });
+        const hop = happy ? Math.abs(Math.sin(now * 7)) * 0.08 : 0;
         // a wide screen: beside the neck, by the orange button; a phone held upright (the neck fills its width): sitting
         // in the corner under the buttons, where the notes are already gone
-        const tall = h.aspect < 0.9, px = tall ? h.width() / 2 - 0.25 : pet.x, pz = tall ? 1.6 : 0.15, k = tall ? 1.5 : 1.1;
-        pet.sp.position.set(px - pet.flap * 0.35 + Math.sin(now * 2.2) * 0.2 * pet.flap, 0.02 + pulse * 0.05 + hop + pet.flap * (0.9 + Math.sin(now * 3) * 0.1), pz);
-        const sq = 1 + pulse * 0.06;
-        pet.sp.scale.set(k / sq, k * sq, 1);
+        const tall = h.aspect < 0.9, px = tall ? h.width() / 2 - 0.55 : pet.x, pz = tall ? 1.3 : 0.15, k = tall ? 0.85 : 1.05;
+        pet.g.position.set(px - pet.flap * 0.35 + Math.sin(now * 2.2) * 0.2 * pet.flap, 0.02 + pulse * 0.05 + hop + pet.flap * (0.9 + Math.sin(now * 3) * 0.1), pz);
+        // turned a little toward the neck and the player (a phone looks down on it more: leaned back); bored, it looks about; asleep, its head nods
+        pet.g.rotation.set((tall ? -0.45 : 0.15) + (pet.sleepy && !star ? 0.25 + Math.sin(now * 1.5) * 0.05 : 0), -0.35 + (happy || star || pet.sleepy ? 0 : Math.sin(now * 0.6) * 0.3), pulse * 0.04 * Math.sin(now * 4));
+        const sq = 1 + pulse * 0.06, br = pet.sleepy ? 1 + Math.sin(now * 2) * 0.02 : 1;
+        pet.g.scale.set(k * br / sq, k * sq * br, k * br / sq);
       }
       // star power: the neck, its edges and the strike light turn blue (or the skin's colour)
       h.starGlow += ((star ? 1 : 0) - h.starGlow) * Math.min(1, dt * 6);
