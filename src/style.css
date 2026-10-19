@@ -1455,6 +1455,10 @@ body.fx-quake #stage { animation: quake .11s linear infinite; }
 .cm-reply { margin-top: 8px; padding: 8px 10px; border-left: 3px solid var(--gold); background: rgba(245,197,24,.07); }
 .cm-reply .cm-admin { font: 700 13px var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--gold); }
 .cm-reply p { margin: 2px 0 0; font: 500 15px/1.45 var(--body); white-space: pre-wrap; overflow-wrap: anywhere; }
+.cm-reply.cm-wait { border-left-color: #4a423c; background: none; }
+.cm-reply.cm-wait .cm-admin { color: var(--muted); }
+.cm-reply.cm-wait p { color: var(--muted); font-size: 14px; }
+.cm-private { margin: 0 0 10px; }
 .cma-reply textarea { width: 100%; resize: vertical; font-size: 15px; }
 .cma-row { display: flex; justify-content: flex-end; }
 .notice-body { white-space: pre-wrap; }
