@@ -10,8 +10,8 @@ const RATE = 20; // energy samples per second
  *    that knows the song). Three things go into it: how loud this part is compared to the rest of the song, how loud it
  *    really is (a metal song's "quiet" verse is still loud), and how busy the chart is (a chorus full of notes is intense).
  *  - fast = punch 0–1 (hits above the recent level).
- *  - calm = 0–1, a part that is really calm: soft for real, few notes and quieter than the rest of the song. Only then
- *    do the lighters come out; measuring against the song alone sent them up in the "quietest" bit of a loud song.
+ *  - calm = 0–1, a part that is really calm: clearly quieter than the song's loud parts, not loud for real, not too busy.
+ *    Only then do the lighters come out (a metal song's verses stay loud for real, so they don't; a ballad's verses do).
  */
 export function energyCurve(buffers, noteTimes = null) {
   if (!buffers.length) return null;
@@ -55,7 +55,10 @@ export function energyCurve(buffers, noteTimes = null) {
   const rawS = movingAvg(raw, RATE * 2), absS = movingAvg(abs, RATE * 2);
   const calmRaw = new Float32Array(n);
   for (let k = 0; k < n; k++) {
-    const soft = 1 - smooth(0.3, 0.75, absS[k]), sparse = dens ? 1 - smooth(0.2, 0.45, dens[k]) : 1, quieter = 1 - smooth(0.3, 0.6, rawS[k]);
+    // gentle songs are mastered loud too (a soft verse of a ballad sits near a metal verse in level), so "soft for real"
+    // only rules out the really loud, and a busy chart (an arpeggio) only weighs a little: what counts most is being
+    // clearly quieter than the song's own loud parts
+    const soft = 1 - smooth(0.78, 0.97, absS[k]), sparse = dens ? 1 - 0.4 * smooth(0.55, 1, dens[k]) : 1, quieter = 1 - smooth(0.32, 0.6, rawS[k]);
     calmRaw[k] = soft * sparse * quieter;
   }
   const calm = movingAvg(calmRaw, RATE * 3); // no flicker: a calm part has to last
