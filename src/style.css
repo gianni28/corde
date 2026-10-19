@@ -1529,4 +1529,10 @@ body.fx-quake #stage { animation: quake .11s linear infinite; }
 .sw-pet { background: radial-gradient(ellipse 70% 60% at 50% 100%, rgba(120,140,220,.12), transparent 70%), linear-gradient(180deg, #16141c, #0c0b10); }
 .sw-pet .nero { height: 88%; filter: drop-shadow(0 3px 0 rgba(0,0,0,.6)); }
 .sw-pet .member { height: 92%; filter: drop-shadow(0 3px 0 rgba(0,0,0,.6)); }
+/* a band's card (shop.js GROUPS): its members side by side; opened, a card to go back */
+.sw-group { display: flex; align-items: flex-end; justify-content: center; gap: 0; overflow: hidden; }
+.sw-group .sg-m { flex: 1; height: 100%; display: grid; place-items: end center; min-width: 0; margin: 0 -6%; background: none; }
+.sw-group .sg-m .member { height: 78%; }
+.shop-back { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.shop-back .sb-arrow { font: 700 46px/1 var(--display); color: var(--muted); }
 .sw-pet .pet-none { width: 46%; height: 6px; border-radius: 3px; background: #3a3430; box-shadow: 0 0 0 1px #000; }
