@@ -248,6 +248,8 @@ function show(name, push = true) {
   $("hud").hidden = !(app.game && ["play", "pause", "settings"].includes(name));
   if (name === "play") $("hud").hidden = false;
   if (name === "home") { renderHomeBoard(); renderDailyCard(); if (online && !daily.day) loadDaily(); }
+  // a room: the host starts everyone's song, no tap of theirs, so the motion is settled as soon as they're in
+  if (name === "lobby" && motionNeeded()) setTimeout(() => { if (app.screen === "lobby" && $("motionModal").hidden) withMotion(() => {}); }, 400);
   if (name === "library") renderSongs(); // back from a song: its stars, the bananas and the events' cards up to date
   if (name !== "settings") stopMotionTest();
   if (notices.queue.length && !notices.current) setTimeout(showNextNotice, 400);
@@ -1541,18 +1543,42 @@ function starTipHow() {
 }
 function hideStarTip() { tip.at = 0; tip.hideAt = 0; $("spTip").hidden = true; }
 if (liftOn()) onLift(liftStar);
-// iPhone asks for the motion permission (only from a tap) and forgets it every time the page opens. So before the
-// first song of each visit the player is asked (or, if they allowed it before, it's asked again right in the tap that
-// starts the song); "Usar el dedo" goes on with the multiplier, and "Siempre con el dedo" stops asking.
-let motionAsked = false; // this visit
+// iPhone asks for the motion permission only from a tap, and forgets it every time the app opens. The player's answer
+// is kept (settings.motion): once they said yes, the first tap of each visit, anywhere, asks iPhone again (it may show
+// its prompt right then, never mid-song). A song never starts with the permission still pending: if it isn't alive
+// by then (the song was loaded first, out of the tap), the player is asked with our own button, a tap of its own.
+// "Usar el dedo" goes on with the multiplier this visit; "Siempre con el dedo" stops asking.
+let motionAsked = false; // answered this visit
 const motionNeeded = () => touch && motionAvailable() && motionNeedsPermission() && settings.starMode !== "tap" && !motionReady() && !motionAsked;
 let motionThen = null;
 function withMotion(fn) {
   if (!motionNeeded()) return fn();
-  if (settings.motion === "granted") { motionAsked = true; requestMotion().then((ok) => ok && onLift(liftStar)); return fn(); }
+  if (settings.motion === "granted") {
+    // still inside the tap (the play button): iPhone answers at once; out of it, it says no and we ask with our button
+    requestMotion().then((ok) => {
+      if (ok) { motionAsked = true; onLift(liftStar); fn(); return; }
+      motionThen = fn; showMotionModal();
+    });
+    return;
+  }
   motionThen = fn;
+  showMotionModal();
+}
+// said yes before: iPhone forgot it when the app closed, one tap brings it back
+function showMotionModal() {
+  const again = settings.motion === "granted";
+  $("motionModal").querySelector(".hint").textContent = again
+    ? "Tu iPhone olvida el permiso del movimiento cada vez que se cierra la app. Tócalo para activarlo otra vez (es un momento)."
+    : "Se activa levantando o sacudiendo el celular, como una guitarra. Para eso el celular te va a pedir permiso para usar el movimiento.";
+  $("motionAllow").textContent = again ? "Activar movimiento" : "Permitir movimiento";
   $("motionModal").hidden = false;
 }
+// the first taps of a visit, wherever they land: a player who allowed it before gets it back before any song
+function primeMotion() {
+  if (!(touch && motionAvailable() && motionNeedsPermission()) || settings.starMode === "tap" || settings.motion !== "granted" || motionReady()) return;
+  requestMotion().then((ok) => { if (ok) { motionAsked = true; onLift(liftStar); } });
+}
+for (const ev of ["touchend", "click"]) document.addEventListener(ev, primeMotion, { capture: true, passive: true });
 function motionGo() { $("motionModal").hidden = true; const f = motionThen; motionThen = null; if (app.screen === "lobby") renderLobby(); f && f(); }
 $("motionAllow").onclick = async () => {
   motionAsked = true;
@@ -1760,7 +1786,7 @@ $("pauseBtn").onclick = pauseGame;
 $("pauseSettingsBtn").onclick = () => { app.settingsFromPause = true; renderSettings(); show("settings", false); };
 function backToPause() { app.settingsFromPause = false; show("pause", false); }
 $("resumeBtn").onclick = resumeGame;
-$("restartBtn").onclick = () => startGame({ lanes: app.lanes, diff: app.diff, practice: app.practice, duo: app.duo, ctx: app.ctx });
+$("restartBtn").onclick = () => withMotion(() => startGame({ lanes: app.lanes, diff: app.diff, practice: app.practice, duo: app.duo, ctx: app.ctx }));
 // "Salir" goes back to where the song was picked
 $("quitBtn").onclick = () => {
   const duo = app.duo, ctx = app.ctx; stopGame(); R.setLanes(5);
@@ -2864,7 +2890,7 @@ $("shareBtn").onclick = async () => {
   } catch (e) { toast("No se pudo crear la imagen."); }
   b.disabled = false;
 };
-$("againBtn").onclick = () => startGame({ lanes: app.lanes, diff: app.diff, duo: app.duo, ctx: againCtx() });
+$("againBtn").onclick = () => withMotion(() => startGame({ lanes: app.lanes, diff: app.diff, duo: app.duo, ctx: againCtx() }));
 $("homeBtn").onclick = () => { clearTimeout(app.celTimer); app.duo = null; app.mode = "solo"; app.history = []; show("home", false); };
 $("menuBtn").onclick = () => {
   if (app.mode === "mp") { tallyCup(true); renderLobby(); show("lobby", false); }
