@@ -142,6 +142,140 @@ function fireFrames(n = 6, pal = FIRE) {
   return frames;
 }
 
+// Hit flames that aren't a fire of another colour: each its own picture (flipbook frames) and its own sparks.
+// campfire/embers are drawn in their colours; the rest are white, tinted per skin (FLAMES' tint).
+// look: sprite size [w, h], growth over its life [gx, gy], life (s), anchor (sprite center y);
+// spark: sideways speed, upward speed range, gravity (below 0: they float up), life range, how many (× today's), star-shaped.
+const FLAME_FORMS = {
+  fire: { look: [0.95, 1.5, 0.25, 0.9, 0.32, 0.04], spark: { vx: 1.8, vy: [2, 5.5], g: 9.5, life: [0.35, 0.7], n: 1 } },
+  campfire: { look: [1.35, 1.95, 0.2, 0.7, 0.42, 0.04], spark: { vx: 0.8, vy: [1.4, 3.4], g: -1.4, life: [0.9, 1.6], n: 1.4 } },
+  embers: { look: [1.3, 0.75, 0.12, 0.18, 0.62, 0.1], spark: { vx: 1.3, vy: [2.6, 4.6], g: 12, life: [0.7, 1.1], n: 0.75 } },
+  nova: { look: [0.6, 0.6, 2.4, 2.4, 0.32, 0.5], spark: { radial: 5.5, g: 0, life: [0.22, 0.4], n: 1.6 } },
+  bolt: { look: [0.85, 2.2, 0.1, 0.25, 0.22, 0.03], spark: { vx: 4.5, vy: [0.4, 4], g: 0, life: [0.07, 0.17], n: 1.2 } },
+  curtain: { look: [1.1, 2.0, 0.2, 0.5, 0.55, 0.03], spark: { vx: 0.5, vy: [0.6, 1.5], g: -0.6, life: [0.9, 1.5], n: 0.8 } },
+  stars: { look: [1.15, 1.6, 0.5, 0.8, 0.45, 0.06], spark: { vx: 1.5, vy: [2.6, 5], g: 5, life: [0.6, 1], n: 0.9, star: true } },
+  bubbles: { look: [1.0, 1.7, 0.15, 0.6, 0.5, 0.04], spark: { vx: 0.6, vy: [1, 2.2], g: -0.4, life: [0.6, 1.1], n: 0.7 } },
+};
+function flameFrames(form, n = 6) {
+  const out = [];
+  const glowDot = (g, x, y, r, col, a) => { const rg = g.createRadialGradient(x, y, 0, x, y, r); rg.addColorStop(0, `rgba(${col},${a})`); rg.addColorStop(1, `rgba(${col},0)`); g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2); };
+  for (let f = 0; f < n; f++) {
+    if (form === "campfire") {
+      // a campfire: many wide tongues, embers flying out of it
+      out.push(canvasTex(192, 256, (g, w, h) => {
+        g.globalCompositeOperation = "lighter";
+        for (let k = 0; k < 12; k++) {
+          const bx = w / 2 + rnd(-48, 48), top = rnd(8, 120) + Math.abs(bx - w / 2) * 0.8;
+          for (let s = 0; s < 22; s++) {
+            const p = s / 21, y = h - 14 - p * (h - 14 - top), x = bx + Math.sin(p * 6 + f * 1.4 + k) * 13 * p - (bx - w / 2) * p * 0.45;
+            const heat = 1 - p, col = heat > 0.8 ? FIRE[0] : heat > 0.5 ? FIRE[1] : heat > 0.22 ? FIRE[2] : FIRE[3];
+            glowDot(g, x, y, (1 - p) * 26 + 5, col, 0.18 + heat * 0.18);
+          }
+        }
+        for (let k = 0; k < 14; k++) glowDot(g, w / 2 + rnd(-60, 60), rnd(10, h * 0.6), rnd(2, 4), "255,200,90", 1);
+      }));
+    } else if (form === "embers") {
+      // a bed of embers: glowing coals breathing, little flames licking over them
+      out.push(canvasTex(192, 128, (g, w, h) => {
+        g.globalCompositeOperation = "lighter";
+        for (let k = 0; k < 26; k++) {
+          const x = w / 2 + rnd(-70, 70) * (0.6 + 0.4 * Math.random()), y = h - rnd(8, 34), r = rnd(8, 18);
+          const hot = 0.5 + 0.5 * Math.sin(f * 1.7 + k * 2.3);
+          glowDot(g, x, y, r * 1.8, "200,30,5", 0.35);
+          glowDot(g, x, y, r, hot > 0.6 ? "255,190,70" : "255,90,20", 0.5 + hot * 0.4);
+        }
+        for (let k = 0; k < 5; k++) {
+          const bx = w / 2 + rnd(-50, 50), top = rnd(40, 80);
+          for (let s = 0; s < 12; s++) { const p = s / 11, y = h - 26 - p * (h - 26 - top); glowDot(g, bx + Math.sin(p * 5 + f) * 6 * p, y, (1 - p) * 12 + 3, p < 0.4 ? "255,150,40" : "220,40,10", 0.25); }
+        }
+      }));
+    } else if (form === "nova") {
+      // a star blowing up: a white core, rays all around, a shock ring
+      out.push(canvasTex(256, 256, (g, w, h) => {
+        g.globalCompositeOperation = "lighter";
+        const cx = w / 2, cy = h / 2;
+        for (let k = 0; k < 16; k++) {
+          const a = (k / 16) * Math.PI * 2 + rnd(-0.12, 0.12) + f * 0.05, len = rnd(60, 122) * (k % 2 ? 0.65 : 1);
+          const lg = g.createLinearGradient(cx, cy, cx + Math.cos(a) * len, cy + Math.sin(a) * len);
+          lg.addColorStop(0, "rgba(255,255,255,.9)"); lg.addColorStop(1, "rgba(255,255,255,0)");
+          g.strokeStyle = lg; g.lineWidth = k % 2 ? 3 : 6; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len); g.stroke();
+        }
+        g.filter = "blur(4px)"; g.strokeStyle = "rgba(255,255,255,.55)"; g.lineWidth = 9; g.beginPath(); g.arc(cx, cy, 88 + f * 4, 0, Math.PI * 2); g.stroke(); g.filter = "none";
+        glowDot(g, cx, cy, 60, "255,255,255", 0.9); glowDot(g, cx, cy, 22, "255,255,255", 1);
+      }));
+    } else if (form === "bolt") {
+      // electricity: jagged bolts jumping up from the button, branching
+      out.push(canvasTex(128, 256, (g, w, h) => {
+        g.globalCompositeOperation = "lighter"; g.lineJoin = "round";
+        const bolt = (x, y, len, ang, width, depth) => {
+          const pts = [[x, y]];
+          for (let i = 0; i < 9; i++) { ang += rnd(-0.6, 0.6); x += Math.sin(ang) * len / 9; y -= Math.cos(ang) * len / 9; x = Math.max(6, Math.min(w - 6, x)); pts.push([x, y]); }
+          for (const [lw, a] of [[width * 4, 0.18], [width * 2, 0.35], [width, 1]]) {
+            g.strokeStyle = `rgba(255,255,255,${a})`; g.lineWidth = lw; g.beginPath(); pts.forEach(([px, py], i) => (i ? g.lineTo(px, py) : g.moveTo(px, py))); g.stroke();
+          }
+          if (depth < 2) for (let b = 0; b < 2; b++) { const [bx, by] = pts[3 + Math.floor(Math.random() * 5)]; bolt(bx, by, len * 0.45, ang + rnd(-1, 1), width * 0.6, depth + 1); }
+        };
+        for (let k = 0; k < 2; k++) bolt(w / 2 + rnd(-8, 8), h - 8, rnd(170, 230), rnd(-0.3, 0.3), 3, 0);
+        glowDot(g, w / 2, h - 10, 34, "255,255,255", 0.8);
+      }));
+    } else if (form === "curtain") {
+      // an aurora: soft curtains of light waving up from the button, brightest at their lower edge
+      out.push(canvasTex(192, 256, (g, w, h) => {
+        g.globalCompositeOperation = "lighter";
+        for (let k = 0; k < 6; k++) {
+          const x0 = w / 2 + (k - 2.5) * 18, ph = f * 0.9 + k * 1.7;
+          for (let y = h - 8; y > 10; y -= 3) {
+            const p = (h - y) / h, x = x0 + Math.sin(p * 7 + ph) * 16 * (0.4 + p), a = (1 - p) * (1 - p) * (0.08 + 0.05 * Math.sin(p * 20 + ph));
+            g.fillStyle = `rgba(255,255,255,${Math.max(0, a)})`; g.fillRect(x - 7, y, 14, 3);
+          }
+          glowDot(g, x0, h - 14, 22, "255,255,255", 0.35);
+        }
+      }));
+    } else if (form === "stars") {
+      // perfect: a burst of four-point stars twinkling
+      out.push(canvasTex(128, 256, (g, w, h) => {
+        g.globalCompositeOperation = "lighter";
+        const star = (x, y, r) => {
+          glowDot(g, x, y, r * 1.2, "255,255,255", 0.45);
+          g.fillStyle = "rgba(255,255,255,.95)"; g.beginPath();
+          g.moveTo(x, y - r); g.lineTo(x + r * 0.16, y - r * 0.16); g.lineTo(x + r, y); g.lineTo(x + r * 0.16, y + r * 0.16); g.lineTo(x, y + r); g.lineTo(x - r * 0.16, y + r * 0.16); g.lineTo(x - r, y); g.lineTo(x - r * 0.16, y - r * 0.16); g.fill();
+        };
+        for (let k = 0; k < 9; k++) { const p = rnd(0, 1); star(w / 2 + rnd(-40, 40) * (1 - p * 0.5), h - 16 - p * (h - 40), rnd(7, 20) * (1 - p * 0.45) * (0.7 + 0.3 * Math.sin(f * 2 + k))); }
+        glowDot(g, w / 2, h - 14, 34, "255,255,255", 0.7);
+      }));
+    } else {
+      // bubbles: rings with a shine, boiling up
+      out.push(canvasTex(128, 256, (g, w, h) => {
+        for (let k = 0; k < 14; k++) {
+          const p = rnd(0, 1), r = rnd(6, 17) * (1 - p * 0.4), x = w / 2 + rnd(-38, 38) * (0.5 + p * 0.5), y = h - 14 - p * (h - 40) - f * 6;
+          g.strokeStyle = `rgba(255,255,255,${0.9 - p * 0.5})`; g.lineWidth = 3; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke();
+          g.fillStyle = `rgba(255,255,255,${0.18 - p * 0.1})`; g.fill();
+          g.fillStyle = "rgba(255,255,255,.95)"; g.beginPath(); g.arc(x - r * 0.4, y - r * 0.4, r * 0.22, 0, Math.PI * 2); g.fill();
+        }
+        g.globalCompositeOperation = "lighter"; glowDot(g, w / 2, h - 14, 36, "255,255,255", 0.6);
+      }));
+    }
+  }
+  return out;
+}
+// what chrome reflects: an equirectangular studio, soft boxes and stage lights above, the warm stage below
+function studioTex() {
+  const t = canvasTex(512, 256, (g, w, h) => {
+    const bg = g.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, "#2a2c34"); bg.addColorStop(0.45, "#0c0d12"); bg.addColorStop(0.55, "#3a1c0c"); bg.addColorStop(1, "#140804");
+    g.fillStyle = bg; g.fillRect(0, 0, w, h);
+    g.fillStyle = "#fff"; for (let k = 0; k < 4; k++) g.fillRect(k * 128 + 20, 30, 70, 26); // soft boxes
+    g.fillStyle = "rgba(255,230,200,.85)"; g.fillRect(0, 100, w, 6); // a bright horizon
+    for (let k = 0; k < 8; k++) { const rg = g.createRadialGradient(k * 64 + 32, 78, 0, k * 64 + 32, 78, 16); rg.addColorStop(0, "#fff6e0"); rg.addColorStop(1, "rgba(255,180,90,0)"); g.fillStyle = rg; g.fillRect(k * 64, 60, 64, 40); }
+  });
+  t.mapping = THREE.EquirectangularReflectionMapping;
+  return t;
+}
+const starDotTex = () => canvasTex(64, 64, (g) => {
+  const rg = g.createRadialGradient(32, 32, 0, 32, 32, 14); rg.addColorStop(0, "rgba(255,255,255,1)"); rg.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = rg; g.fillRect(0, 0, 64, 64);
+  g.fillStyle = "#fff"; g.beginPath(); g.moveTo(32, 2); g.lineTo(36, 28); g.lineTo(62, 32); g.lineTo(36, 36); g.lineTo(32, 62); g.lineTo(28, 36); g.lineTo(2, 32); g.lineTo(28, 28); g.fill();
+});
+
 // Merge every static mesh in a group into one mesh per material (hundreds of draw calls -> a handful).
 function bake(group) {
   group.updateMatrixWorld(true);
@@ -446,7 +580,7 @@ export function createRenderer(canvas) {
     // per lane: the colour (caps, string flashes), each gem part, the tails, a glow under the notes (haloSize 0: none)
     lane: cols(5), body: cols(5), dome: cols(5), ring: cols(5), ringLane: false, tail: cols(5), halo: cols(5), haloSize: 0, twinkle: false,
     // hit flames: flipbook, colour per lane, hue going round (0: no); sparks per lane [r,g,b cool, r,g,b hot]
-    fire: null, flame: cols(5), flameRainbow: 0, flameK: 1, spark: new Float32Array(30),
+    fire: null, flame: cols(5), flameRainbow: 0, flameK: 1, spark: new Float32Array(30), form: FLAME_FORMS.fire,
     // star power: notes, tails, glows, sparks, the venue's rim light, the ready fire (flipbook + colour); hue going round
     starBody: new THREE.Color(), starDome: new THREE.Color(), starGem: new THREE.Color(), starHalo: new THREE.Color(), starTail: new THREE.Color(),
     starSpark: new Float32Array(6), starRim: new THREE.Color(), ready: null, readyCol: new THREE.Color(), starRainbow: false,
@@ -458,6 +592,8 @@ export function createRenderer(canvas) {
   const dotTex = softDotTex();
   const blueFire = fireFrames(6, BLUE_FIRE);
   let paleFire = null; // white fire, tinted per skin through the sprite's colour (made the first time a skin needs it)
+  const formFrames = {}; // the other flames' flipbooks (made the first time they're worn)
+  let studioEnv = null;
   // neck canvases by id: the one on the necks and the one before it (the shop flips between two); older ones go
   const neckCache = new Map();
   function neckTex(id) {
@@ -553,6 +689,47 @@ export function createRenderer(canvas) {
       const cyl = (r, h, y) => at(new THREE.CylinderGeometry(r, r, h, 40), y);
       const grooves = [0.29, 0.335, 0.38].map((r) => { const t = new THREE.TorusGeometry(r, 0.008, 4, 48); t.rotateX(Math.PI / 2); return at(t, 0.1); });
       G = { base: cyl(0.43, 0.05, 0), body: cyl(0.42, 0.07, 0.06), dome: cyl(0.25, 0.035, 0.11), ring: mergeGeometries(grooves) };
+    } else if (key === "chrome") {
+      // a chrome hubcap: a domed mirror rim, a stepped bezel, a coloured lens in the middle
+      const lathe = (pts, seg = 40) => new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), seg);
+      G = {
+        base: lathe([[0.001, -0.05], [0.42, -0.05], [0.43, 0.0], [0.41, 0.04], [0.001, 0.04]]),
+        body: lathe([[0.001, 0.03], [0.41, 0.03], [0.4, 0.09], [0.35, 0.15], [0.27, 0.18], [0.001, 0.18]]),
+        ring: lathe([[0.2, 0.17], [0.27, 0.175], [0.27, 0.205], [0.2, 0.215]]),
+        dome: lathe([[0.001, 0.17], [0.2, 0.17], [0.19, 0.22], [0.12, 0.255], [0.001, 0.265]]),
+      };
+    } else if (key === "macaron") {
+      // a macaron: a bottom shell with its rough "foot", the cream, a domed top shell
+      const lathe = (pts, seg = 36) => new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), seg);
+      G = {
+        base: lathe([[0.001, -0.03], [0.36, -0.03], [0.37, 0.0], [0.001, 0.0]]),
+        body: lathe([[0.001, 0.0], [0.33, 0.0], [0.38, 0.02], [0.39, 0.05], [0.4, 0.07], [0.37, 0.095], [0.001, 0.095]]),
+        ring: lathe([[0.001, 0.085], [0.36, 0.085], [0.385, 0.115], [0.36, 0.15], [0.001, 0.15]]),
+        dome: lathe([[0.001, 0.145], [0.37, 0.145], [0.4, 0.162], [0.395, 0.19], [0.35, 0.23], [0.22, 0.262], [0.001, 0.272]]),
+      };
+    } else if (key === "candy") {
+      // a wrapped candy: a glossy oval, a white swirl on it (the dome's part), the twisted wrapper at both ends (the base)
+      const rx = 0.27, ry = 0.13, rz = 0.22, cy = 0.13;
+      const body = new THREE.SphereGeometry(1, 28, 18); body.scale(rx, ry, rz); body.translate(0, cy, 0);
+      const swirl = [];
+      for (let j = 0; j < 5; j++) {
+        const pts = [];
+        for (let k = 0; k <= 24; k++) {
+          const t = k / 24, th = 0.08 + t * 1.45, ph = (j / 5) * Math.PI * 2 + t * 2.4;
+          pts.push(new THREE.Vector3(rx * Math.sin(th) * Math.cos(ph) * 1.02, cy + ry * Math.cos(th) * 1.04, rz * Math.sin(th) * Math.sin(ph) * 1.02));
+        }
+        swirl.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 32, 0.028, 5));
+      }
+      const wrap = [-1, 1].flatMap((k) => {
+        const pinch = new THREE.CylinderGeometry(0.035, 0.05, 0.06, 10); pinch.rotateZ(Math.PI / 2); pinch.translate(k * 0.28, cy, 0);
+        // the frilly fan of cellophane: a flattened cone, opening out, with pleats
+        const fan = new THREE.ConeGeometry(0.17, 0.17, 12, 1, true); fan.rotateZ(k * Math.PI / 2); fan.scale(1, 0.75, 1); fan.translate(k * 0.36, cy, 0);
+        const pos = fan.attributes.position;
+        for (let i = 0; i < pos.count; i++) { const a = Math.atan2(pos.getZ(i), pos.getY(i) - cy); const r = 1 + 0.18 * Math.sin(a * 6); pos.setY(i, cy + (pos.getY(i) - cy) * r); pos.setZ(i, pos.getZ(i) * r); }
+        fan.computeVertexNormals();
+        return [pinch, fan];
+      });
+      G = { base: mergeGeometries(wrap.map((g) => g.index ? g.toNonIndexed() : g)), body, dome: mergeGeometries(swirl), ring: null };
     } else if (key === "cat") {
       // a kitten's head: round, two ears, a pale muzzle (dome) and the face (the band's part, dark: eyes, nose and
       // whiskers). Flat it would be seen almost edge-on, so it sits up, tilted toward the player, its chin on the neck.
@@ -624,12 +801,22 @@ export function createRenderer(canvas) {
       if (m.userData.glow) m.userData.glow.value = glow;
     };
     fin(gemBodyMat, Gm.body, Gm.body.glow ?? 0); fin(gemDomeMat, Gm.dome, Gm.dome.glow ?? 0); tailMat.userData.glow.value = Gm.tailGlow ?? 0;
+    // mirror skins reflect a little studio (lights above, the warm stage below); the others nothing (as ever)
+    const env = Gm.mirror ? studioEnv || (studioEnv = studioTex()) : null;
+    for (const m of [gemBodyMat, gemRingMat, gemBaseMat]) if (m.envMap !== env) { m.envMap = env; m.needsUpdate = true; }
     fin(gemRingMat, Gm.ring, Gm.ring.glow ?? 0); fin(gemBaseMat, Gm.base, 0);
     // hit flames: today's fire, or white fire in a colour (per lane, or going round the colour wheel)
-    if (F.tint == null && !F.lane && !F.rainbow) { sk.fire = fire; sk.flame.forEach((c) => c.copy(WHITE)); }
-    else { sk.fire = paleFire || (paleFire = fireFrames(6, PALE_FIRE)); for (let i = 0; i < 5; i++) flameColor(i, F.lane ? tmpC.setHex(Gm.lanes[i]) : tmpC.setHex(F.tint ?? 0xffffff), F.k); }
+    const form = F.form || "fire";
+    sk.form = FLAME_FORMS[form];
+    const own = form === "campfire" || form === "embers"; // drawn in their own colours
+    if (own) { sk.fire = formFrames[form] || (formFrames[form] = flameFrames(form)); sk.flame.forEach((c) => c.copy(WHITE)); }
+    else if (F.tint == null && !F.lane && !F.rainbow) { sk.fire = fire; sk.flame.forEach((c) => c.copy(WHITE)); }
+    else {
+      sk.fire = form === "fire" ? paleFire || (paleFire = fireFrames(6, PALE_FIRE)) : formFrames[form] || (formFrames[form] = flameFrames(form));
+      for (let i = 0; i < 5; i++) flameColor(i, F.lane ? tmpC.setHex(Gm.lanes[i]) : tmpC.setHex(F.tint ?? 0xffffff), F.k);
+    }
     sk.flameRainbow = F.rainbow ? 1 : 0; sk.flameK = F.k ?? 1;
-    if (F.tint == null && !F.lane && !F.rainbow) for (let i = 0; i < 5; i++) sk.spark.set([1, 0.45, 0, 1, 0.95, 0.35], i * 6); // today's warm sparks
+    if (own || (F.tint == null && !F.lane && !F.rainbow)) for (let i = 0; i < 5; i++) sk.spark.set(form === "embers" ? [1, 0.12, 0.02, 1, 0.6, 0.15] : [1, 0.45, 0, 1, 0.95, 0.35], i * 6); // warm sparks
     // star power
     sk.starRainbow = !!Sp.rainbow;
     if (Sp.hue == null) {
@@ -724,6 +911,7 @@ export function createRenderer(canvas) {
 
     // hit fire + sparks
     const flames = [];
+    let starTex = null;
     for (let i = 0; i < 5; i++) {
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: fire[0], transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
       sp.center.set(0.5, 0.04); hwy.add(sp); flames.push({ sp, t: 9, f: 0 });
@@ -744,18 +932,23 @@ export function createRenderer(canvas) {
     const spPos = new Float32Array(SPARKS * 3), spCol = new Float32Array(SPARKS * 3);
     sparkGeo.setAttribute("position", new THREE.BufferAttribute(spPos, 3));
     sparkGeo.setAttribute("color", new THREE.BufferAttribute(spCol, 3));
-    const sparkVel = new Float32Array(SPARKS * 3), sparkLife = new Float32Array(SPARKS);
+    const sparkVel = new Float32Array(SPARKS * 3), sparkLife = new Float32Array(SPARKS), sparkG = new Float32Array(SPARKS);
     const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({ map: dotTex, size: 0.1, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
     sparks.frustumCulled = false; hwy.add(sparks);
     let sparkIdx = 0;
     // star: sparks in the star power colour (default: the lane's flame colour, from cool to hot)
     function burst(x, n, white = false, star = false, power = 1, lane = 0) {
       const c = h.sparkStar || star ? sk.starSpark : sk.spark, o = h.sparkStar || star ? 0 : lane * 6;
+      // a hit's sparks fly the way its flame's do (fogata: up into the air, brasas: falling coals...); the white ones as ever
+      const S = white || star ? FLAME_FORMS.fire.spark : sk.form.spark;
+      if (!white && !star) n = Math.round(n * S.n);
       for (let k = 0; k < n; k++) {
         const i = sparkIdx++ % SPARKS;
         spPos[i * 3] = x + rnd(-0.25, 0.25); spPos[i * 3 + 1] = 0.25; spPos[i * 3 + 2] = rnd(-0.1, 0.1);
-        sparkVel[i * 3] = rnd(-1.8, 1.8) * power; sparkVel[i * 3 + 1] = rnd(2, 5.5) * power; sparkVel[i * 3 + 2] = rnd(-0.6, 1.2);
-        sparkLife[i] = rnd(0.35, 0.7) * Math.sqrt(power);
+        if (S.radial) { const a = rnd(0, Math.PI * 2), v = rnd(0.6, 1) * S.radial; sparkVel[i * 3] = Math.cos(a) * v; sparkVel[i * 3 + 1] = Math.sin(a) * v * 0.8 + 1; }
+        else { sparkVel[i * 3] = rnd(-S.vx, S.vx) * power; sparkVel[i * 3 + 1] = rnd(S.vy[0], S.vy[1]) * power; }
+        sparkVel[i * 3 + 2] = rnd(-0.6, 1.2);
+        sparkLife[i] = rnd(S.life[0], S.life[1]) * Math.sqrt(power); sparkG[i] = S.g;
         const hot = Math.random();
         if (white) { spCol[i * 3] = 0.85 + hot * 0.15; spCol[i * 3 + 1] = 0.92 + hot * 0.08; spCol[i * 3 + 2] = 1; }
         else for (let j = 0; j < 3; j++) spCol[i * 3 + j] = c[o + j] + hot * (c[o + 3 + j] - c[o + j]);
@@ -780,7 +973,10 @@ export function createRenderer(canvas) {
         const m = strings[i].mesh.material; m.color.setHex(S.string[0]); m.metalness = S.string[1]; m.roughness = S.string[2];
         const cap = buttons[i].cap.material; cap.color.copy(sk.lane[i]); cap.emissive.copy(sk.lane[i]);
         flames[i].sp.material.color.copy(sk.flame[i]);
+        flames[i].sp.center.set(0.5, sk.form.look[5]);
       }
+      sparks.material.map = sk.form.spark.star ? starTex || (starTex = starDotTex()) : dotTex;
+      sparks.material.size = sk.form.spark.star ? 0.2 : 0.1;
     };
 
     h.layout = (n) => {
@@ -944,16 +1140,17 @@ export function createRenderer(canvas) {
         st.mesh.position.x = laneX(i) + Math.sin(now * 95 + i) * 0.035 * st.vib;
         st.mesh.material.emissive.copy(sk.lane[i]).multiplyScalar(sk.laneGlow + st.glow * 0.4);
         const f = flames[i]; f.t += dt;
-        const k = f.t / 0.32;
+        const L = sk.form.look, k = f.t / L[4];
         if (sk.flameRainbow) { flameColor(i, hue.setHSL((now * 0.25 + i / 5) % 1, 1, 0.5), sk.flameK); f.sp.material.color.copy(sk.flame[i]); }
         f.sp.material.map = sk.fire[(Math.floor(now * 22) + i) % sk.fire.length];
         f.sp.material.opacity = k < 1 ? (1 - k) : 0;
         f.sp.visible = k < 1;
-        f.sp.scale.set(0.95 + k * 0.25, 1.5 + k * 0.9, 1);
+        f.sp.scale.set(L[0] + k * L[2], L[1] + k * L[3], 1);
       }
       for (let i = 0; i < SPARKS; i++) {
         if (sparkLife[i] <= 0) { spPos[i * 3 + 1] = -50; continue; }
-        sparkLife[i] -= dt; sparkVel[i * 3 + 1] -= 9.5 * dt;
+        sparkLife[i] -= dt; sparkVel[i * 3 + 1] -= sparkG[i] * dt;
+        if (sparkG[i] < 0) sparkVel[i * 3] += Math.sin(now * 3 + i) * dt * 1.5; // floating up: they drift
         spPos[i * 3] += sparkVel[i * 3] * dt; spPos[i * 3 + 1] += sparkVel[i * 3 + 1] * dt; spPos[i * 3 + 2] += sparkVel[i * 3 + 2] * dt;
       }
       sparkGeo.attributes.position.needsUpdate = true; sparkGeo.attributes.color.needsUpdate = true;

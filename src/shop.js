@@ -25,9 +25,6 @@ const dots = (c, r = 4) => `radial-gradient(circle at 30% 50%, ${c} 0 ${r}px, tr
 // strings: the edges (rails) on both sides and five strings
 const strings = (s, edge, base = "linear-gradient(90deg, #24120b, #3a1d10 50%, #24120b)") =>
   `linear-gradient(90deg, ${edge} 0 4%, transparent 4% 96%, ${edge} 96%), repeating-linear-gradient(90deg, transparent 0 9.2%, ${s} 9.2% 10.8%, transparent 10.8% 20%), ${base}`;
-// the crowd: little lights over a dark room, heads in front
-const crowd = (a, b = a) => `radial-gradient(ellipse 9% 30% at 8% 100%, #050303 70%, transparent 72%), radial-gradient(ellipse 9% 34% at 30% 100%, #050303 70%, transparent 72%), radial-gradient(ellipse 9% 30% at 52% 100%, #050303 70%, transparent 72%), radial-gradient(ellipse 9% 34% at 74% 100%, #050303 70%, transparent 72%), radial-gradient(ellipse 9% 30% at 95% 100%, #050303 70%, transparent 72%),`
-  + ` radial-gradient(circle, ${a} 0 1.6px, transparent 2.6px) 3px 4px / 17px 13px, radial-gradient(circle, ${b} 0 1.4px, transparent 2.4px) 11px 9px / 23px 15px, linear-gradient(180deg, #120c14, #241418)`;
 const glow = (c) => `radial-gradient(circle at 50% 50%, #fff 0 7%, ${c} 20%, transparent 58%), radial-gradient(circle at 50% 50%, ${c}55, transparent 75%), #06080d`;
 
 /** Every item: { slot, id, name, price, req?, lvl? (a level's prize, claimed like a logro's), tour? (a tour prize: its
@@ -63,9 +60,9 @@ export const ITEMS = [
     sw: "radial-gradient(circle at 20% 35%, #ffd27a 0 2px, transparent 3px), radial-gradient(circle at 75% 25%, #ffd27a 0 2px, transparent 3px), radial-gradient(circle at 55% 75%, #ffd27a 0 2px, transparent 3px), radial-gradient(ellipse 70% 40% at 47% 50%, transparent 58%, rgba(255,206,90,.85) 60%, transparent 63%), repeating-linear-gradient(90deg, rgba(90,140,220,.15) 0 1px, transparent 1px 18px), linear-gradient(90deg, #020611, #08183a 50%, #020611)" },
   // notas (the gems)
   { slot: "gems", id: "clasicas", name: "Clásicas", price: 0, cols: LANES },
-  { slot: "gems", id: "cromo", name: "Cromadas", price: 200, cols: LANES, ring: "#e8ecf0" },
-  { slot: "gems", id: "pastel", name: "Pastel", price: 200, cols: ["#8fe8a8", "#f59aa0", "#f7e08a", "#8fb6f2", "#f8bb84"] },
-  { slot: "gems", id: "caramelo", name: "Caramelo", price: 300, cols: ["#19ff5a", "#ff1f3d", "#ffd400", "#1a6bff", "#ff7a00"], ring: "#fff" },
+  { slot: "gems", id: "cromo", name: "Cromadas", price: 200, cols: LANES, shape: "chrome", desc: "Notas de cromo que reflejan como espejo, con un lente de color en el centro." },
+  { slot: "gems", id: "pastel", name: "Macarons", price: 200, cols: ["#8fe8a8", "#f59aa0", "#f7e08a", "#8fb6f2", "#f8bb84"], shape: "macaron", desc: "Las notas son macarons de colores pastel, con su relleno de crema." },
+  { slot: "gems", id: "caramelo", name: "Caramelos", price: 300, cols: ["#19ff5a", "#ff1f3d", "#ffd400", "#1a6bff", "#ff7a00"], shape: "candy", desc: "Caramelos envueltos en celofán, con espiral blanca." },
   { slot: "gems", id: "cuadradas", name: "Cuadradas", price: 350, cols: LANES, shape: "square" },
   { slot: "gems", id: "neon", name: "Neón", price: 400, cols: ["#39ff6a", "#ff2d55", "#ffe600", "#2d8cff", "#ff8a00"], shape: "neon" },
   { slot: "gems", id: "pixel", name: "Píxel", price: 450, cols: ["#2fdc4f", "#f2333c", "#ffd23a", "#3a7bf0", "#ff8c1a"], shape: "pixel" },
@@ -77,18 +74,18 @@ export const ITEMS = [
   // llamas (when a note is hit)
   { slot: "flames", id: "fuego", name: "Fuego", price: 0, cols: ["#ff8a1a", "#ffb020", "#ff5a10"] },
   { slot: "flames", id: "azul", name: "Fuego azul", price: 150, cols: ["#3fa0ff", "#8fd0ff", "#2a6bff"] },
-  { slot: "flames", id: "verde", name: "Ácido", price: 200, cols: ["#7dff3a", "#c8ff5a", "#3adf2a"] },
+  { slot: "flames", id: "verde", art: "bubbles", name: "Ácido", price: 200, cols: ["#7dff3a", "#c8ff5a", "#3adf2a"], desc: "Burbujas verdes que hierven desde el botón, como ácido." },
   { slot: "flames", id: "rosa", name: "Rosa chicle", price: 200, cols: ["#ff5fb8", "#ff9ad4", "#ff3a9a"] },
   { slot: "flames", id: "morado", name: "Morado", price: 250, cols: ["#a45bff", "#c99aff", "#7a3aff"] },
   { slot: "flames", id: "dorado", name: "Dorado", price: 400, cols: ["#f5c518", "#ffe27a", "#e8a010"] },
-  { slot: "flames", id: "plasma", name: "Plasma", price: 500, cols: ["#e8fbff", "#ffffff", "#bff4ff"], glow: "#3fe0ff" },
+  { slot: "flames", id: "plasma", art: "bolt", name: "Plasma", price: 500, cols: ["#e8fbff", "#ffffff", "#bff4ff"], glow: "#3fe0ff", desc: "Rayos eléctricos que saltan del botón." },
   { slot: "flames", id: "notas", name: "Del color de la nota", price: 600, cols: [LANES[0], LANES[2], LANES[3]] },
   { slot: "flames", id: "arcoiris", name: "Arcoíris", price: 1000, cols: ["#ff3a3a", "#3aff6a", "#3a8aff"], rainbow: true },
-  { slot: "flames", id: "aurora", name: "Aurora", price: 0, lvl: 15, cols: ["#3dffc8", "#b0fff0", "#2ad0ff"], glow: "#3dffc8", desc: "Fuego verde agua, como una aurora boreal. Premio del nivel 15." },
-  { slot: "flames", id: "perfecto", name: "Perfeccionista", price: 0, req: "sin-fallar", cols: ["#fff6d8", "#ffffff", "#ffe08a"], glow: "#f5c518", desc: "Fuego blanco y dorado. Premio por terminar una canción sin fallar." },
-  { slot: "flames", id: "brasas", name: "Brasas", price: 0, req: "dia-3", streak: 3, cols: ["#c4161c", "#ff4a1a", "#6a0808"], desc: "Fuego rojo oscuro, como brasas al rojo vivo. Premio por tocar la canción del día 3 días seguidos." },
-  { slot: "flames", id: "fogata", name: "Fogata", price: 0, req: "gira-easy-bar", tour: "easy", cols: ["#ff5a1a", "#ff8a2a", "#c41c0c"], desc: "Fuego rojo de fogata de barrio. Premio de la gira en Fácil: supera el Bar La Cueva." },
-  { slot: "flames", id: "supernova", name: "Supernova", price: 0, req: "gira-expert-bar", tour: "expert", cols: ["#e2c2ff", "#ffffff", "#a45bff"], glow: "#c77dff", desc: "Estallidos violeta y blanco, como una estrella que explota. Premio de la gira en Experto: supera el Bar La Cueva." },
+  { slot: "flames", id: "aurora", art: "curtain", name: "Aurora", price: 0, lvl: 15, cols: ["#3dffc8", "#b0fff0", "#2ad0ff"], glow: "#3dffc8", desc: "Cortinas de luz verde agua que ondulan como una aurora boreal. Premio del nivel 15." },
+  { slot: "flames", id: "perfecto", art: "stars", name: "Perfeccionista", price: 0, req: "sin-fallar", cols: ["#fff6d8", "#ffffff", "#ffe08a"], glow: "#f5c518", desc: "Una lluvia de estrellas doradas en cada nota. Premio por terminar una canción sin fallar." },
+  { slot: "flames", id: "brasas", art: "embers", name: "Brasas", price: 0, req: "dia-3", streak: 3, cols: ["#c4161c", "#ff4a1a", "#6a0808"], desc: "Un lecho de carbones al rojo vivo que escupe brasas. Premio por tocar la canción del día 3 días seguidos." },
+  { slot: "flames", id: "fogata", art: "campfire", name: "Fogata", price: 0, req: "gira-easy-bar", tour: "easy", cols: ["#ff8a1a", "#ffd04a", "#ff5a10"], desc: "Una fogata de verdad: llamas anchas y chispas que suben al aire. Premio de la gira en Fácil: supera el Bar La Cueva." },
+  { slot: "flames", id: "supernova", art: "nova", name: "Supernova", price: 0, req: "gira-expert-bar", tour: "expert", cols: ["#e2c2ff", "#ffffff", "#a45bff"], glow: "#c77dff", desc: "Cada nota estalla en rayos y anillos violeta, como una estrella que explota. Premio de la gira en Experto: supera el Bar La Cueva." },
   // cuerdas y bordes
   { slot: "strings", id: "acero", name: "Acero", price: 0, sw: strings("#cfd4da", "#8f969e") },
   { slot: "strings", id: "cobre", name: "Cobre", price: 150, sw: strings("#e09050", "#b5652a") },
@@ -134,12 +131,14 @@ export const ITEMS = [
   { slot: "streak", id: "platino", name: "Platino", price: 0, lvl: 50, desc: "Rachas de platino con brillo morado. Premio del nivel 50." },
   { slot: "streak", id: "pirotecnia", name: "Pirotecnia", price: 0, req: "gira-hard-theater", tour: "hard", desc: "Las rachas estallan como fuegos artificiales. Premio de la gira en Difícil: supera El Gran Teatro." },
   // público (the lights in the crowd)
-  { slot: "crowd", id: "encendedores", name: "Encendedores", price: 0, sw: crowd("#ffc060", "#ff9a30") },
-  { slot: "crowd", id: "celulares", name: "Celulares", price: 150, sw: crowd("#e8f4ff", "#9fd0ff") },
-  { slot: "crowd", id: "rojo", name: "Luces rojas", price: 200, sw: crowd("#ff3a2a", "#ff7a6a") },
-  { slot: "crowd", id: "barras", name: "Barras de neón", price: 300, sw: crowd("#3aff7a", "#ff4fd8").replace("#120c14", "#0e0a1a") },
-  { slot: "crowd", id: "estrobos", name: "Estroboscopios", price: 0, req: "dia-7", streak: 7, sw: crowd("#ffffff", "#e8f0ff").replace("#120c14", "#050508"), desc: "Luces estroboscópicas que destellan sobre el público, como en un concierto de verdad. Premio por tocar la canción del día 7 días seguidos." },
-  { slot: "crowd", id: "bengalas", name: "Bengalas", price: 0, req: "gira-easy-theater", tour: "easy", sw: crowd("#fff6d0", "#ffd27a"), desc: "El público prende bengalas que chisporrotean. Premio de la gira en Fácil: supera El Gran Teatro." },
+  { slot: "crowd", id: "encendedores", name: "Encendedores", price: 0, desc: "La llamita de un encendedor en alto en las partes tranquilas." },
+  { slot: "crowd", id: "celulares", name: "Celulares", price: 150, desc: "Celulares de verdad en alto, grabando el concierto: en la pantalla se ve la tarima." },
+  { slot: "crowd", id: "rojo", name: "Láseres", price: 200, desc: "Punteros láser rojos que barren el aire al ritmo de la canción." },
+  { slot: "crowd", id: "barras", name: "Barras de neón", price: 300, desc: "Barras de luz de colores que el público agita en cada golpe." },
+  { slot: "crowd", id: "luciernagas", name: "Luciérnagas", price: 350, desc: "Luciérnagas que vuelan sobre el público y se prenden al ritmo, en ola." },
+  { slot: "crowd", id: "gatos", name: "Público de gatos", price: 500, desc: "Todo el público con orejas y cola de gato, que mueven al ritmo." },
+  { slot: "crowd", id: "estrobos", name: "Estroboscopios", price: 0, req: "dia-7", streak: 7, desc: "Destellos blancos que encienden a todo el público en cada golpe, como en un concierto de verdad. Premio por tocar la canción del día 7 días seguidos." },
+  { slot: "crowd", id: "bengalas", name: "Bengalas", price: 0, req: "gira-easy-theater", tour: "easy", desc: "El público prende bengalas que escupen chispas de verdad. Premio de la gira en Fácil: supera El Gran Teatro." },
 ];
 for (const it of ITEMS) if (it.slot === "star") it.sw = it.rainbow ? `radial-gradient(circle at 50% 50%, #fff 0 7%, transparent 40%), conic-gradient(from 0deg, ${it.cols.join(", ")}, ${it.cols[0]})` : glow(it.cols[0]);
 

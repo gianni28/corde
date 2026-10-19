@@ -63,6 +63,57 @@ function crowdGeometries() {
   return { torso, head, hair, upper, fore };
 }
 
+// The pictures of what the crowd holds up (white where the instance colour tints it)
+function propTex(kind) {
+  const W = { lighters: [64, 128], phones: [128, 232], lasers: [16, 256], sticks: [32, 160], sparklers: [8, 128] }[kind];
+  const c = document.createElement("canvas"); c.width = W[0]; c.height = W[1];
+  const g = c.getContext("2d"), w = W[0], h = W[1];
+  const rr = (x, y, ww, hh, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + ww, y, x + ww, y + hh, r); g.arcTo(x + ww, y + hh, x, y + hh, r); g.arcTo(x, y + hh, x, y, r); g.arcTo(x, y, x + ww, y, r); g.closePath(); };
+  if (kind === "lighters") {
+    // a lighter's flame: a teardrop, white-hot at the bottom, orange at the edges, a blue foot
+    const drop = (k, col) => { g.beginPath(); g.moveTo(w / 2, h * (0.05 + (1 - k) * 0.3)); g.bezierCurveTo(w * (0.5 + 0.42 * k), h * 0.45, w * (0.5 + 0.3 * k), h * 0.92, w / 2, h * 0.92);
+      g.bezierCurveTo(w * (0.5 - 0.3 * k), h * 0.92, w * (0.5 - 0.42 * k), h * 0.45, w / 2, h * (0.05 + (1 - k) * 0.3)); g.fillStyle = col; g.fill(); };
+    g.filter = "blur(3px)"; drop(1, "rgba(255,120,30,.75)"); g.filter = "blur(2px)"; drop(0.7, "rgba(255,200,90,.9)"); drop(0.42, "rgba(255,250,225,1)");
+    g.filter = "blur(2px)"; g.fillStyle = "rgba(80,140,255,.8)"; g.beginPath(); g.ellipse(w / 2, h * 0.9, w * 0.13, h * 0.04, 0, 0, 6.3); g.fill();
+  } else if (kind === "phones") {
+    // a phone seen from behind its owner: the screen filming the stage (lights, the band), REC on
+    rr(2, 2, w - 4, h - 4, 16); g.fillStyle = "#0b0b0e"; g.fill(); g.lineWidth = 2; g.strokeStyle = "#55555c"; g.stroke();
+    const sx = 9, sy = 12, sw = w - 18, sh = h - 24;
+    g.save(); rr(sx, sy, sw, sh, 9); g.clip();
+    const bg = g.createLinearGradient(0, sy, 0, sy + sh); bg.addColorStop(0, "#160a2e"); bg.addColorStop(0.55, "#3a1050"); bg.addColorStop(1, "#ff7a2a");
+    g.fillStyle = bg; g.fillRect(sx, sy, sw, sh);
+    g.globalCompositeOperation = "lighter";
+    [["255,60,200", 0.25], ["60,180,255", 0.5], ["255,210,80", 0.75]].forEach(([col, x]) => {
+      const gx = sx + sw * x; const lg = g.createLinearGradient(0, sy, 0, sy + sh * 0.8); lg.addColorStop(0, `rgba(${col},.9)`); lg.addColorStop(1, `rgba(${col},0)`);
+      g.fillStyle = lg; g.beginPath(); g.moveTo(gx - 4, sy + 8); g.lineTo(gx + 4, sy + 8); g.lineTo(gx + 26, sy + sh * 0.8); g.lineTo(gx - 26, sy + sh * 0.8); g.fill();
+      const dg = g.createRadialGradient(gx, sy + 10, 0, gx, sy + 10, 14); dg.addColorStop(0, "rgba(255,255,255,1)"); dg.addColorStop(1, `rgba(${col},0)`); g.fillStyle = dg; g.fillRect(gx - 14, sy - 4, 28, 28);
+    });
+    g.globalCompositeOperation = "source-over";
+    g.fillStyle = "#07040a"; // the band, small on the stage
+    [[0.22, 0.2], [0.42, 0.24], [0.62, 0.22], [0.8, 0.18]].forEach(([x, hgt]) => { const bx = sx + sw * x, by = sy + sh * 0.8; g.fillRect(bx - 5, by - sh * hgt, 10, sh * hgt); g.beginPath(); g.arc(bx, by - sh * hgt - 5, 6, 0, 6.3); g.fill(); });
+    g.fillRect(sx, sy + sh * 0.8, sw, sh * 0.2);
+    g.fillStyle = "#ff2a2a"; g.beginPath(); g.arc(sx + 14, sy + 16, 6, 0, 6.3); g.fill();
+    g.fillStyle = "#fff"; g.font = "bold 15px sans-serif"; g.fillText("REC", sx + 24, sy + 21);
+    g.fillStyle = "rgba(255,255,255,.85)"; g.beginPath(); g.arc(w / 2, sy + sh - 16, 10, 0, 6.3); g.lineWidth = 3; g.strokeStyle = "#fff"; g.stroke();
+    g.restore();
+  } else if (kind === "lasers") {
+    const lg = g.createLinearGradient(0, h, 0, 0); lg.addColorStop(0, "rgba(255,255,255,1)"); lg.addColorStop(0.15, "rgba(255,255,255,.7)"); lg.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = lg; g.fillRect(w / 2 - 1.5, 0, 3, h);
+    g.globalAlpha = 0.35; g.filter = "blur(3px)"; g.fillRect(w / 2 - 3, 0, 6, h);
+  } else if (kind === "sticks") {
+    // a glow stick: a bright tube with rounded ends and a soft glow around it
+    g.filter = "blur(6px)"; rr(6, 6, w - 12, h - 12, 10); g.fillStyle = "rgba(255,255,255,.55)"; g.fill();
+    g.filter = "none"; rr(11, 14, w - 22, h - 28, 5); g.fillStyle = "rgba(255,255,255,.95)"; g.fill();
+    g.fillStyle = "rgba(255,255,255,.4)"; g.fillRect(11, h - 30, w - 22, 16); // the plastic cap at the bottom
+  } else {
+    // a sparkler's wire
+    g.fillStyle = "#9a9590"; g.fillRect(w / 2 - 1.5, 0, 3, h);
+    g.fillStyle = "#3a3634"; g.fillRect(w / 2 - 1.5, h * 0.55, 3, h * 0.45);
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 // max: people in a normal club; room: how much bigger the densest venue gets (instances are allocated once)
 export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
   const alloc = Math.ceil(max * room);
@@ -83,14 +134,58 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
   lgeo.setAttribute("color", new THREE.BufferAttribute(lightCol, 3));
   const lights = new THREE.Points(lgeo, new THREE.PointsMaterial({ map: dotTex, size: 0.9, vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: false }));
   lights.frustumCulled = false; lights.renderOrder = 62; layer.add(lights);
-  // what they hold up (the shop's "Público"): "lighters" (warm, flickering), "phones" (cold white, steady), "red",
-  // "sticks" (glow sticks, every one its own neon colour); held up for a while however loud the song is (showLights)
+  // what the crowd does (the shop's "Público"), each its own thing, not a colour of the same dot:
+  // "lighters" (a real little flame), "phones" (screens filming the stage), "lasers" (red beams), "sticks" (neon glow
+  // sticks waved on the beat), "sparklers" (spitting sparks), "strobe" (white flashes on the beat over everyone),
+  // "fireflies" (they fly over the crowd and blink on the beat), "cats" (a crowd of cats: ears and tails)
   let lightKind = "lighters", liftFor = 0;
   const STICKS = [[0.35, 1, 0.2], [1, 0.25, 0.75], [0.2, 0.85, 1], [1, 0.9, 0.15], [0.65, 0.3, 1], [1, 0.5, 0.1]];
+  // who holds one up: a share of the crowd per kind (more phones than lighters, a few lasers); always: also in the loud parts
+  const HOLD = { lighters: 0.45, phones: 0.55, lasers: 0.3, sticks: 0.5, sparklers: 0.35 };
+  const ALWAYS = { lasers: true, sticks: true };
+
+  // the things they hold: one textured card per person, drawn over the crowd (instanced; the look per kind)
+  const propGeo = new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0); // grows up from the hand
+  const propMat = new THREE.MeshBasicMaterial({ transparent: true, depthTest: false, depthWrite: false, fog: false, blending: THREE.AdditiveBlending });
+  const props = new THREE.InstancedMesh(propGeo, propMat, alloc);
+  props.instanceMatrix.setUsage(THREE.DynamicDrawUsage); props.frustumCulled = false; props.renderOrder = 62; props.count = 0;
+  props.setColorAt(0, new THREE.Color()); layer.add(props);
+  const TEX = {};
+  const tex = (k) => TEX[k] || (TEX[k] = propTex(k));
+  // per kind: texture, blending, card size (× the person's size: w, h) and where it sits (lift above the fist)
+  const LOOK = {
+    lighters: { w: 0.3, h: 0.62, lift: 0.02, add: true },
+    phones: { w: 0.4, h: 0.72, lift: -0.15, add: false },
+    lasers: { w: 0.16, h: 3.6, lift: 0, add: true },
+    sticks: { w: 0.16, h: 0.85, lift: -0.25, add: true },
+    sparklers: { w: 0.07, h: 0.75, lift: -0.05, add: false },
+  };
+
+  // sparks off the sparklers; fireflies over the crowd (both points in the crowd's layer)
+  const BITS = 600, FLIES = 60;
+  const bitPos = new Float32Array(BITS * 3), bitCol = new Float32Array(BITS * 3), bitVel = new Float32Array(BITS * 3), bitLife = new Float32Array(BITS);
+  const bgeo = new THREE.BufferGeometry();
+  bgeo.setAttribute("position", new THREE.BufferAttribute(bitPos, 3)); bgeo.setAttribute("color", new THREE.BufferAttribute(bitCol, 3));
+  const bits = new THREE.Points(bgeo, new THREE.PointsMaterial({ map: dotTex, size: 0.2, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: false }));
+  bits.frustumCulled = false; bits.renderOrder = 63; layer.add(bits);
+  let bitI = 0;
+  const flyPos = new Float32Array(FLIES * 3), flyCol = new Float32Array(FLIES * 3), flyHome = [];
+  const fgeo = new THREE.BufferGeometry();
+  fgeo.setAttribute("position", new THREE.BufferAttribute(flyPos, 3)); fgeo.setAttribute("color", new THREE.BufferAttribute(flyCol, 3));
+  const flies = new THREE.Points(fgeo, new THREE.PointsMaterial({ map: dotTex, size: 0.5, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: false }));
+  flies.frustumCulled = false; flies.renderOrder = 63; flies.visible = false; layer.add(flies);
+
+  // a crowd of cats: ears on every head, a tail swinging on the beat
+  const earGeo = mergeGeometries([-1, 1].map((k) => new THREE.ConeGeometry(0.17, 0.46, 4).rotateY(Math.PI / 4).scale(1, 1, 0.5).rotateZ(-k * 0.42).translate(k * 0.22, 1.0, 0)));
+  // the tail curls up from the lower back to beside the head, so it shows over the people in front
+  const tailCurve = new THREE.CatmullRomCurve3([[0, 0, 0], [0.15, -0.1, 0.4], [0.6, 0.4, 0.55], [0.8, 1.4, 0.5], [0.75, 2.35, 0.45], [0.5, 2.75, 0.4], [0.3, 2.6, 0.38]].map(([x, y, z]) => new THREE.Vector3(x, y, z)));
+  const tailGeo = new THREE.TubeGeometry(tailCurve, 24, 0.2, 6);
+  const mkx = (geo) => { const m = new THREE.InstancedMesh(geo, mat, alloc); m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); m.frustumCulled = false; m.renderOrder = 61; m.count = 0; layer.add(m); return m; };
+  const cat = { ears: mkx(earGeo), tail: mkx(tailGeo) };
 
   let people = [];
   const M = new THREE.Matrix4(), P = new THREE.Matrix4(), A = new THREE.Matrix4(), B = new THREE.Matrix4(), T = new THREE.Matrix4();
-  const e = new THREE.Euler(), q = new THREE.Quaternion(), v = new THREE.Vector3(), s = new THREE.Vector3();
+  const e = new THREE.Euler(), q = new THREE.Quaternion(), v = new THREE.Vector3(), s = new THREE.Vector3(), w2 = new THREE.Vector3(), tmpC = new THREE.Color();
 
   /** Places the crowd for the current screen. edgeX(ndcY) = the highway's left edge in NDC at that height (or null above it).
    *  density: 1 = a normal club; below 1 thins the crowd out, above 1 packs more people into the same space. */
@@ -115,7 +210,7 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
           const yy = y + rnd(-0.25, 0.25) * w * aspect;
           people.push({
             x: side * x * d * tf * aspect, y: yy * d * tf, z: -d, s: sc,
-            th: rnd(0.12, 0.8), style: Math.floor(Math.random() * 4), lighter: Math.random() < 0.34, hair: Math.random() < 0.38,
+            th: rnd(0.12, 0.8), style: Math.floor(Math.random() * 4), hold: Math.random(), hair: Math.random() < 0.38,
             jumpy: Math.random() < 0.6, ph: rnd(-0.06, 0.08), sway: rnd(0, 6.28), lean: rnd(-0.06, 0.06), side,
             arms: { uL: 0.15, uR: 0.15, bL: 0.3, bR: 0.3, oL: 0.08, oR: 0.08 }, j: 0, depthK: k,
           });
@@ -146,9 +241,17 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
       c.setRGB(b, b, b);
       for (const k in parts) { if (k === "hair") { if (p.hair) parts.hair.setColorAt(p.hairI, c); } else parts[k].setColorAt(i, c); }
     });
+    people.forEach((p, i) => { parts.head.getColorAt(i, c); cat.ears.setColorAt(i, c); cat.tail.setColorAt(i, c); });
     for (const k in parts) if (parts[k].instanceColor) parts[k].instanceColor.needsUpdate = true;
-    const ss = people.map((p) => p.s).sort((a, b) => a - b);
-    lights.material.size = (ss[ss.length >> 1] || 1) * 0.24;
+    for (const k in cat) if (cat[k].instanceColor) cat[k].instanceColor.needsUpdate = true;
+    const ss = people.map((p) => p.s).sort((a, b) => a - b), med = ss[ss.length >> 1] || 1;
+    lights.material.size = med * 0.24; bits.material.size = med * 0.12; flies.material.size = med * 0.24;
+    // fireflies: each one has a spot over somebody's head it wanders around
+    flyHome.length = 0;
+    for (let i = 0; i < FLIES && people.length; i++) {
+      const p = people[Math.floor(Math.random() * people.length)];
+      flyHome.push({ x: p.x, y: p.y + p.s * rnd(1.2, 3.2), z: p.z, s: p.s, a: rnd(0.3, 0.8), b: rnd(0.4, 1.1), ph: rnd(0, 6.28), wave: rnd(0, 1) });
+    }
   }
 
   function armMatrices(Pm, side, up, out, bend, upMesh, foreMesh, i) {
@@ -172,6 +275,8 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
     liftFor = Math.max(-1, liftFor - dt);
     const up = Math.max(calm, smooth(0, 0.6, liftFor)); // lights up: the quiet parts, or showLights
     uni.uRim.value.copy(f.rim);
+    // strobes: the whole crowd flashes white on the beat (harder the louder it is)
+    if (lightKind === "strobe") { const fl = Math.pow(kick(ph), 6) * (0.35 + 0.9 * lvl); uni.uRim.value.lerp(tmpC.setRGB(2.4, 2.4, 2.6), clamp01(fl)); }
     const k = Math.min(1, dt * 8);
     let li = 0;
     for (let i = 0; i < people.length; i++) {
@@ -195,8 +300,10 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
       // arms: targets by style and energy, eased so poses blend instead of popping
       const a = p.arms;
       let uL = 0.12, uR = 0.12, bL = 0.35, bR = 0.35, oL = 0.1, oR = 0.1;
-      const light = p.lighter && up > 0.4;
-      if (light) {
+      const holds = p.hold < (HOLD[lightKind] || 0);
+      const light = holds && !ALWAYS[lightKind] && up > 0.4;
+      if (light && lightKind === "phones") { uR = 2.2; bR = 0.75; oR = 0.1 + Math.sin(now * 0.7 + p.sway) * 0.08; } // filming: the phone up in front of the face
+      else if (light) {
         uR = 2.55; bR = 0.25; oR = 0.12 + Math.sin(now * 0.9 + p.sway) * 0.28; // sways slowly over the head
       } else if (into > 0.05) {
         const pump = Math.sin(Math.PI * lp);                          // fist up on the beat
@@ -205,21 +312,58 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
         else if (p.style === 2) { const alt = Math.floor(bpos) % 2 ? 1 : 0; uL = 1.6 + 0.8 * into * (alt ? pump : 0.4); uR = 1.6 + 0.8 * into * (alt ? 0.4 : pump); bL = 0.9 - 0.6 * into; bR = bL; oL = oR = 0.18; }
         else { uL = 2.6 * into + 0.12; bL = 0.22; oL = 0.25; uR = 0.2 + 0.5 * into; bR = 1.1 * into; }
         if (into < 1) { uL = 0.12 + (uL - 0.12) * into; uR = 0.12 + (uR - 0.12) * into; }
-      }
+      } else if (holds && ALWAYS[lightKind]) { uR = 2.3; bR = 0.5; oR = 0.15 + Math.sin(now * 0.9 + p.sway) * 0.25; } // calm: held up, swaying
       a.uL += (uL - a.uL) * k; a.uR += (uR - a.uR) * k; a.bL += (bL - a.bL) * k; a.bR += (bR - a.bR) * k; a.oL += (oL - a.oL) * k; a.oR += (oR - a.oR) * k;
       armMatrices(P, -1, a.uL, a.oL, a.bL, parts.upL, parts.foreL, i);
       const fr = armMatrices(P, 1, a.uR, a.oR, a.bR, parts.upR, parts.foreR, i);
-      if (light) {
-        v.set(0, -0.74, 0).applyMatrix4(M.multiplyMatrices(P, fr));
-        lightPos[li * 3] = v.x; lightPos[li * 3 + 1] = v.y; lightPos[li * 3 + 2] = v.z;
-        if (lightKind === "phones") { const fl = 0.9 + 0.06 * Math.sin(now * 2 + i); lightCol[li * 3] = fl * 0.74; lightCol[li * 3 + 1] = fl * 0.86; lightCol[li * 3 + 2] = fl; }
-        else if (lightKind === "strobe") { const fl = Math.sin(now * 19 + i * 0.37) > 0.55 ? 1.25 : 0.06; lightCol[li * 3] = fl; lightCol[li * 3 + 1] = fl; lightCol[li * 3 + 2] = fl * 1.05; } // white strobes, flashing in waves
-        else if (lightKind === "sparklers") { const fl = 0.6 + 0.4 * Math.abs(Math.sin(now * 31 + i * 5.3)) * (0.7 + 0.3 * Math.sin(now * 7 + i)); lightCol[li * 3] = fl; lightCol[li * 3 + 1] = fl * 0.95; lightCol[li * 3 + 2] = fl * 0.8; } // crackling white-gold
-        else if (lightKind === "sticks") { const c = STICKS[(i * 7 + 3) % STICKS.length], fl = 0.85 + 0.15 * Math.sin(now * 3 + i * 1.7); lightCol[li * 3] = c[0] * fl; lightCol[li * 3 + 1] = c[1] * fl; lightCol[li * 3 + 2] = c[2] * fl; }
-        else {
+      if (lightKind === "cats") {
+        cat.ears.setMatrixAt(i, M.multiplyMatrices(P, T.makeTranslation(0, -0.05 * beat * (0.3 + into), -0.06 * beat * into)));
+        // the tail: from the lower back, swinging side to side on the beat (wider the more into it they are)
+        A.makeTranslation(0.05, -1.45, 0.3);
+        e.set(0, 0, Math.sin((bpos + p.ph) * Math.PI) * (0.35 + 0.45 * into) + (p.side > 0 ? 0.15 : -0.15)); T.makeRotationFromEuler(e); A.multiply(T);
+        cat.tail.setMatrixAt(i, M.multiplyMatrices(P, A));
+      }
+      if (light || (holds && ALWAYS[lightKind])) {
+        // the fist and where the forearm points (the stick and the beam go that way)
+        M.multiplyMatrices(P, fr);
+        v.set(0, -0.7, 0).applyMatrix4(M); w2.set(0, -1.2, 0).applyMatrix4(M);
+        let ang = Math.atan2(-(w2.x - v.x), w2.y - v.y);
+        const L = LOOK[lightKind];
+        let glow = 0, gr = 0, gg = 0, gb = 0, pc = [1, 1, 1], hh = L.h, pw = L.w;
+        if (lightKind === "lighters") {
+          ang *= 0.15; // a flame burns upwards whatever the hand does
           const fl = 0.75 + 0.25 * Math.sin(now * 13 + i * 3.1);
-          if (lightKind === "red") { lightCol[li * 3] = fl; lightCol[li * 3 + 1] = fl * 0.1; lightCol[li * 3 + 2] = fl * 0.07; }
-          else { lightCol[li * 3] = fl; lightCol[li * 3 + 1] = fl * 0.92; lightCol[li * 3 + 2] = fl * 0.78; }
+          hh *= 0.85 + 0.25 * Math.sin(now * 17 + i * 2.3); pc = [fl, fl * 0.8, fl * 0.55]; glow = fl; gr = 1; gg = 0.78; gb = 0.45;
+        } else if (lightKind === "phones") {
+          ang = Math.sin(now * 0.7 + p.sway) * 0.08; // upright, like filming
+          const fl = 0.85 + 0.1 * Math.sin(now * 1.3 + i) + 0.25 * f.P * (p.hold * 7 % 1); pc = [fl, fl, fl]; glow = 0.32; gr = 0.7; gg = 0.82; gb = 1;
+        } else if (lightKind === "lasers") {
+          // red beams thrown up and away from the neck (outwards on the screen), sweeping on the bar
+          ang = -Math.sign(p.x || 1) * (0.25 + 0.35 * (0.5 + 0.5 * Math.sin((bpos / 2 + p.sway) * Math.PI)));
+          const fl = 0.55 + 0.45 * kick(frac(lp + 0.0)); pc = [fl, fl * 0.12, fl * 0.1]; glow = 0.9; gr = 1; gg = 0.15; gb = 0.1;
+        } else if (lightKind === "sticks") {
+          const c = STICKS[(i * 7 + 3) % STICKS.length], fl = 0.9 + 0.3 * beat; pc = [c[0] * fl, c[1] * fl, c[2] * fl]; glow = 0.7; [gr, gg, gb] = c;
+        } else if (lightKind === "sparklers") {
+          ang *= 0.4; pc = [0.35, 0.33, 0.3];
+          const fl = 0.75 + 0.25 * Math.abs(Math.sin(now * 31 + i * 5.3)); glow = fl; gr = 1; gg = 0.92; gb = 0.7;
+        }
+        const sc = p.s;
+        e.set(0, 0, ang); q.setFromEuler(e);
+        v.y += L.lift * sc;
+        s.set(pw * sc, hh * sc, 1);
+        props.setMatrixAt(li, M.compose(v, q, s)); props.setColorAt(li, tmpC.setRGB(pc[0], pc[1], pc[2]));
+        // a glow where the light is: the flame, the screen, the stick, the sparkler's tip
+        const tipK = lightKind === "lasers" ? 0.02 : lightKind === "phones" ? 0.5 : lightKind === "sticks" ? 0.5 : lightKind === "lighters" ? 0.35 : 1;
+        const tx = v.x - Math.sin(ang) * hh * sc * tipK, ty = v.y + Math.cos(ang) * hh * sc * tipK;
+        lightPos[li * 3] = tx; lightPos[li * 3 + 1] = ty; lightPos[li * 3 + 2] = v.z;
+        lightCol[li * 3] = gr * glow; lightCol[li * 3 + 1] = gg * glow; lightCol[li * 3 + 2] = gb * glow;
+        if (lightKind === "sparklers") {
+          for (let n = 0; n < 4; n++) {
+            const j = bitI++ % BITS, an = rnd(0, 6.28), sp = rnd(1.2, 3.4) * sc;
+            bitPos[j * 3] = tx; bitPos[j * 3 + 1] = ty; bitPos[j * 3 + 2] = v.z;
+            bitVel[j * 3] = Math.cos(an) * sp; bitVel[j * 3 + 1] = Math.sin(an) * sp; bitVel[j * 3 + 2] = 0; bitLife[j] = rnd(0.12, 0.3);
+            const hot = Math.random(); bitCol[j * 3] = 1; bitCol[j * 3 + 1] = 0.75 + 0.25 * hot; bitCol[j * 3 + 2] = 0.35 + 0.6 * hot;
+          }
         }
         li++;
       }
@@ -227,16 +371,48 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
     for (const kk in parts) { parts[kk].instanceMatrix.needsUpdate = true; }
     lgeo.setDrawRange(0, li);
     lgeo.attributes.position.needsUpdate = true; lgeo.attributes.color.needsUpdate = true;
-    lights.material.opacity = smooth(0.4, 0.75, up);
+    const shown = ALWAYS[lightKind] ? 1 : smooth(0.4, 0.75, up);
+    lights.material.opacity = shown;
+    props.count = li; props.visible = li > 0 && !!LOOK[lightKind];
+    if (props.visible) { props.instanceMatrix.needsUpdate = true; props.instanceColor.needsUpdate = true; propMat.opacity = shown; }
+    const cats = lightKind === "cats";
+    for (const kk in cat) { cat[kk].count = cats ? people.length : 0; if (cats) cat[kk].instanceMatrix.needsUpdate = true; }
+    // sparks fly out and fall
+    for (let j = 0; j < BITS; j++) {
+      if (bitLife[j] <= 0) { bitPos[j * 3 + 1] = -1e4; continue; }
+      bitLife[j] -= dt; bitVel[j * 3 + 1] -= 6 * dt * (bitVel[j * 3 + 1] > 0 ? 1 : 0.5);
+      bitPos[j * 3] += bitVel[j * 3] * dt; bitPos[j * 3 + 1] += bitVel[j * 3 + 1] * dt;
+    }
+    bits.visible = lightKind === "sparklers";
+    if (bits.visible) { bgeo.attributes.position.needsUpdate = true; bgeo.attributes.color.needsUpdate = true; bits.material.opacity = shown; }
+    // fireflies: wander over the heads and light up on the beat, in a wave that runs across the room
+    flies.visible = lightKind === "fireflies" && flyHome.length > 0;
+    if (flies.visible) {
+      flyHome.forEach((h, j) => {
+        flyPos[j * 3] = h.x + Math.sin(now * h.a + h.ph) * h.s * 1.4 + Math.sin(now * 1.7 + j) * h.s * 0.15;
+        flyPos[j * 3 + 1] = h.y + Math.sin(now * h.b + h.ph * 1.3) * h.s * 0.7;
+        flyPos[j * 3 + 2] = h.z;
+        const blink = Math.pow(kick(frac(ph - h.wave * 0.5)), 1.6), b = 0.2 + 2.6 * blink * (0.6 + 0.4 * lvl + 0.4 * calm);
+        flyCol[j * 3] = 0.85 * b; flyCol[j * 3 + 1] = 1 * b; flyCol[j * 3 + 2] = 0.2 * b;
+      });
+      fgeo.setDrawRange(0, flyHome.length);
+      fgeo.attributes.position.needsUpdate = true; fgeo.attributes.color.needsUpdate = true;
+    }
   }
 
-  return {
+  const api = {
     layout, update, setVisible(on) { layer.visible = on; }, get count() { return people.length; },
-    /** What the crowd holds up: "lighters" | "phones" | "red" | "sticks" | "sparklers" | "strobe". */
-    setLights(kind) { lightKind = kind || "lighters"; },
+    /** What the crowd does: "lighters" | "phones" | "lasers" | "sticks" | "sparklers" | "strobe" | "fireflies" | "cats". */
+    setLights(kind) {
+      lightKind = kind || "lighters";
+      const L = LOOK[lightKind];
+      if (L) { propMat.map = tex(lightKind); propMat.blending = L.add ? THREE.AdditiveBlending : THREE.NormalBlending; propMat.needsUpdate = true; }
+    },
     /** Lights up for the next `s` seconds whatever the song does (Infinity: until called with 0). */
     showLights(s) { liftFor = s; },
   };
+  api.setLights("lighters");
+  return api;
 }
 
 /* ======================================================================
