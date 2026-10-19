@@ -2304,7 +2304,16 @@ function fillSwatch(el, it) {
   } else if (it.slot === "flames") {
     el.classList.toggle("rainbow", !!it.rainbow);
     if (it.glow) el.style.setProperty("--glow", it.glow);
-    el.innerHTML = it.cols.map((c) => `<svg aria-hidden="true" style="--c:${c}"><use href="#flame"/></svg>`).join("");
+    el.style.setProperty("--c", it.cols[0]); el.style.setProperty("--c2", it.cols[1]);
+    // flames that aren't a fire: their own little picture (style.css .fa-*)
+    const art = { bubbles: "<i></i>".repeat(7), embers: "<i></i>".repeat(8), nova: "<i></i>", stars: "<i></i>".repeat(5), curtain: "<i></i>".repeat(4),
+      bolt: `<svg viewBox="0 0 40 60" aria-hidden="true"><path d="M24 2 9 33h11l-6 25 19-34H21z"/></svg>` }[it.art];
+    if (art) { el.classList.add("fa-" + it.art); el.innerHTML = art; }
+    else el.innerHTML = it.cols.map((c) => `<svg aria-hidden="true" style="--c:${c}"><use href="#flame"/></svg>`).join("") + (it.art === "campfire" ? "<em></em>".repeat(6) : "");
+  } else if (it.slot === "crowd") {
+    // five people from behind, holding up what this crowd holds up (style.css .cw-*)
+    el.classList.add("cw-" + it.id);
+    el.innerHTML = "<b><i></i></b>".repeat(5) + (it.id === "luciernagas" ? "<em></em>".repeat(7) : "");
   } else if (it.slot === "star") {
     el.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg>`;
   } else if (it.slot === "name") {

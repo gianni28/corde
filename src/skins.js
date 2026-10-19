@@ -602,7 +602,8 @@ export const NECKS = {
 
 /* ================= note gems ================= */
 // lanes: the five colours (sRGB, lane order green red yellow blue orange; also the fret buttons, tails, string flashes
-// and the HUD). shape: "round" (today's), "square", "pixel", "crystal", "diamond", "cat", "vinyl".
+// and the HUD). shape: "round" (today's), "square", "pixel", "crystal", "diamond", "cat", "vinyl", "chrome", "macaron", "candy".
+// mirror: the metal reflects a studio (an environment map), so chrome looks like chrome.
 // body/dome: finish of the coloured parts; each part's colour is the lane colour mixed towards `to` by `mix`, times `mul`;
 // glow: how much that colour lights the part itself (today's notes: none). ring: the band around the top (color: its
 // own colour, or the lane colour mixed like above when `lane` is set; glow as above); base: the bottom disc.
@@ -611,14 +612,20 @@ const RING = { color: 0xf2eee6, metal: 0.1, rough: 0.25, emissive: 0xffffff, ei:
 const BASE = { color: 0x080808, metal: 0.3, rough: 0.35 };
 export const GEMS = {
   clasicas: { lanes: LANE_HEX, body: { metal: 0.05, rough: 0.3 }, dome: { metal: 0.05, rough: 0.1, mix: 0.1 } },
+  // chrome: mirror-polished (they reflect a studio: renderer.js mirror), a coloured lens in the middle
   cromo: {
-    lanes: LANE_HEX, body: { metal: 0.85, rough: 0.16, mul: 1.1, glow: 0.18 }, dome: { metal: 0.8, rough: 0.05, mix: 0.3, glow: 0.22 },
-    ring: { color: 0xffffff, metal: 0.6, rough: 0.06, emissive: 0xeef3ff, ei: 0.55 }, base: { color: 0xb8bec8, metal: 0.7, rough: 0.18, emissive: 0x5a606a, ei: 1 },
+    lanes: LANE_HEX, shape: "chrome", mirror: true, body: { metal: 1, rough: 0.07, mix: 0.92, to: 0xe6ebf2 }, dome: { metal: 0.3, rough: 0.05, mix: 0.05, mul: 1.1, glow: 0.55 },
+    ring: { color: 0xf4f6fa, metal: 1, rough: 0.05, emissive: 0x000000, ei: 0 }, base: { color: 0xc8ced8, metal: 1, rough: 0.12 },
   },
-  pastel: { lanes: [0x86e8a4, 0xff8f9c, 0xffe28a, 0x8fb6ff, 0xffbc86], body: { metal: 0, rough: 0.55 }, dome: { metal: 0, rough: 0.35, mix: 0.18 }, ring: { ...RING, color: 0xfff8f0 }, base: { color: 0x2a2226, metal: 0.1, rough: 0.6 } },
+  // macarons: two pastel shells and the cream between them
+  pastel: {
+    lanes: [0x86e8a4, 0xff8f9c, 0xffe28a, 0x8fb6ff, 0xffbc86], shape: "macaron", body: { metal: 0, rough: 0.75 }, dome: { metal: 0, rough: 0.6, mix: 0.06 },
+    ring: { color: 0xfff3dc, metal: 0, rough: 0.85, emissive: 0xfff3dc, ei: 0.08 }, base: { color: 0x2a2226, metal: 0, rough: 0.8 },
+  },
+  // wrapped hard candies: glossy, a white swirl, twisted cellophane at both ends
   caramelo: {
-    lanes: [0x10f060, 0xff1744, 0xffd500, 0x1f7aff, 0xff7000], body: { metal: 0.1, rough: 0.06, mul: 1.1, glow: 0.08 }, dome: { metal: 0.12, rough: 0.02, mix: 0.06, mul: 1.15, glow: 0.12 },
-    ring: { color: 0xffffff, metal: 0, rough: 0.1, emissive: 0xffffff, ei: 0.35 },
+    lanes: [0x10f060, 0xff1744, 0xffd500, 0x1f7aff, 0xff7000], shape: "candy", body: { metal: 0.1, rough: 0.05, mul: 1.1, glow: 0.1 }, dome: { metal: 0, rough: 0.2, mix: 0.88, glow: 0.05 },
+    base: { color: 0xe8eef6, metal: 0.6, rough: 0.12, emissive: 0x404650, ei: 0.6 },
   },
   cuadradas: { lanes: LANE_HEX, shape: "square", body: { metal: 0.05, rough: 0.3 }, dome: { metal: 0.05, rough: 0.1, mix: 0.12 } },
   neon: {
@@ -660,21 +667,22 @@ for (const s of Object.values(GEMS)) { s.ring = s.ring || RING; s.base = s.base 
 /* ================= hit flames ================= */
 // tint: a colour for a white flipbook (null: today's fire); k: how hot (above 1 the core burns white).
 // lane: each lane burns in its note colour; rainbow: the colour goes round, a different hue on every lane.
+// form: not a fire at all, its own picture and sparks (renderer.js FLAME_FORMS): campfire, embers, nova, bolt, curtain, stars, bubbles.
 export const FLAMES = {
   fuego: { tint: null },
   azul: { tint: 0x3d86ff, k: 1.9 },
-  verde: { tint: 0x86ff26, k: 1.5 },
+  verde: { tint: 0x86ff26, k: 1.5, form: "bubbles" },
   rosa: { tint: 0xff48b4, k: 1.7 },
   morado: { tint: 0x9a48ff, k: 2 },
   dorado: { tint: 0xffc23c, k: 1.6 },
-  plasma: { tint: 0x8ef2ff, k: 2.4 },
+  plasma: { tint: 0x8ef2ff, k: 2.4, form: "bolt" },
   notas: { lane: true, k: 1.8 },
   arcoiris: { rainbow: true, k: 1.8 },
-  perfecto: { tint: 0xffe6a6, k: 2.2 },
-  aurora: { tint: 0x3dffc8, k: 2.1 },
-  fogata: { tint: 0xff4214, k: 1.5 },
-  brasas: { tint: 0xb3120a, k: 1.35 },
-  supernova: { tint: 0xc77dff, k: 2.6 },
+  perfecto: { tint: 0xffd76a, k: 2, form: "stars" },
+  aurora: { tint: 0x3dffc8, k: 2.1, form: "curtain" },
+  fogata: { form: "campfire" },
+  brasas: { form: "embers" },
+  supernova: { tint: 0xc77dff, k: 2.2, form: "nova" },
 };
 
 /* ================= strings, rails, edges ================= */
@@ -708,7 +716,10 @@ export const STARS = {
 };
 
 /* ================= the crowd's lights ================= */
-export const CROWDS = { encendedores: "lighters", celulares: "phones", rojo: "red", barras: "sticks", bengalas: "sparklers", estrobos: "strobe" };
+// what the crowd does: each its own thing (stagecrew.js createCrowd); "rojo" was red lights, now red laser pointers
+export const CROWDS = {
+  encendedores: "lighters", celulares: "phones", rojo: "lasers", barras: "sticks", bengalas: "sparklers", estrobos: "strobe", luciernagas: "fireflies", gatos: "cats",
+};
 
 const SLOTS = { neck: NECKS, gems: GEMS, flames: FLAMES, strings: STRINGS, star: STARS, crowd: CROWDS };
 /** The ids to show for an equipped set: anything missing or unknown is that slot's default. */
