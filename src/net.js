@@ -94,13 +94,21 @@ export function joinRoom(code, me, h) {
     if (status === "SUBSCRIBED") { await ch.track(state); h.onStatus && h.onStatus("ok"); }
     else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") h.onStatus && h.onStatus("error");
   });
+  // a phone can lose its place in the room without noticing (a busy moment, a blip in the connection): the others see
+  // it leave while it still sees itself. Every few seconds: if the room doesn't have us, say we're here again.
+  const watch = setInterval(() => {
+    try {
+      if (!supabase.realtime.isConnected()) supabase.realtime.connect();
+      else if (ch.state === "joined" && !ch.presenceState()[id]) ch.track(state);
+    } catch {}
+  }, 4000);
   return {
     code,
     peers,
     isHost: () => { const p = peers(); return p.length ? p[0].id === id : true; },
     update: (patch) => { state = { ...state, ...patch }; return ch.track(state); },
     send: (event, payload) => ch.send({ type: "broadcast", event, payload: { ...payload, from: id } }),
-    leave: () => supabase.removeChannel(ch),
+    leave: () => { clearInterval(watch); return supabase.removeChannel(ch); },
   };
 }
 
