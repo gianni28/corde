@@ -271,12 +271,14 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
   }
 
   /** f: {bpos (beats, continuous), ph, E (song energy), hype, star, dt, now, rim (Color)} */
+  const calmOf = (f, E) => (f.C == null ? 1 - smooth(0.22, 0.5, E) : clamp01(f.C));
   function update(f, cam) {
     layer.matrix.copy(cam.matrixWorld); layer.matrixWorldNeedsUpdate = true;
     const { bpos, ph, E, hype, star, dt, now } = f;
-    const lvl = clamp01(E * (0.62 + 0.38 * hype) + star * 0.25);  // how into it the crowd is
+    const lvl = clamp01(E * (0.62 + 0.38 * hype) + star * 0.25 * (1 - calmOf(f, E)));  // how into it the crowd is
     // a really calm part (energy.js: soft for real, few notes): sway with the lights up; without that measure, quiet = calm
-    const calm = f.C == null ? 1 - smooth(0.22, 0.5, E) : clamp01(f.C * (1 - star));
+    // star power doesn't change what the song is: a calm part stays calm (lighters up, swaying), it only makes a loud one wilder
+    const calm = f.C == null ? 1 - smooth(0.22, 0.5, E) : clamp01(f.C);
     liftFor = Math.max(-1, liftFor - dt);
     if (star > 0.5 && !starWas) waveT = now;
     starWas = star > 0.5;
@@ -286,11 +288,10 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
     const drop = clamp01(1 - (now - dropT) / 2.4); // ~2 s of jumping all together, fading
     // the wave: a front crossing the room left to right in 1.4 s, again every 3.5 s while star power lasts
     const wt = now - waveT, waveOn = star > 0.3 || wt < 1.6, front = waveOn ? ((wt % 3.5) / 1.4) * 1.4 - 0.2 : -9;
-    const passing = waveOn && wt % 3.5 < 1.6; // while it runs the rest wait their turn, so it reads as a wave
     let xMin = Infinity, xMax = -Infinity;
     if (waveOn) for (const p of people) { if (p.x < xMin) xMin = p.x; if (p.x > xMax) xMax = p.x; }
     // how high they jump: higher at the song's peaks and with star power
-    const high = 1 + 0.5 * star + 0.45 * smooth(0.8, 0.95, E) * (1 - calm);
+    const high = 1 + (0.5 * star + 0.45 * smooth(0.8, 0.95, E)) * (1 - calm);
     const lift = smooth(0, 0.6, liftFor), loud = (1 - calm) * (1 - smooth(0.25, 0.6, calm));
     const up = { lighters: Math.max(calm, lift), phones: Math.max(calm, smooth(0.62, 0.8, E) * loud, lift),
       lasers: Math.max(smooth(0.55, 0.75, E) * loud, lift), sparklers: Math.max(smooth(0.72, 0.88, E) * loud, lift) }[lightKind] ?? Math.max(calm, lift);
@@ -309,8 +310,7 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
       // the burst: everyone, together, on the beat
       if (drop > 0) j = Math.max(j, drop * 0.55 * high * Math.sin(Math.PI * frac(ph)));
       const wv = waveOn ? Math.exp(-Math.pow(((p.x - xMin) / Math.max(1e-3, xMax - xMin) - front) / 0.11, 2)) : 0;
-      if (passing) j *= 0.2;
-      if (wv > 0.02) j = Math.max(j, wv * 0.5);
+      if (wv > 0.02) j = Math.max(j, wv * 0.45 * (1 - calm)); // a hop in the loud parts; in a calm one only the arms go up
       p.j += (j - p.j) * Math.min(1, dt * 30);
       const roll = Math.sin((bpos / 4) * Math.PI * 2 + p.sway) * 0.07 * calm + p.lean;
       const bob = (0.04 + 0.08 * into) * beat;
@@ -338,9 +338,8 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
         else { uL = 2.6 * into + 0.12; bL = 0.22; oL = 0.25; uR = 0.2 + 0.5 * into; bR = 1.1 * into; }
         if (into < 1) { uL = 0.12 + (uL - 0.12) * into; uR = 0.12 + (uR - 0.12) * into; }
       } else if (holds && ALWAYS[lightKind]) { uR = 2.3; bR = 0.5; oR = 0.15 + Math.sin(now * 0.9 + p.sway) * 0.25; } // calm: held up, swaying
-      // the wave goes by: both arms straight up (whatever they hold goes up with them)
-      if (passing) { uL = Math.min(uL, 0.5); uR = Math.min(uR, light ? uR : 0.5); bL = Math.max(bL, 0.4); }
-      if (wv > 0.02) { uL += (2.75 - uL) * wv; uR += (2.75 - uR) * wv; bL += (0.1 - bL) * wv; bR += (0.1 - bR) * wv; oL += (0.22 - oL) * wv; oR += (0.22 - oR) * wv; }
+      // the wave goes by: both arms straight up, whatever they hold going up with them (a lighter keeps burning)
+      if (wv > 0.02) { uL += (2.75 - uL) * wv; uR += (2.75 - uR) * wv; bL += (0.1 - bL) * wv; bR += (0.1 - bR) * wv; oL += (0.22 - oL) * wv; if (!light) oR += (0.22 - oR) * wv; }
       if (drop > 0.2 && !light) { uL = Math.max(uL, 2.3 * drop); uR = Math.max(uR, 2.3 * drop); } // and the fists up on the burst
       a.uL += (uL - a.uL) * k; a.uR += (uR - a.uR) * k; a.bL += (bL - a.bL) * k; a.bR += (bR - a.bR) * k; a.oL += (oL - a.oL) * k; a.oR += (oR - a.oR) * k;
       armMatrices(P, -1, a.uL, a.oL, a.bL, parts.upL, parts.foreL, i);
