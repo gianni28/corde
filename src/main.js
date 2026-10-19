@@ -3248,7 +3248,7 @@ async function syncConfig() {
   const song = await findSong(cfg.songId);
   if (!song) return;
   app.loadingRoomSong = cfg.songId;
-  app.room.update({ ready: false, songId: null });
+  // (no "loading" message to the room: a player whose songId isn't the room's is loading, as everyone can see)
   try {
     if (app.loadedSongId !== song.id) {
       const { chart, stems } = await downloadSong(song, (p) => { $("lobbyStatus").textContent = `Descargando canción… ${Math.round(p * 100)}%`; });
@@ -3275,7 +3275,8 @@ function renderLobby() {
     const li = document.createElement("li");
     const ready = cfg && p.ready && p.songId === cfg.songId;
     li.innerHTML = `<span class="n"></span>${i === 0 ? `<span class="tag host">Anfitrión</span>` : ""}<span class="tag">${p.device === "cel" ? "Celular" : "PC"}</span><span class="${ready ? "ok" : "wait"}">${cfg ? (ready ? "listo" : "cargando") : ""}</span>`;
-    li.querySelector(".n").textContent = p.name + (p.id === app.me.id ? " (tú)" : "");
+    li.querySelector(".n").textContent = p.name + (p.id === app.me.id ? " (tú)" : "") + (p.away ? " · reconectando…" : "");
+    li.classList.toggle("away", !!p.away);
     styledName(li.querySelector(".n"), p.name);
     ul.appendChild(li);
   });
