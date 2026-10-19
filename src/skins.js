@@ -538,30 +538,43 @@ function worldTour(g, w, h) {
   sides(g, w, h, 0.6, "0,0,0", 0.08);
 }
 
-// the song of the day's 30-day prize: a starry night sky, a golden sun and a silver crescent moon
-function sunMoon(g, w, h) {
-  const b = g.createLinearGradient(0, 0, w, 0);
-  b.addColorStop(0, "#060a1c"); b.addColorStop(0.5, "#16245a"); b.addColorStop(1, "#060a1c");
-  g.fillStyle = b; g.fillRect(0, 0, w, h);
-  blots(g, w, h, 12, "70,90,200", [0.06, 0.12], [40, 110]);
-  for (let i = 0; i < 500; i++) { const r = rnd(0.4, 1.3); g.fillStyle = `rgba(255,255,240,${rnd(0.25, 0.9)})`; g.beginPath(); g.ellipse(rnd(0, w), rnd(0, h), r, r * TALL, 0, 0, TAU); g.fill(); }
-  const glow = (x, y, r, rgb, a) => { const rg = g.createRadialGradient(x, y, 0, x, y, r); rg.addColorStop(0, `rgba(${rgb},${a})`); rg.addColorStop(1, `rgba(${rgb},0)`); g.save(); g.translate(x, y); g.scale(1, TALL); g.translate(-x, -y); g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2); g.restore(); };
-  // the sun (off the middle string, so the yellow notes keep their contrast): rays, a warm glow, the disc
-  const sx = w * 0.3, sy = h * 0.25;
-  glow(sx, sy, 140, "255,170,40", 0.35);
-  g.save(); g.translate(sx, sy); g.scale(1, TALL); g.globalAlpha = 0.85;
-  for (let k = 0; k < 16; k++) { const a = (k / 16) * TAU; g.strokeStyle = "rgba(255,200,80,.5)"; g.lineWidth = k % 2 ? 3 : 5; g.beginPath(); g.moveTo(Math.cos(a) * 56, Math.sin(a) * 56); g.lineTo(Math.cos(a) * (k % 2 ? 76 : 90), Math.sin(a) * (k % 2 ? 76 : 90)); g.stroke(); }
-  const sd = g.createRadialGradient(-12, -12, 4, 0, 0, 46); sd.addColorStop(0, "#fff4c8"); sd.addColorStop(0.5, "#ffc23a"); sd.addColorStop(1, "#f08a1a");
-  g.fillStyle = sd; g.beginPath(); g.arc(0, 0, 44, 0, TAU); g.fill(); g.restore();
-  // the moon: a crescent cut on its own little canvas (cutting it on the neck would cut the sky too), a cold glow
-  const mx = w * 0.7, my = h * 0.75;
-  glow(mx, my, 110, "160,190,255", 0.3);
-  const mc = document.createElement("canvas"); mc.width = mc.height = 100;
-  const m = mc.getContext("2d");
-  m.fillStyle = "#eef2fa"; m.beginPath(); m.arc(50, 50, 44, 0, TAU); m.fill();
-  m.globalCompositeOperation = "destination-out"; m.beginPath(); m.arc(70, 38, 40, 0, TAU); m.fill();
-  g.drawImage(mc, mx - 50, my - 50 * TALL, 100, 100 * TALL);
-  sides(g, w, h, 0.6, "0,0,0", 0.08);
+// the song of the day's 30-day prize: black leather, barbed wire down both sides, a skull
+function skullNeck(g, w, h) {
+  g.fillStyle = "#0c0a0a"; g.fillRect(0, 0, w, h);
+  grain(g, w, h, 220, ["40,34,32", "0,0,0"], [0.1, 0.3], [0.5, 2], 3); // the leather's grain
+  blots(g, w, h, 30, "60,50,48", [0.05, 0.12], [10, 40]);
+  sides(g, w, h, 0.7, "0,0,0", 0.08);
+  // barbed wire: two twisted strands and a barb every so often
+  for (const x0 of [26, w - 26]) {
+    for (const ph of [0, Math.PI]) {
+      g.strokeStyle = "#5a5a62"; g.lineWidth = 3.2; g.beginPath();
+      for (let y = 0; y <= h; y += 4) g.lineTo(x0 + Math.sin((y / h) * TAU * 16 + ph) * 5, y);
+      g.stroke();
+      g.strokeStyle = "rgba(220,220,230,.55)"; g.lineWidth = 1; g.stroke();
+    }
+    for (let y = 16; y < h; y += 64) {
+      g.strokeStyle = "#7a7a84"; g.lineWidth = 2.4; g.beginPath();
+      g.moveTo(x0 - 11, y - 9); g.lineTo(x0 + 11, y + 9); g.moveTo(x0 + 11, y - 9); g.lineTo(x0 - 11, y + 9); g.stroke();
+    }
+  }
+  // the skull (crossed bones behind it), bone white and worn
+  const skull = (cx, cy, s) => {
+    g.save(); g.translate(cx, cy); g.scale(s, s * TALL);
+    g.lineCap = "round";
+    for (const d of [-1, 1]) { // the bones
+      g.strokeStyle = "#cfc8b8"; g.lineWidth = 12; g.beginPath(); g.moveTo(-58 * d, -44); g.lineTo(58 * d, 50); g.stroke();
+      g.fillStyle = "#cfc8b8"; for (const [x, y] of [[-58 * d, -44], [58 * d, 50]]) { g.beginPath(); g.arc(x - 6, y, 9, 0, TAU); g.arc(x + 6, y, 9, 0, TAU); g.fill(); }
+    }
+    const bone = g.createRadialGradient(-12, -20, 6, 0, -6, 60); bone.addColorStop(0, "#f4efe2"); bone.addColorStop(1, "#b8b09c");
+    g.fillStyle = bone;
+    g.beginPath(); g.arc(0, -12, 40, Math.PI * 0.92, Math.PI * 0.08); g.lineTo(26, 22); g.lineTo(22, 38); g.lineTo(-22, 38); g.lineTo(-26, 22); g.closePath(); g.fill();
+    g.fillStyle = "#0c0a0a";
+    for (const d of [-1, 1]) { g.beginPath(); g.ellipse(16 * d, -10, 12, 14, d * 0.25, 0, TAU); g.fill(); } // the eyes
+    g.beginPath(); g.moveTo(0, 6); g.lineTo(-6, 18); g.lineTo(6, 18); g.closePath(); g.fill();                 // the nose
+    g.strokeStyle = "#0c0a0a"; g.lineWidth = 2.4; for (let x = -15; x <= 15; x += 7.5) { g.beginPath(); g.moveTo(x, 26); g.lineTo(x, 38); g.stroke(); } // the teeth
+    g.restore();
+  };
+  g.globalAlpha = 0.8; skull(w / 2, h * 0.3, 1.05); skull(w / 2, h * 0.8, 0.7); g.globalAlpha = 1;
 }
 
 // draw: the canvas; emissive: how much the neck lights itself (light woods less, so the notes keep their contrast);
@@ -584,7 +597,7 @@ export const NECKS = {
   calcomanias: { draw: stickers, emissive: 0.3, rough: 0.6 },
   laser: { draw: lasers, emissive: 0.6, rough: 0.4 },
   mundial: { draw: worldTour, emissive: 0.55, rough: 0.35 },
-  "sol-luna": { draw: sunMoon, emissive: 0.5, rough: 0.4 },
+  calavera: { draw: skullNeck, emissive: 0.35, rough: 0.7 },
 };
 
 /* ================= note gems ================= */
@@ -660,6 +673,7 @@ export const FLAMES = {
   perfecto: { tint: 0xffe6a6, k: 2.2 },
   aurora: { tint: 0x3dffc8, k: 2.1 },
   fogata: { tint: 0xff4214, k: 1.5 },
+  brasas: { tint: 0xb3120a, k: 1.35 },
   supernova: { tint: 0xc77dff, k: 2.6 },
 };
 
@@ -690,12 +704,11 @@ export const STARS = {
   arcoiris: { hue: 0xff40c0, rainbow: true, css: "#ff5cd6" },
   atardecer: { hue: 0xff7a12, css: "#ff9a3a" },
   cian: { hue: 0x00ffd5, css: "#3dffe0" },
-  sol: { hue: 0xfff04a, css: "#fff04a" },
   blanca: { hue: 0xfff4e8, css: "#fff4e8" },
 };
 
 /* ================= the crowd's lights ================= */
-export const CROWDS = { encendedores: "lighters", celulares: "phones", rojo: "red", barras: "sticks", bengalas: "sparklers", luciernagas: "fireflies" };
+export const CROWDS = { encendedores: "lighters", celulares: "phones", rojo: "red", barras: "sticks", bengalas: "sparklers", estrobos: "strobe" };
 
 const SLOTS = { neck: NECKS, gems: GEMS, flames: FLAMES, strings: STRINGS, star: STARS, crowd: CROWDS };
 /** The ids to show for an equipped set: anything missing or unknown is that slot's default. */

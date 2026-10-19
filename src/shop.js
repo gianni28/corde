@@ -52,8 +52,8 @@ export const ITEMS = [
   { slot: "neck", id: "leyenda", name: "Leyenda", price: 0, req: "leyenda", desc: "Negro con filigrana de oro. Solo para quien terminó la gira.",
     sw: "radial-gradient(circle at 50% 50%, #f5c518 0 3px, transparent 3.5px 8px, #c99a1a 8px 9.5px, transparent 10px), repeating-linear-gradient(45deg, rgba(245,197,24,.16) 0 1px, transparent 1px 9px), repeating-linear-gradient(-45deg, rgba(245,197,24,.16) 0 1px, transparent 1px 9px), #0b0906" },
   // the song of the day's streak prizes (main.js STREAK_PRIZES)
-  { slot: "neck", id: "sol-luna", name: "Sol y luna", price: 0, req: "dia-30", streak: 30, desc: "El sol y la luna sobre un cielo de noche estrellada. Premio por tocar la canción del día 30 días seguidos.",
-    sw: "radial-gradient(circle at 30% 30%, #fff2a0 0 8px, #ffb020 11px, transparent 13px), radial-gradient(circle at 72% 68%, #e8eef8 0 8px, transparent 9px), radial-gradient(circle at 76% 64%, #0c1430 0 7px, transparent 8px), radial-gradient(circle, #fff 0 1px, transparent 1.5px) 0 0 / 17px 13px, linear-gradient(135deg, #2a3a7a, #0a0e24)" },
+  { slot: "neck", id: "calavera", name: "Calavera", price: 0, req: "dia-30", streak: 30, desc: "Cuero negro, alambre de púas y una calavera. Premio por tocar la canción del día 30 días seguidos.",
+    sw: "radial-gradient(ellipse 15% 22% at 50% 42%, #e8e2d4 60%, transparent 63%), radial-gradient(ellipse 9% 9% at 50% 66%, #e8e2d4 60%, transparent 64%), radial-gradient(circle at 44% 42%, #000 0 3px, transparent 4px), radial-gradient(circle at 56% 42%, #000 0 3px, transparent 4px), repeating-linear-gradient(90deg, #8a8a90 0 2px, transparent 2px 9px) 0 0 / 100% 3px no-repeat, repeating-linear-gradient(90deg, #8a8a90 0 2px, transparent 2px 9px) 0 100% / 100% 3px no-repeat, linear-gradient(90deg, #0a0909, #1c1a1a 50%, #0a0909)" },
   // the tour's prizes (tour.js TOUR_PRIZES): one style per difficulty
   { slot: "neck", id: "calcomanias", name: "Calcomanías", price: 0, req: "gira-easy-stadium", tour: "easy", desc: "Madera gastada llena de calcomanías de bandas. Premio de la gira en Fácil: supera El Estadio.",
     sw: "radial-gradient(circle at 22% 30%, #ff4f6a 0 9px, transparent 10px), radial-gradient(circle at 70% 24%, #ffd23a 0 8px, transparent 9px), radial-gradient(circle at 48% 70%, #3fa8ff 0 9px, transparent 10px), radial-gradient(circle at 84% 72%, #3fd06a 0 7px, transparent 8px), radial-gradient(circle at 14% 78%, #b46bff 0 7px, transparent 8px), linear-gradient(90deg, #3a2412, #6a4424 50%, #3a2412)" },
@@ -86,6 +86,7 @@ export const ITEMS = [
   { slot: "flames", id: "arcoiris", name: "Arcoíris", price: 1000, cols: ["#ff3a3a", "#3aff6a", "#3a8aff"], rainbow: true },
   { slot: "flames", id: "aurora", name: "Aurora", price: 0, lvl: 15, cols: ["#3dffc8", "#b0fff0", "#2ad0ff"], glow: "#3dffc8", desc: "Fuego verde agua, como una aurora boreal. Premio del nivel 15." },
   { slot: "flames", id: "perfecto", name: "Perfeccionista", price: 0, req: "sin-fallar", cols: ["#fff6d8", "#ffffff", "#ffe08a"], glow: "#f5c518", desc: "Fuego blanco y dorado. Premio por terminar una canción sin fallar." },
+  { slot: "flames", id: "brasas", name: "Brasas", price: 0, req: "dia-3", streak: 3, cols: ["#c4161c", "#ff4a1a", "#6a0808"], desc: "Fuego rojo oscuro, como brasas al rojo vivo. Premio por tocar la canción del día 3 días seguidos." },
   { slot: "flames", id: "fogata", name: "Fogata", price: 0, req: "gira-easy-bar", tour: "easy", cols: ["#ff5a1a", "#ff8a2a", "#c41c0c"], desc: "Fuego rojo de fogata de barrio. Premio de la gira en Fácil: supera el Bar La Cueva." },
   { slot: "flames", id: "supernova", name: "Supernova", price: 0, req: "gira-expert-bar", tour: "expert", cols: ["#e2c2ff", "#ffffff", "#a45bff"], glow: "#c77dff", desc: "Estallidos violeta y blanco, como una estrella que explota. Premio de la gira en Experto: supera el Bar La Cueva." },
   // cuerdas y bordes
@@ -107,7 +108,6 @@ export const ITEMS = [
   { slot: "star", id: "verde", name: "Verde", price: 300, cols: ["#3aff7a"] },
   { slot: "star", id: "morado", name: "Morado", price: 300, cols: ["#b06bff"] },
   { slot: "star", id: "atardecer", name: "Atardecer", price: 0, lvl: 30, cols: ["#ff9a3a"], desc: "El poder estrella se vuelve naranja atardecer. Premio del nivel 30." },
-  { slot: "star", id: "sol", name: "Sol de mediodía", price: 0, req: "dia-3", streak: 3, cols: ["#fff04a"], desc: "El poder estrella amarillo como el sol. Premio por tocar la canción del día 3 días seguidos." },
   { slot: "star", id: "cian", name: "Neón cian", price: 0, req: "gira-medium-theater", tour: "medium", cols: ["#3dffe0"], desc: "El poder estrella en cian, como un letrero de neón. Premio de la gira en Media: supera El Gran Teatro." },
   { slot: "star", id: "blanca", name: "Estrella blanca", price: 0, req: "gira-expert-theater", tour: "expert", cols: ["#fff4e8"], desc: "El poder estrella al rojo blanco. Premio de la gira en Experto: supera El Gran Teatro." },
   { slot: "star", id: "arcoiris", name: "Arcoíris", price: 1200, cols: ["#ff3a3a", "#ffd23a", "#3aff6a", "#3a8aff", "#c43aff"], rainbow: true },
@@ -123,7 +123,7 @@ export const ITEMS = [
   { slot: "name", id: "plata", name: "Plata", price: 0, lvl: 5, desc: "Tu nombre en plata brillante. Premio del nivel 5." },
   { slot: "name", id: "electrico", name: "Eléctrico", price: 0, lvl: 10, desc: "Tu nombre echando chispas. Premio del nivel 10." },
   { slot: "name", id: "estrella", name: "Estrella", price: 0, lvl: 20, desc: "Tu nombre con una estrella que brilla. Premio del nivel 20." },
-  { slot: "name", id: "racha", name: "En racha", price: 0, req: "dia-14", streak: 14, desc: "Tu nombre con una llama, en todas las clasificaciones. Premio por tocar la canción del día 14 días seguidos." },
+  { slot: "name", id: "heavy", name: "Heavy Metal", price: 0, req: "dia-14", streak: 14, desc: "Tu nombre en metal cromado con los cuernos arriba, en todas las clasificaciones. Premio por tocar la canción del día 14 días seguidos." },
   { slot: "name", id: "festival", name: "Festival", price: 0, req: "gira-hard-bar", tour: "hard", desc: "Tu nombre en los colores de un festival, con su pulsera. Premio de la gira en Difícil: supera el Bar La Cueva." },
   // rachas (the "¡Racha de 50!" pop-up)
   { slot: "streak", id: "clasica", name: "Clásica", price: 0 },
@@ -138,7 +138,7 @@ export const ITEMS = [
   { slot: "crowd", id: "celulares", name: "Celulares", price: 150, sw: crowd("#e8f4ff", "#9fd0ff") },
   { slot: "crowd", id: "rojo", name: "Luces rojas", price: 200, sw: crowd("#ff3a2a", "#ff7a6a") },
   { slot: "crowd", id: "barras", name: "Barras de neón", price: 300, sw: crowd("#3aff7a", "#ff4fd8").replace("#120c14", "#0e0a1a") },
-  { slot: "crowd", id: "luciernagas", name: "Luciérnagas", price: 0, req: "dia-7", streak: 7, sw: crowd("#e4ff6a", "#a8ff3a"), desc: "El público se llena de luciérnagas que titilan. Premio por tocar la canción del día 7 días seguidos." },
+  { slot: "crowd", id: "estrobos", name: "Estroboscopios", price: 0, req: "dia-7", streak: 7, sw: crowd("#ffffff", "#e8f0ff").replace("#120c14", "#050508"), desc: "Luces estroboscópicas que destellan sobre el público, como en un concierto de verdad. Premio por tocar la canción del día 7 días seguidos." },
   { slot: "crowd", id: "bengalas", name: "Bengalas", price: 0, req: "gira-easy-theater", tour: "easy", sw: crowd("#fff6d0", "#ffd27a"), desc: "El público prende bengalas que chisporrotean. Premio de la gira en Fácil: supera El Gran Teatro." },
 ];
 for (const it of ITEMS) if (it.slot === "star") it.sw = it.rainbow ? `radial-gradient(circle at 50% 50%, #fff 0 7%, transparent 40%), conic-gradient(from 0deg, ${it.cols.join(", ")}, ${it.cols[0]})` : glow(it.cols[0]);

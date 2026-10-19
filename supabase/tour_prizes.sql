@@ -7,7 +7,9 @@ insert into public.shop_items (slot, id, price, req, sort) values
   ('flames', 'supernova', 0, 'gira-expert-bar', 31), ('star', 'blanca', 0, 'gira-expert-theater', 31), ('neck', 'mundial', 0, 'gira-expert-stadium', 32)
 on conflict (slot, id) do update set price = 0, req = excluded.req, sort = excluded.sort, lvl = null;
 
--- the song of the day's streak prizes (logros dia-3, dia-7, dia-14, dia-30: days in a row, counted in the game)
+-- the song of the day's streak prizes (logros dia-3, dia-7, dia-14, dia-30: days in a row, counted in the game).
+-- (A first set — sol, luciernagas, racha, sol-luna — was retired the day after for these, more rock ones.)
+update public.shop_items set active = false where (slot, id) in (('star', 'sol'), ('crowd', 'luciernagas'), ('name', 'racha'), ('neck', 'sol-luna'));
 insert into public.shop_items (slot, id, price, req, sort) values
-  ('star', 'sol', 0, 'dia-3', 20), ('crowd', 'luciernagas', 0, 'dia-7', 20), ('name', 'racha', 0, 'dia-14', 20), ('neck', 'sol-luna', 0, 'dia-30', 20)
-on conflict (slot, id) do update set price = 0, req = excluded.req, sort = excluded.sort, lvl = null;
+  ('flames', 'brasas', 0, 'dia-3', 20), ('crowd', 'estrobos', 0, 'dia-7', 20), ('name', 'heavy', 0, 'dia-14', 20), ('neck', 'calavera', 0, 'dia-30', 20)
+on conflict (slot, id) do update set price = 0, req = excluded.req, sort = excluded.sort, lvl = null, active = true;

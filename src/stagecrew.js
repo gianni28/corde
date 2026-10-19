@@ -213,7 +213,7 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
         v.set(0, -0.74, 0).applyMatrix4(M.multiplyMatrices(P, fr));
         lightPos[li * 3] = v.x; lightPos[li * 3 + 1] = v.y; lightPos[li * 3 + 2] = v.z;
         if (lightKind === "phones") { const fl = 0.9 + 0.06 * Math.sin(now * 2 + i); lightCol[li * 3] = fl * 0.74; lightCol[li * 3 + 1] = fl * 0.86; lightCol[li * 3 + 2] = fl; }
-        else if (lightKind === "fireflies") { const fl = 0.15 + 0.85 * Math.pow(Math.max(0, Math.sin(now * 1.4 + i * 2.3)), 3); lightCol[li * 3] = fl * 0.85; lightCol[li * 3 + 1] = fl; lightCol[li * 3 + 2] = fl * 0.25; } // soft yellow-green, blinking slowly
+        else if (lightKind === "strobe") { const fl = Math.sin(now * 19 + i * 0.37) > 0.55 ? 1.25 : 0.06; lightCol[li * 3] = fl; lightCol[li * 3 + 1] = fl; lightCol[li * 3 + 2] = fl * 1.05; } // white strobes, flashing in waves
         else if (lightKind === "sparklers") { const fl = 0.6 + 0.4 * Math.abs(Math.sin(now * 31 + i * 5.3)) * (0.7 + 0.3 * Math.sin(now * 7 + i)); lightCol[li * 3] = fl; lightCol[li * 3 + 1] = fl * 0.95; lightCol[li * 3 + 2] = fl * 0.8; } // crackling white-gold
         else if (lightKind === "sticks") { const c = STICKS[(i * 7 + 3) % STICKS.length], fl = 0.85 + 0.15 * Math.sin(now * 3 + i * 1.7); lightCol[li * 3] = c[0] * fl; lightCol[li * 3 + 1] = c[1] * fl; lightCol[li * 3 + 2] = c[2] * fl; }
         else {
@@ -232,7 +232,7 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
 
   return {
     layout, update, setVisible(on) { layer.visible = on; }, get count() { return people.length; },
-    /** What the crowd holds up: "lighters" | "phones" | "red" | "sticks" | "sparklers" | "fireflies". */
+    /** What the crowd holds up: "lighters" | "phones" | "red" | "sticks" | "sparklers" | "strobe". */
     setLights(kind) { lightKind = kind || "lighters"; },
     /** Lights up for the next `s` seconds whatever the song does (Infinity: until called with 0). */
     showLights(s) { liftFor = s; },
