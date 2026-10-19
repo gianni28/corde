@@ -12,7 +12,7 @@ import { motionAvailable, motionNeedsPermission, motionReady, requestMotion, onL
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
 import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, nameStyles, songRequest, myNotices, noticeSeen, noticeReply, myFulfilled, fulfilledSeen } from "./net.js";
 import { shareCard, retoUrl, readReto } from "./share.js";
-import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau } from "./achievements.js";
+import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau, forBananas, BANANA_GIFTS, BANANA_LOGROS } from "./achievements.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretOpen, secretBoard, songById, fetchMiauProgress, roomDirectory, commentPost, commentsWall, myCommentReplies, commentReplySeen } from "./net.js";
 import { VENUES, TO_ENCORE, TOUR_PRIZES, TOUR_THEMES, prizesWon, savedTourDiffs, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song, separateExisting } from "./admin.js";
@@ -176,6 +176,10 @@ const notices = { queue: [], current: null, asked: false }; // the admin's messa
 let previewing = null, previewLoading = null; // the song list's ▶ (see previewSong): up here, the menu music asks from the start
 const mp = { fx: { terremoto: 0, niebla: 0, apagon: 0, turbo: 0 }, on: "", lastPos: 0, posAt: 0, bannerT: 0 }; // multiplayer battle (see launchAttack)
 const PUBLIC_MAX = 4, dir = { ch: null, list: [], last: "" }; // the open rooms (see syncDir): up here, show() keeps it in step
+// the Otaku event's golden bananas picked up so far (see markBananas): up here, the account's sync reads them early
+const BANANA_KEY = "corde.bananas.v1", OTAKU_INTRO_KEY = "corde.otaku.intro.v1";
+let bananas = (() => { try { return Math.max(0, Math.floor(+localStorage.getItem(BANANA_KEY) || 0)); } catch { return 0; } })();
+function saveBananas() { try { localStorage.setItem(BANANA_KEY, String(bananas)); } catch {} }
 // while the admin uploads or separates songs, the stage and the menu music rest (they'd take the processor from it)
 function adminWorking() { return adm.busy || split.on; }
 function adminWorkChanged() { syncMenuMusic(); }
@@ -353,7 +357,7 @@ renderHomeBoard();
 Promise.resolve().then(() => {
   if (!online) return;
   loadLibrary()
-    .then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); backfillAchievements(); queueMiauIntro(); refreshMiau(); })
+    .then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); backfillAchievements(); queueMiauIntro(); queueOtakuIntro(); refreshMiau(); })
     .catch((e) => console.warn("library:", e.message))
     .finally(() => loadDaily());
 });
@@ -489,6 +493,7 @@ $("secretForm").onsubmit = async (e) => {
     sfx.unlock();
     const n = g.songs.length;
     if (g.songs.some((x) => x.miau)) { queueMiauIntro(3200); refreshMiau(); } // after the celebration
+    if (nameKey(g.name) === "otaku") queueOtakuIntro(3200);
     celebrate({ kicker: "Código correcto", title: g.name, kind: "secret", ms: 2800,
       sub: n ? `${n} ${n === 1 ? "canción desbloqueada" : "canciones desbloqueadas"}. Las encuentras en «${g.name}».` : "Ya quedaron desbloqueadas, aunque todavía no hay ninguna." });
   } catch (err) {
@@ -557,7 +562,8 @@ function renderSongs() {
   const catGroup = (id) => app.songs.some((s) => s.secret === id && s.miau);
   const tabs = $("libTabs");
   tabs.hidden = !groups.length;
-  tabs.innerHTML = `<button data-t="all">Biblioteca</button>` + groups.map((g) => `<button data-t="${g.id}"${catGroup(g.id) ? ` class="cat"` : ""}><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#${catGroup(g.id) ? "catface" : "pick"}"/></svg><span></span></button>`).join("");
+  const otaku = otakuGroup();
+  tabs.innerHTML = `<button data-t="all">Biblioteca</button>` + groups.map((g) => `<button data-t="${g.id}"${catGroup(g.id) ? ` class="cat"` : g.id === otaku ? ` class="otaku"` : ""}><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#${catGroup(g.id) ? "catface" : g.id === otaku ? "banana" : "pick"}"/></svg><span></span></button>`).join("");
   groups.forEach((g, i) => (tabs.querySelectorAll("span")[i].textContent = g.name));
   tabs.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.t === String(app.libTab))));
   $("secretLock").hidden = !secretTab;
@@ -571,6 +577,8 @@ function renderSongs() {
     return;
   }
   box.innerHTML = "";
+  // the Otaku event's bar, on top of its tab
+  if (secretTab && app.libTab === otakuGroup()) box.appendChild(otakuCard());
   // the kittens' challenge, on top of the tab that has the miau songs
   if (secretTab && tab.some((s) => s.miau)) {
     const p = miauProgress(), card = document.createElement("div");
@@ -1400,7 +1408,7 @@ function finishCtx(sum) {
   if (!main && !prizes.length) return null;
   return () => (main ? main(prizes.length ? () => prizeCel() : null) : prizeCel());
 }
-const SLOT_ONE = { neck: "Mástil", gems: "Notas", flames: "Llamas", strings: "Cuerdas y bordes", star: "Poder estrella", name: "Estilo de nombre", streak: "Estilo de rachas", crowd: "Público" };
+const SLOT_ONE = { neck: "Mástil", gems: "Notas", flames: "Llamas", strings: "Cuerdas y bordes", star: "Poder estrella", name: "Estilo de nombre", streak: "Estilo de rachas", crowd: "Público", pet: "Mascota" };
 // Full-screen moment: a new venue, an encore, a streak. Tap to skip.
 let celT = 0, celThen = null;
 function celebrate({ kicker = "", title, sub = "", ms = 3000, kind = "", then = null }) {
@@ -1434,11 +1442,14 @@ function celebrateAchievements(list) {
   if (!list.length) return;
   const [a, ...rest] = list;
   sfx.unlock();
-  celebrate({ kicker: "Logro desbloqueado", title: a.name, sub: a.desc, ms: 2600, kind: "ach", then: rest.length ? () => celebrateAchievements(rest) : null });
+  const then = rest.length ? () => celebrateAchievements(rest) : null;
+  const gift = a.surprise && giftOf(a.id);
+  if (gift) { R.pyro(); celebrate({ kicker: "¡Regalo sorpresa!", title: gift.name, sub: `Ya es tuyo: está en la Tienda, en ${SLOTS.find((x) => x.id === gift.slot)?.name || "la Tienda"}.`, ms: 3800, kind: "prize", then }); return; }
+  celebrate({ kicker: "Logro desbloqueado", title: a.name, sub: a.desc, ms: 2600, kind: "ach", then });
 }
 // what your saved bests already prove (players from before the logros existed get theirs without replaying), silently
 function backfillAchievements() {
-  const ids = [...forMiau(miauIds(), bestAcc)], n = songsDone();
+  const ids = [...forMiau(miauIds(), bestAcc), ...forBananas(bananas)], n = songsDone();
   // the tour's prizes for venues already cleared (before there were prizes, or on another device)
   if (publicSongs().length) for (const d of savedTourDiffs()) { const t = tourFor(d, publicSongs()); if (t) ids.push(...prizesWon(tourProgress(t, bestOf))); }
   if (n >= 1) ids.push("primer-acorde");
@@ -1646,6 +1657,9 @@ function startGame({ lanes, diff, practice = null, duo = null, ctx = null }) {
   }
   app.duo = duo;
   app.ctx = ctx;
+  app.bananaRun = !practice && !duo && isOtaku(app.song) ? { got: 0 } : null;
+  if (app.bananaRun) markBananas(app.game.notes, `${app.song.id}:${diff}:${lanes}`);
+  $("bananaHud").hidden = !app.bananaRun; $("bananaHud").querySelector("b").textContent = "0";
   games().forEach((g, k) => {
     g.ui = { p: k, hud: k ? duoHud() : huds[0], starShown: true, starWasReady: false };
     for (const key in g.ui.hud.cache) delete g.ui.hud.cache[key];
@@ -1814,7 +1828,18 @@ function finishGame() {
   if (app.mode === "mp") ids.push("en-banda");
   if (app.retoWon) ids.push("reto-aceptado");
   if (app.song?.miau && !sum.failed) ids.push(...forMiau(miauIds(), (id) => Math.max(bestAcc(id), id === app.song.id ? sum.acc : 0)));
-  const fresh = unlock(ids);
+  // the Otaku event: the bananas picked up, and the gifts they reach
+  const run = app.bananaRun; app.bananaRun = null;
+  $("bananaRes").hidden = !run; $("giftBtn").hidden = true;
+  if (run) { bananas += run.got; saveBananas(); ids.push(...forBananas(bananas)); }
+  const fresh = unlock(ids).sort((a, b) => !!b.surprise - !!a.surprise); // a surprise gift first: it's the big news
+  if (run) {
+    const gifts = fresh.filter((a) => a.surprise).map((a) => giftOf(a.id)).filter(Boolean);
+    const won = achievementsWon(), next = BANANA_GIFTS.find((n, i) => !won[BANANA_LOGROS[i]]);
+    $("bananaMsg").textContent = run.got ? `+${run.got} ${run.got === 1 ? "banana" : "bananas"}` : "Ninguna banana esta vez";
+    $("bananaSub").textContent = `Llevas ${bananas}. ` + (next == null ? "¡Tienes todos los regalos!" : `Faltan ${next - bananas} para el próximo regalo sorpresa.`);
+    if (gifts.length) { $("giftBtn").hidden = false; $("giftBtn").onclick = () => { clearTimeout(app.celTimer); openShopAt(gifts[0].slot, gifts[0].id); }; }
+  }
   const celebration = !fresh.length ? ctxCel
     : !ctxCel ? () => celebrateAchievements(fresh)
     : () => { ctxCel(); const prev = celThen; celThen = () => { prev && prev(); celebrateAchievements(fresh); }; };
@@ -1879,13 +1904,14 @@ function playerSecret() {
 const TOUR_KEY = "corde.tour.v1";
 let account = null; // { name, code, progress }
 const readJson = (k, d) => { try { return JSON.parse(localStorage.getItem(k) || "null") ?? d; } catch { return d; } };
-const localProgress = () => ({ days: [...new Set([...readDailyLog(), ...dailyLog.days])].sort(), bests, tour: readJson(TOUR_KEY, {}), ach: achievementsWon() });
+const localProgress = () => ({ days: [...new Set([...readDailyLog(), ...dailyLog.days])].sort(), bests, tour: readJson(TOUR_KEY, {}), ach: achievementsWon(), bananas });
 function applyProgress(p) {
   if (!p || typeof p !== "object") return;
   if (p.bests && typeof p.bests === "object") { bests = p.bests; try { localStorage.setItem(BEST_KEY, JSON.stringify(bests)); } catch {} }
   if (Array.isArray(p.days)) { dailyLog.days = [...new Set([...p.days, ...dailyLog.days])].sort().slice(-400); try { localStorage.setItem(DAILY_KEY, JSON.stringify({ days: dailyLog.days })); } catch {} }
   if (p.tour && typeof p.tour === "object") { try { localStorage.setItem(TOUR_KEY, JSON.stringify(p.tour)); } catch {} }
   if (p.ach && typeof p.ach === "object") mergeAchievements(p.ach);
+  if (Number.isFinite(p.bananas) && p.bananas > bananas) { bananas = Math.floor(p.bananas); saveBananas(); }
   try { backfillAchievements(); } catch {}
   try { renderDailyCard(); } catch {}
   if (app.screen === "library") try { renderSongs(); } catch {}
@@ -2010,10 +2036,20 @@ function showNextNotice() {
   const n = notices.current = notices.queue.shift();
   if (n.kind === "song") return showSongReady(n);
   if (n.kind === "reto") return showReto();
+  if (n.kind === "otaku") {
+    try { localStorage.setItem(OTAKU_INTRO_KEY, "1"); } catch {}
+    notices.go = () => { app.mode = "solo"; app.libTab = otakuGroup(); openLibrary(); };
+    $("noticeKicker").textContent = "Evento · Otaku";
+    $("noticeBody").textContent = "¡Bienvenida a la Expedición del Emperador!\n\nEn las canciones Otaku, algunas notas traen una banana dorada encima. Tócalas para recogerlas: mientras más juntes, más regalos sorpresa vas abriendo. ¿Qué serán? Solo lo sabrás cuando los ganes.";
+    $("noticeForm").querySelector(".notice-reply").hidden = true; $("noticeGo").hidden = false; $("noticeGo").textContent = "Ir a las canciones Otaku";
+    $("noticeMsg").textContent = ""; $("noticeModal").hidden = false;
+    return;
+  }
   const answer = n.kind === "comment"; // the admin answered one of their comments: the answer, under what they wrote
   $("noticeKicker").textContent = answer ? `${ADMIN_NAME} te respondió` : "Mensaje";
   $("noticeBody").textContent = answer ? `«${n.body}»\n\n${n.reply}` : n.body;
-  $("noticeForm").querySelector(".notice-reply").hidden = answer; $("noticeGo").hidden = !answer;
+  $("noticeForm").querySelector(".notice-reply").hidden = answer; $("noticeGo").hidden = !answer; $("noticeGo").textContent = "Ver comentarios";
+  notices.go = answer ? openComments : null;
   $("noticeReply").value = ""; $("noticeSend").hidden = true; $("noticeMsg").textContent = "";
   $("noticeModal").hidden = false;
   (answer ? commentReplySeen : noticeSeen)(playerSecret(), n.id).catch(() => {}); // shown: it won't come again
@@ -2036,6 +2072,57 @@ function miauProgress() {
   return { need, done: Math.min(need, ids.filter((id) => bestAcc(id) >= 0.8).length), won: !!achievementsWon()["coro-gatitos"] };
 }
 const catsHtml = (p) => Array.from({ length: p.need }, (_, i) => `<i class="${i < p.done || p.won ? "on" : ""}"></i>`).join("");
+/* ================= the Otaku event ================= */
+// The anime songs are a secret group named "Otaku" (its code from the admin panel). Some of their notes carry a golden
+// banana; the bananas picked up fill a bar with three surprise gifts (achievements.js BANANA_GIFTS), which show
+// nowhere, not even in the shop, until they're won.
+const otakuGroup = () => secretList().find((g) => nameKey(g.name) === "otaku")?.id ?? null;
+const isOtaku = (s) => { const g = otakuGroup(); return g != null && !!s && s.secret === g; };
+// about one note in twenty, the same ones each time for a song and difficulty; never a star note nor part of a chord
+function markBananas(notes, seed) {
+  let h = 2166136261;
+  for (const c of seed) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
+  const rnd = () => (h = (Math.imul(h, 1664525) + 1013904223) >>> 0) / 4294967296;
+  let next = 8 + Math.floor(rnd() * 10);
+  notes.forEach((n, i) => {
+    if (n.state === 3 || (n.star != null && n.star >= 0)) return;
+    if (Math.abs((notes[i - 1]?.t ?? -9) - n.t) < 0.01 || Math.abs((notes[i + 1]?.t ?? -9) - n.t) < 0.01) return;
+    if (--next <= 0) { n.banana = true; next = 14 + Math.floor(rnd() * 12); }
+  });
+}
+const giftOf = (logro) => ITEMS.find((it) => it.req === logro);
+// the bar: the bananas so far and the three gifts (a closed box until it's won)
+function otakuCardHtml() {
+  const won = achievementsWon(), max = BANANA_GIFTS[BANANA_GIFTS.length - 1];
+  const next = BANANA_GIFTS.find((n, i) => !won[BANANA_LOGROS[i]] && bananas < n);
+  const marks = BANANA_GIFTS.map((n, i) => {
+    const got = !!won[BANANA_LOGROS[i]], it = giftOf(BANANA_LOGROS[i]);
+    return `<button type="button" class="ok-gift${got ? " won" : ""}" style="left:${(n / max) * 100}%" data-i="${i}" ${got ? "" : "disabled"} aria-label="${got ? it?.name || "Regalo" : "Regalo sorpresa"}">`
+      + (got ? `<span class="sw"></span>` : `<svg aria-hidden="true"><use href="#gift"/></svg><em>?</em>`) + `<small>${n}</small></button>`;
+  }).join("");
+  return `<div class="ok-head"><svg aria-hidden="true"><use href="#banana"/></svg><div><b>Expedición del Emperador</b><small></small></div><span class="ok-count">${bananas}</span></div>`
+    + `<div class="ok-bar"><i style="width:${Math.min(100, (bananas / max) * 100)}%"></i>${marks}</div>`;
+}
+function otakuCard() {
+  const card = document.createElement("div"); card.className = "otaku-card";
+  card.innerHTML = otakuCardHtml();
+  const won = achievementsWon(), next = BANANA_GIFTS.find((n, i) => !won[BANANA_LOGROS[i]]);
+  card.querySelector(".ok-head small").textContent = next == null ? "¡Encontraste todos los regalos! Están en la Tienda."
+    : `Toca las bananas doradas de las canciones Otaku. Faltan ${Math.max(0, next - bananas)} para el próximo regalo sorpresa.`;
+  card.querySelectorAll(".ok-gift.won").forEach((b) => {
+    const it = giftOf(BANANA_LOGROS[+b.dataset.i]); if (!it) return;
+    fillSwatch(b.querySelector(".sw"), it);
+    b.onclick = () => openShopAt(it.slot, it.id);
+  });
+  return card;
+}
+// told once, the first time the Otaku songs show up (after entering the code)
+function queueOtakuIntro(delay = 0) {
+  let seen = false; try { seen = !!localStorage.getItem(OTAKU_INTRO_KEY); } catch {}
+  if (seen || otakuGroup() == null || notices.queue.some((x) => x.kind === "otaku") || notices.current?.kind === "otaku") return;
+  notices.queue.unshift({ kind: "otaku" });
+  setTimeout(showNextNotice, delay);
+}
 function queueMiauIntro(delay = 0) {
   const p = miauProgress();
   let seen = false; try { seen = !!localStorage.getItem(MIAU_KEY); } catch {}
@@ -2086,7 +2173,7 @@ function closeNotice() {
   setTimeout(showNextNotice, 300);
 }
 $("noticeClose").onclick = closeNotice;
-$("noticeGo").onclick = () => { closeNotice(); openComments(); };
+$("noticeGo").onclick = () => { const go = notices.go; notices.go = null; closeNotice(); go && go(); };
 $("noticeModal").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); closeNotice(); } });
 $("noticeReply").addEventListener("input", () => { $("noticeSend").hidden = !$("noticeReply").value.trim(); });
 $("noticeForm").onsubmit = async (e) => {
@@ -2291,6 +2378,9 @@ $("shopStreak").addEventListener("animationend", (e) => {
   shop.streakT = setTimeout(() => { if (app.screen === "tienda" && shop.cat === "streak") streakSample(shop.sel || equipped.streak); }, 600);
 });
 
+// a surprise (the Otaku gifts) shows nowhere until it's won; a secret prize only for whoever can win it (the kittens:
+// the miau songs' players), or has it
+const shopVisible = (it) => it.surprise ? owns(it) || prizeWon(it) : !it.secret || owns(it) || knowsMiau();
 function renderShop() {
   const w = app.wallet;
   renderPicks();
@@ -2301,6 +2391,8 @@ function renderShop() {
     cats.appendChild(b);
   }
   cats.querySelectorAll("button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.c === shop.cat)));
+  // a part with nothing to show but its default (the pets, before the first one is won) has no tab
+  cats.querySelectorAll("button").forEach((b) => { b.hidden = !ITEMS.some((it) => it.slot === b.dataset.c && !isDefault(it) && shopVisible(it)); });
   // without a connection or an account you can look at everything, but not buy
   const off = shopOffline(), noAcc = !off && !account;
   $("shopNote").hidden = !(off || noAcc || !w);
@@ -2310,7 +2402,7 @@ function renderShop() {
   $("shopAccount").hidden = !noAcc;
   const grid = $("shopGrid"); grid.innerHTML = "";
   // a secret prize only for whoever can win it (the kittens: the miau songs' players), or has it
-  for (const it of ITEMS) if (it.slot === shop.cat && (!it.secret || owns(it) || knowsMiau())) grid.appendChild(shopCard(it));
+  for (const it of ITEMS) if (it.slot === shop.cat && shopVisible(it)) grid.appendChild(shopCard(it));
   renderShopDetail();
   revealShopSel();
 }
@@ -2346,6 +2438,13 @@ function shopCard(it) {
   b.onclick = () => selectShopItem(it.id);
   return b;
 }
+// Nero for the shop's card and the Otaku bar (the stage draws him in renderer.js neroTex)
+const NERO_SVG = `<svg class="nero" viewBox="0 0 120 110" aria-hidden="true"><path d="M82 92l30 6-13 4 15 8-34-7z" fill="#1d2342"/>`
+  + `<ellipse cx="60" cy="68" rx="40" ry="40" fill="#1d2342"/><ellipse cx="60" cy="84" rx="29" ry="24" fill="#f1eee6"/>`
+  + `<path d="M62 30c-2-16 14-24 22-15 5 6-4 11-8 6" fill="none" stroke="#1d2342" stroke-width="5" stroke-linecap="round"/>`
+  + `<path d="M28 50q32-10 64 0l-2 16q-30 7-60 0z" fill="#7c2633"/>`
+  + `<path d="M38 57h14M68 57h14" stroke="#140c10" stroke-width="3"/><circle cx="45" cy="61" r="3.4" fill="#140c10"/><circle cx="75" cy="61" r="3.4" fill="#140c10"/>`
+  + `<path d="M53 64h14l-7 13z" fill="#0e0c10"/><ellipse cx="47" cy="108" rx="7" ry="3" fill="#c9a46a"/><ellipse cx="73" cy="108" rx="7" ry="3" fill="#c9a46a"/></svg>`;
 // the card's little picture: the catalog's CSS, plus gems, flames, a name or a streak drawn with elements
 function fillSwatch(el, it) {
   el.className = `sw sw-${it.slot}`;
@@ -2360,9 +2459,13 @@ function fillSwatch(el, it) {
     el.style.setProperty("--c", it.cols[0]); el.style.setProperty("--c2", it.cols[1]);
     // flames that aren't a fire: their own little picture (style.css .fa-*)
     const art = { bubbles: "<i></i>".repeat(7), embers: "<i></i>".repeat(8), nova: "<i></i>", stars: "<i></i>".repeat(5), curtain: "<i></i>".repeat(4),
-      bolt: `<svg viewBox="0 0 40 60" aria-hidden="true"><path d="M24 2 9 33h11l-6 25 19-34H21z"/></svg>` }[it.art];
+      bolt: `<svg viewBox="0 0 40 60" aria-hidden="true"><path d="M24 2 9 33h11l-6 25 19-34H21z"/></svg>`,
+      antimagic: [1, 2, 3].map(() => `<svg aria-hidden="true"><use href="#flame"/></svg>`).join("") }[it.art];
     if (art) { el.classList.add("fa-" + it.art); el.innerHTML = art; }
     else el.innerHTML = it.cols.map((c) => `<svg aria-hidden="true" style="--c:${c}"><use href="#flame"/></svg>`).join("") + (it.art === "campfire" ? "<em></em>".repeat(6) : "");
+  } else if (it.slot === "pet") {
+    el.classList.add("pet-" + it.id);
+    el.innerHTML = it.id === "nero" ? NERO_SVG : `<span class="pet-none" aria-hidden="true"></span>`;
   } else if (it.slot === "crowd") {
     // five people from behind, holding up what this crowd holds up (style.css .cw-*)
     el.classList.add("cw-" + it.id);
@@ -2808,7 +2911,8 @@ function visibleBeats(beats, t, look) {
 }
 // what each neck shows; one player passes it straight, two pass { players: [...] }
 function neckState(g, t, beats, from = g.next) {
-  return { t, look: g.look, notes: g.notes, from, pressed: g.pressed, beats, star: g.starOn, starReady: g.starMeter >= STAR_READY && !g.starOn && g.ui.starShown };
+  return { t, look: g.look, notes: g.notes, from, pressed: g.pressed, beats, star: g.starOn, starReady: g.starMeter >= STAR_READY && !g.starOn && g.ui.starShown,
+    combo: g.combo, missRun: g.ui?.missRun || 0 }; // (the pet reacts to these)
 }
 function renderGames(gs, t, dt, from) {
   const beats = visibleBeats(gs[0].beats, t, gs[0].look);
@@ -2820,11 +2924,18 @@ function onGameEvent(g, ev, now) {
   const p = g.ui.p, h = g.ui.hud;
   if (ev.type === "hit") {
     R.hit(ev.lane, ev.sustain, p);
+    g.ui.missRun = 0;
+    if (ev.banana && app.bananaRun) {
+      const b = $("bananaHud"); app.bananaRun.got++;
+      b.querySelector("b").textContent = app.bananaRun.got;
+      b.classList.remove("pop"); void b.offsetWidth; b.classList.add("pop");
+      R.banana(ev.lane, p); try { sfx.banana(); } catch {}
+    }
     if (Math.abs(ev.err) <= 0.045) judge("Perfecto", "#f5c518", g);
     if (g.combo > 0 && g.combo % 50 === 0) { streak(`¡Racha de ${g.combo}!`, h); if (g.combo % 100 === 0) R.pyro(); }
   }
   else if (ev.type === "hold") R.holdSpark(ev.lane, p);
-  else if (ev.type === "miss" || ev.type === "ghost") judge("Fallo", "#ff2a22", g);
+  else if (ev.type === "miss" || ev.type === "ghost") { judge("Fallo", "#ff2a22", g); g.ui.missRun = (g.ui.missRun || 0) + 1; }
   else if (ev.type === "starPhrase") {
     R.starPhrase(p); sfx.starChime();
     g.ui.starShown = false; starComet(g, ev.lane);

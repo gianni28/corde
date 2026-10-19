@@ -153,7 +153,7 @@ export class Game {
           this.events.push({ type: "starPhrase", ready: this.starMeter >= STAR_READY, lane });
         }
       }
-      this.events.push({ type: "hit", lane, sustain: best.holding, err, star: best.star != null && best.star >= 0 });
+      this.events.push({ type: "hit", lane, sustain: best.holding, err, star: best.star != null && best.star >= 0, banana: !!best.banana });
     } else if (t > -0.5 && t >= this.practiceUntil) {
       // Forgive double taps and presses that are just outside the window of a nearby note in this lane.
       const near = t - this.lastHit[lane] < 0.18 || this.notes.some((n, i) => i >= this.next - 4 && i < this.next + 24 && n.lane === lane && Math.abs(n.t - t) < 0.22);

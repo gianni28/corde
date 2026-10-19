@@ -1448,3 +1448,48 @@ body.fx-quake #stage { animation: quake .11s linear infinite; }
 .cma-row { display: flex; justify-content: flex-end; }
 .notice-body { white-space: pre-wrap; }
 .notice-reply[hidden], #noticeGo[hidden] { display: none !important; }
+
+/* ---------- the Otaku event: golden bananas, the gifts' bar ---------- */
+.banana-hud { display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; font: 700 16px var(--display); color: #ffd23a; text-shadow: 0 0 10px rgba(255,190,40,.5); }
+.banana-hud svg { width: 18px; height: 18px; fill: #ffd23a; }
+.banana-hud.pop { animation: bananaPop .45s ease-out; }
+@keyframes bananaPop { 0% { transform: scale(1); } 35% { transform: scale(1.45); } 100% { transform: scale(1); } }
+.banana-res { --ctx: #ffd23a; }
+.banana-res svg { width: 28px; height: 28px; flex: none; fill: #ffd23a; filter: drop-shadow(0 0 8px rgba(255,200,40,.55)); }
+.banana-res b { font-size: 22px; color: #ffd23a; }
+.banana-res .btn { flex: none; display: inline-flex; align-items: center; gap: 6px; }
+.banana-res .btn svg { width: 18px; height: 18px; fill: currentColor; filter: none; }
+.banana-res .btn[hidden] { display: none; }
+.lib-tabs button.otaku { text-transform: none; letter-spacing: .03em; }
+.lib-tabs button.otaku[aria-pressed="true"] { background: linear-gradient(180deg, #ffd23a, #a8660a); color: #1a1004; text-shadow: none; }
+.lib-tabs button.otaku svg { fill: #ffd23a; }
+.lib-tabs button.otaku[aria-pressed="true"] svg { fill: #1a1004; }
+.otaku-card { margin: 0 0 12px; padding: 12px 14px 30px; border: 1px solid #000; border-radius: 3px;
+  background: radial-gradient(ellipse at 15% 0, rgba(255,200,40,.16), transparent 60%), linear-gradient(180deg, #24201a, #14110d); box-shadow: inset 0 0 0 1px #4a3a18; }
+.ok-head { display: flex; align-items: center; gap: 10px; }
+.ok-head > svg { width: 30px; height: 30px; flex: none; fill: #ffd23a; filter: drop-shadow(0 0 8px rgba(255,200,40,.5)); }
+.ok-head div { flex: 1; min-width: 0; }
+.ok-head b { display: block; font: 700 15px var(--display); letter-spacing: .1em; text-transform: uppercase; color: #ffd23a; }
+.ok-head small { display: block; font: 500 14px/1.3 var(--body); color: var(--muted); }
+.ok-count { font: 700 26px var(--display); color: #ffd23a; }
+.ok-bar { position: relative; height: 10px; margin: 18px 22px 0 6px; border-radius: 5px; background: #0a0806; box-shadow: inset 0 0 0 1px #3a2c12; }
+.ok-bar > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 5px; background: linear-gradient(90deg, #a8660a, #ffd23a); box-shadow: 0 0 10px rgba(255,200,40,.5); }
+.ok-gift { position: absolute; top: 50%; width: 38px; height: 38px; margin: -19px 0 0 -19px; padding: 0; border: 0; border-radius: 6px; display: grid; place-items: center;
+  background: linear-gradient(180deg, #3a2c18, #1a130a); box-shadow: 0 0 0 2px #000, inset 0 0 0 1px #6a5228; }
+.ok-gift svg { width: 24px; height: 24px; fill: #b08a3a; }
+.ok-gift em { position: absolute; font: 700 16px var(--display); font-style: normal; color: #ffd23a; text-shadow: 0 1px 0 #000; }
+.ok-gift small { position: absolute; top: 100%; margin-top: 6px; font: 700 12px var(--display); color: var(--muted); }
+.ok-gift.won { cursor: pointer; box-shadow: 0 0 0 2px #000, 0 0 12px rgba(255,200,40,.6), inset 0 0 0 1px #ffd23a; }
+.ok-gift.won .sw { position: absolute; inset: 2px; height: auto; border-radius: 4px; transform: scale(1); }
+.ok-gift.won .sw > * { transform: scale(.55); }
+.ok-gift.won small { color: #ffd23a; }
+/* the gifts' cards in the shop */
+.sw-gems.g-titi i { aspect-ratio: 1.1; border-radius: 50%; box-shadow: 0 3px 0 #000;
+  background: radial-gradient(circle at 36% 42%, #140c10 0 7%, transparent 8%), radial-gradient(circle at 64% 42%, #140c10 0 7%, transparent 8%),
+    radial-gradient(ellipse 40% 34% at 50% 52%, #f0d8c8 95%, transparent 100%), var(--c); position: relative; overflow: visible; }
+.sw-gems.g-titi i::after { content: ""; position: absolute; left: -22%; right: -22%; top: 58%; height: 45%;
+  border: 3px solid #fff; border-top: 0; border-radius: 0 0 50% 50% / 0 0 100% 100%; clip-path: polygon(0 0, 42% 0, 50% 30%, 58% 0, 100% 0, 100% 100%, 0 100%); }
+.sw-flames.fa-antimagic svg { fill: #120608; filter: drop-shadow(0 0 2px #ff2a3a) drop-shadow(0 0 7px rgba(255,30,50,.7)); }
+.sw-pet { background: radial-gradient(ellipse 70% 60% at 50% 100%, rgba(120,140,220,.12), transparent 70%), linear-gradient(180deg, #16141c, #0c0b10); }
+.sw-pet .nero { height: 88%; filter: drop-shadow(0 3px 0 rgba(0,0,0,.6)); }
+.sw-pet .pet-none { width: 46%; height: 6px; border-radius: 3px; background: #3a3430; box-shadow: 0 0 0 1px #000; }

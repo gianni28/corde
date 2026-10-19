@@ -4,6 +4,12 @@
 
 const KEY = "corde.achievements.v1";
 
+// bananas for each of the Otaku event's gifts (in order: the Tití notes, Nero, the antimagic flames)
+export const BANANA_GIFTS = [30, 90, 180];
+export const BANANA_LOGROS = ["otaku-titi", "otaku-nero", "otaku-antimagia"];
+/** The Otaku gifts these bananas reach. */
+export const forBananas = (n) => BANANA_LOGROS.filter((_, i) => n >= BANANA_GIFTS[i]);
+
 export const ACHIEVEMENTS = [
   { id: "primer-acorde", name: "Primer acorde", desc: "Termina tu primera canción." },
   { id: "repertorio", name: "Repertorio", desc: "Termina 10 canciones distintas." },
@@ -32,6 +38,11 @@ export const ACHIEVEMENTS = [
       ({ id: `gira-${d}-${v}`, name: `Gira ${dn}: ${vn}`, desc: `Supera ${vn} en la gira en ${dn}.`, tour: true }))),
   // secret: only listed for whoever has the songs it asks for (the miau songs, behind a code), or once won
   { id: "coro-gatitos", name: "Coro de gatitos", desc: "Saca 80% o más en 3 canciones miau (o en todas, si hay menos).", secret: true },
+  // the Otaku event (its songs behind a code): golden bananas on some notes fill a bar with three surprise gifts.
+  // surprise: not listed anywhere (nor their prizes in the shop) until won
+  { id: "otaku-titi", name: "Bigotes del Emperador", desc: `Junta ${BANANA_GIFTS[0]} bananas doradas en las canciones Otaku.`, secret: true, surprise: true },
+  { id: "otaku-nero", name: "El anti-pájaro", desc: `Junta ${BANANA_GIFTS[1]} bananas doradas en las canciones Otaku.`, secret: true, surprise: true },
+  { id: "otaku-antimagia", name: "Antimagia", desc: `Junta ${BANANA_GIFTS[2]} bananas doradas en las canciones Otaku.`, secret: true, surprise: true },
 ];
 const BY_ID = Object.fromEntries(ACHIEVEMENTS.map((a) => [a.id, a]));
 
