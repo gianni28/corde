@@ -191,3 +191,5 @@ export const calibCtx = () => sfxCtx();
 /** Multiplayer battle: an attack goes out (rising) / hits you (falling, buzzing). */
 export function launch() { const c = bus(), t = c.currentTime + 0.01; [B3 * 2, E4 * 2, B3 * 4].forEach((f, i) => note(f, t + i * 0.06, { dur: 0.18, gain: 0.26, dist: false })); }
 export function zap() { const c = bus(), t = c.currentTime + 0.01; [B3 * 4, E4 * 2, B3, E3].forEach((f, i) => note(f, t + i * 0.07, { dur: 0.22, gain: 0.32 })); }
+// a golden banana picked up (the Otaku event): a bright two-note chime
+export function banana() { const c = bus(), t = c.currentTime + 0.005; [E4 * 4, B3 * 8].forEach((f, i) => note(f, t + i * 0.05, { dur: 0.14, gain: 0.18, dist: false })); }

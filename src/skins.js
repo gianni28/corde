@@ -3,7 +3,7 @@
 // them into materials (renderer.js setSkin) and the HUD takes its lane and star colours from cssVars().
 
 export const LANE_HEX = [0x1fd14a, 0xe8202c, 0xf5c518, 0x1f6fe0, 0xf57a12]; // green red yellow blue orange
-export const SKIN_DEFAULTS = { neck: "palo-rosa", gems: "clasicas", flames: "fuego", strings: "acero", star: "azul", crowd: "encendedores" };
+export const SKIN_DEFAULTS = { neck: "palo-rosa", gems: "clasicas", flames: "fuego", strings: "acero", star: "azul", crowd: "encendedores", pet: "ninguna" };
 
 const TAU = Math.PI * 2;
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -664,6 +664,12 @@ export const GEMS = {
     ring: { color: 0x9a9aa8, metal: 0.7, rough: 0.12, emissive: 0x30303a, ei: 0.6 }, base: { color: 0x050506, metal: 0.4, rough: 0.15 },
     halo: { size: 1.1, mul: 0.5 },
   },
+  // emperor tamarins: a round head in the lane colour, a pale face, the long white moustache (the "ring", it moves with
+  // the music: renderer.js uWig), dark eyes and nose (in the base's piece)
+  titi: {
+    lanes: LANE_HEX, shape: "titi", body: { metal: 0, rough: 0.65, mix: 0.12, to: 0x303030 }, dome: { metal: 0, rough: 0.5, mix: 0.7, to: 0xf0d8c8 },
+    ring: { color: 0xffffff, metal: 0, rough: 0.4, emissive: 0xffffff, ei: 0.35 }, base: { color: 0x101010, metal: 0.05, rough: 0.5 },
+  },
   // kittens: matte fur in the lane colour, a pale muzzle, a dark face (the "ring")
   gatitos: {
     lanes: LANE_HEX, shape: "cat", body: { metal: 0, rough: 0.6 }, dome: { metal: 0, rough: 0.55, mix: 0.82 },
@@ -691,6 +697,7 @@ export const FLAMES = {
   fogata: { form: "campfire" },
   brasas: { form: "embers" },
   supernova: { tint: 0xc77dff, k: 2.2, form: "nova" },
+  antimagia: { form: "antimagic" }, // black flames with red cracks: drawn in their own colours, not added up as light
 };
 
 /* ================= strings, rails, edges ================= */
@@ -729,7 +736,10 @@ export const CROWDS = {
   encendedores: "lighters", celulares: "phones", rojo: "lasers", barras: "sticks", bengalas: "sparklers", estrobos: "strobe", luciernagas: "fireflies", gatos: "cats",
 };
 
-const SLOTS = { neck: NECKS, gems: GEMS, flames: FLAMES, strings: STRINGS, star: STARS, crowd: CROWDS };
+/* ================= pets: who keeps you company on the neck (renderer.js drawPet) ================= */
+export const PETS = { ninguna: null, nero: "nero" };
+
+const SLOTS = { neck: NECKS, gems: GEMS, flames: FLAMES, strings: STRINGS, star: STARS, crowd: CROWDS, pet: PETS };
 /** The ids to show for an equipped set: anything missing or unknown is that slot's default. */
 export function resolveSkin(eq = {}) {
   const out = {};

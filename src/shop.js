@@ -11,11 +11,12 @@ export const SLOTS = [
   { id: "name", name: "Tu nombre" },
   { id: "streak", name: "Rachas" },
   { id: "crowd", name: "Público" },
+  { id: "pet", name: "Mascotas" },
 ];
 // the parts the 3D stage draws (the rest are page styles: the name on the boards, the streak pop-up)
-export const STAGE_SLOTS = ["neck", "gems", "flames", "strings", "star", "crowd"];
+export const STAGE_SLOTS = ["neck", "gems", "flames", "strings", "star", "crowd", "pet"];
 
-export const DEFAULTS = { neck: "palo-rosa", gems: "clasicas", flames: "fuego", strings: "acero", star: "azul", name: "normal", streak: "clasica", crowd: "encendedores" };
+export const DEFAULTS = { neck: "palo-rosa", gems: "clasicas", flames: "fuego", strings: "acero", star: "azul", name: "normal", streak: "clasica", crowd: "encendedores", pet: "ninguna" };
 
 /* ---------- what each card shows (a small picture made with CSS, so it works without 3D too) ---------- */
 const LANES = ["#1fd14a", "#e8202c", "#f5c518", "#1f6fe0", "#f57a12"];
@@ -68,6 +69,11 @@ export const ITEMS = [
   { slot: "gems", id: "pixel", name: "Píxel", price: 450, cols: ["#2fdc4f", "#f2333c", "#ffd23a", "#3a7bf0", "#ff8c1a"], shape: "pixel" },
   { slot: "gems", id: "cristal", name: "Cristal", price: 600, cols: LANES, shape: "crystal" },
   { slot: "gems", id: "oro", name: "Doradas", price: 1500, cols: LANES, ring: "#f5c518", shape: "gold" },
+  // the Otaku event's surprise gifts (surprise: nowhere in the shop until won; src/achievements.js BANANA_GIFTS)
+  { slot: "gems", id: "titi", name: "Tití emperador", price: 0, req: "otaku-titi", secret: true, surprise: true, cols: LANES, shape: "titi", desc: "Caritas de tití emperador con sus bigotes blancos, que se mueven con la música. Regalo de la expedición Otaku." },
+  { slot: "flames", id: "antimagia", name: "Antimagia", price: 0, req: "otaku-antimagia", secret: true, surprise: true, art: "antimagic", cols: ["#16080a", "#ff2a3a", "#2a0a10"], glow: "#ff2a3a", desc: "Llamas negras de antimagia con grietas rojas, como la espada de Asta. Regalo de la expedición Otaku." },
+  { slot: "pet", id: "ninguna", name: "Sin mascota", price: 0, desc: "Nadie te acompaña en el mástil." },
+  { slot: "pet", id: "nero", name: "Nero", price: 0, req: "otaku-nero", secret: true, surprise: true, desc: "El anti-pájaro: se sienta junto al mástil con cara de aburrido, se duerme si fallas, aletea con tus rachas y vuela con el poder estrella. Regalo de la expedición Otaku." },
   { slot: "gems", id: "gatitos", name: "Gatitos", price: 0, req: "coro-gatitos", secret: true, cols: LANES, shape: "cat", desc: "Las notas se vuelven caritas de gato. Premio del logro «Coro de gatitos»." },
   { slot: "gems", id: "diamante", name: "Diamante", price: 0, req: "virtuoso", cols: LANES, shape: "diamond", desc: "Brillan como diamantes. Premio por sacar 5 estrellas en Experto." },
   { slot: "gems", id: "vinilo", name: "Vinilos", price: 0, req: "gira-medium-stadium", tour: "medium", cols: LANES, shape: "vinyl", desc: "Las notas son discos de vinilo con la etiqueta de su color. Premio de la gira en Media: supera El Estadio." },
