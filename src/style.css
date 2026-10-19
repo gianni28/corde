@@ -1122,8 +1122,9 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .nm-plata { background: linear-gradient(180deg, #ffffff 0%, #c9d3dc 45%, #7d8a96 100%); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 6px rgba(200,220,240,.35)); }
 .nm-electrico { color: #e9fbff; text-shadow: 0 0 4px #3fe8ff, 0 0 12px #3fa8ff, 0 0 22px #8a5bff; animation: nmZap 2.2s steps(1) infinite; }
 @keyframes nmZap { 0%, 100% { opacity: 1; } 92% { opacity: .55; } 95% { opacity: 1; } 97% { opacity: .7; } }
-.nm-racha { color: #ffd9a0; text-shadow: 0 0 8px rgba(255,120,30,.7), 0 0 16px rgba(255,60,20,.4); }
-.nm-racha::before { content: "🔥"; margin-right: .2em; display: inline-block; font-size: .9em; }
+.nm-heavy { background: linear-gradient(180deg, #ffffff 0%, #b8c0ca 40%, #3a3f48 52%, #e4e8ee 72%, #8a929c 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  -webkit-text-stroke: .5px #000; filter: drop-shadow(0 0 5px rgba(255,40,40,.45)); font-style: italic; letter-spacing: .02em; }
+.nm-heavy::before { content: "🤘"; margin-right: .25em; display: inline-block; font-style: normal; -webkit-text-stroke: 0; }
 .nm-festival { background: linear-gradient(90deg, #ff4fd8, #ffb020 50%, #3ff0ff); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 6px rgba(255,79,216,.45)); }
 .nm-festival::before { content: ""; display: inline-block; width: .95em; height: .42em; margin-right: .3em; vertical-align: .14em; border-radius: .2em;
   background: repeating-linear-gradient(90deg, #ff4fd8 0 .18em, #ffd23a .18em .36em, #3ff0ff .36em .54em); box-shadow: 0 0 0 1px rgba(0,0,0,.6); }
@@ -1261,7 +1262,10 @@ body.streak-pirotecnia #hud .streak.show, .streak.st-pirotecnia.show { animation
 /* ---- multiplayer: battle attacks, overtakes, the room's cup ---- */
 body.fx-quake #stage { animation: quake .11s linear infinite; }
 @keyframes quake { 0% { translate: 0 0; rotate: 0deg; } 25% { translate: -7px 4px; rotate: -.7deg; } 50% { translate: 6px -5px; rotate: .6deg; } 75% { translate: -5px -3px; rotate: .35deg; } 100% { translate: 0 0; rotate: 0deg; } }
-body.fx-mirror #stage { transform: scaleX(-1); }
+.blackout-fx { position: fixed; left: 0; right: 0; pointer-events: none; opacity: 0; transition: opacity .25s; z-index: 2;
+  background: linear-gradient(180deg, rgba(4,3,3,0) 0%, rgba(4,3,3,.98) 18%, rgba(4,3,3,.98) 82%, rgba(4,3,3,0) 100%); }
+.blackout-fx.on { opacity: 1; animation: flicker 2.4s steps(1) infinite; }
+@keyframes flicker { 0%, 100% { opacity: 1; } 47% { opacity: .9; } 48% { opacity: 1; } 73% { opacity: .85; } 74% { opacity: 1; } }
 .fog-fx { position: fixed; left: 0; right: 0; top: 0; height: 60%; pointer-events: none; opacity: 0; transition: opacity .7s; z-index: 2;
   background: radial-gradient(ellipse 60% 40% at 30% 40%, rgba(235,235,245,.9), transparent 70%), radial-gradient(ellipse 50% 35% at 75% 55%, rgba(220,220,235,.9), transparent 70%),
     linear-gradient(180deg, rgba(200,200,215,.97) 0%, rgba(190,190,205,.94) 70%, rgba(190,190,205,0) 100%); }

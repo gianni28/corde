@@ -171,7 +171,7 @@ const adm = { songs: [], busy: false, groups: [] };
 const split = { on: false, stop: false, rows: [] }; // the library's songs whose guitar is being separated
 const notices = { queue: [], current: null, asked: false }; // the admin's messages waiting for this player (see checkNotices)
 let previewing = null, previewLoading = null; // the song list's ▶ (see previewSong): up here, the menu music asks from the start
-const mp = { fx: { terremoto: 0, niebla: 0, espejo: 0 }, on: "", lastPos: 0, posAt: 0, bannerT: 0 }; // multiplayer battle (see launchAttack)
+const mp = { fx: { terremoto: 0, niebla: 0, apagon: 0, turbo: 0 }, on: "", lastPos: 0, posAt: 0, bannerT: 0 }; // multiplayer battle (see launchAttack)
 // while the admin uploads or separates songs, the stage and the menu music rest (they'd take the processor from it)
 function adminWorking() { return adm.busy || split.on; }
 function adminWorkChanged() { syncMenuMusic(); }
@@ -2599,8 +2599,7 @@ canvas.addEventListener("touchstart", (e) => {
   if (app.paused || app.failing) return;
   const rect = canvas.getBoundingClientRect(), t0 = evTime(e);
   for (const t of e.changedTouches) {
-    let lane = R.laneFromClientX(t.clientX, rect);
-    if (mirrored()) lane = app.lanes - 1 - lane; // an Espejo attack: the finger goes where the note is seen
+    const lane = R.laneFromClientX(t.clientX, rect);
     touchLane.set(t.identifier, lane);
     app.game.press(lane, t0);
   }
@@ -2616,8 +2615,7 @@ const touchUp = (e) => {
 canvas.addEventListener("pointerdown", (e) => {
   if (e.pointerType === "touch" || !app.game || app.paused || app.failing) return;
   e.preventDefault();
-  let lane = R.laneFromClientX(e.clientX, canvas.getBoundingClientRect());
-  if (mirrored()) lane = app.lanes - 1 - lane;
+  const lane = R.laneFromClientX(e.clientX, canvas.getBoundingClientRect());
   pointerLane.set(e.pointerId, lane);
   app.game.press(lane, evTime(e));
 });
@@ -3200,11 +3198,12 @@ function onRoomEvent(ev, p) {
 }
 
 /* ---------- multiplayer fun: battle mode, overtakes and the room's cup ---------- */
-// Battle mode (the host picks it in the room, on by default): turning on star power launches an attack at whoever
-// leads (or, when that's you, at the one right behind): their screen shakes, fills with fog or turns mirrored
-// for a few seconds. Overtakes are called out as they happen. Each round gives 3/2/1 points to the podium, and the
+// Battle mode (the host picks it in the room, on by default): turning on star power (which still doubles your
+// points) launches an attack at whoever leads (or, when that's you, at the one right behind) for a few seconds.
+// Every attack hurts the same with a finger or a keyboard: the neck shakes (Terremoto), fog hides where the notes
+// come from (Niebla), the stretch just before the buttons goes dark (Apagón) or the notes come twice as fast (Turbo). Overtakes are called out as they happen. Each round gives 3/2/1 points to the podium, and the
 // host keeps the room's cup (in its presence, so everyone sees the same table).
-const ATTACKS = { terremoto: { name: "Terremoto", ms: 5000 }, niebla: { name: "Niebla", ms: 6000 }, espejo: { name: "Espejo", ms: 6000 } };
+const ATTACKS = { terremoto: { name: "Terremoto", ms: 5000 }, niebla: { name: "Niebla", ms: 6000 }, apagon: { name: "Apagón", ms: 6000 }, turbo: { name: "Turbo", ms: 6000 } };
 const battleOn = () => app.mode === "mp" && app.roomConfig?.battle !== false;
 function launchAttack() {
   const others = Object.entries(app.rivals).filter(([id]) => id !== app.me?.id).sort((a, b) => b[1].score - a[1].score);
@@ -3223,14 +3222,21 @@ function takeAttack(kind, from) {
   mpBanner(`¡${from} te lanzó ${a.name.toUpperCase()}!`, "in");
   updateFx(performance.now());
 }
-const mirrored = () => mp.fx.espejo > performance.now();
 function updateFx(now) {
   const on = !app.game ? "" : Object.keys(mp.fx).filter((k) => mp.fx[k] > now).join(" ");
   if (on === mp.on) return;
   mp.on = on;
   document.body.classList.toggle("fx-quake", on.includes("terremoto"));
-  document.body.classList.toggle("fx-mirror", on.includes("espejo"));
   $("fogFx").classList.toggle("on", on.includes("niebla"));
+  // Apagón: the stretch of the neck right before the buttons goes dark (you see the note coming, then guess)
+  const dark = $("blackoutFx");
+  if (on.includes("apagon") && app.game) {
+    const y = R.strikeScreenY(0), H = innerHeight;
+    dark.style.top = `${Math.max(0, y - H * 0.34)}px`; dark.style.height = `${H * 0.29}px`;
+  }
+  dark.classList.toggle("on", on.includes("apagon"));
+  // Turbo: the notes come almost twice as fast
+  if (app.game) app.game.look = on.includes("turbo") ? +settings.speed * 0.55 : +settings.speed;
 }
 function clearFx() { for (const k in mp.fx) mp.fx[k] = 0; updateFx(0); }
 function mpBanner(text, kind) {
@@ -3386,7 +3392,7 @@ function renderLobbyMode(cfg) {
   const host = amHost(), battle = cfg?.battle !== false;
   document.querySelectorAll("#lobbyMode button").forEach((b) => { b.setAttribute("aria-pressed", String((b.dataset.m === "battle") === battle)); b.disabled = !host; });
   $("lobbyModeHint").textContent = battle
-    ? "Al activar tu poder estrella le lanzas un ataque al que va ganando: terremoto, niebla o espejo."
+    ? "Tu poder estrella sigue duplicando tus puntos y además le lanza un ataque al que va ganando: Terremoto, Niebla, Apagón o Turbo."
     : "Sin ataques: gana el que más puntos haga.";
 }
 $("lobbyMode").onclick = (e) => {
