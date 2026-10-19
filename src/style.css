@@ -525,7 +525,18 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .np-eq i:nth-child(2) { animation-duration: .6s; animation-delay: -.2s; } .np-eq i:nth-child(3) { animation-duration: .75s; animation-delay: -.5s; } .np-eq i:nth-child(4) { animation-duration: .55s; animation-delay: -.1s; }
 @keyframes npEq { 0% { height: 20%; } 100% { height: 100%; } }
 .now-playing.muted .np-eq i { animation: none; height: 20%; background: #4a433e; }
-.np-cover { width: 38px; height: 38px; object-fit: cover; flex: none; box-shadow: 0 0 0 1px #000, 0 0 0 2px #3d3733; }
+.np-cov { position: relative; flex: none; display: block; width: 38px; height: 38px; }
+.np-cov.nocov { background: radial-gradient(circle at 50% 35%, #3a3430, #141110); box-shadow: 0 0 0 1px #000, 0 0 0 2px #3d3733; }
+.np-cov.nocov .np-play { right: 7px; bottom: 7px; width: 24px; height: 24px; padding: 5px; }
+.np-cover[hidden] { display: none; }
+.np-cover { width: 38px; height: 38px; object-fit: cover; display: block; box-shadow: 0 0 0 1px #000, 0 0 0 2px #3d3733; }
+.np-play { position: absolute; right: -5px; bottom: -5px; width: 18px; height: 18px; padding: 3px; border-radius: 50%; fill: #1a1210;
+  background: linear-gradient(180deg, var(--gold), var(--fire)); box-shadow: 0 0 0 1px #000, 0 2px 6px rgba(0,0,0,.6); }
+.now-playing:not(.muted):not(.locked) { cursor: pointer; }
+.now-playing:not(.muted):not(.locked):hover { box-shadow: 0 0 0 1px #000, inset 0 0 0 1px var(--gold), 0 10px 26px rgba(0,0,0,.55); }
+.now-playing:not(.muted):not(.locked):hover .np-play { transform: scale(1.15); }
+.now-playing.locked .np-play { display: none; }
+.now-playing.locked .np-cov.nocov { display: none; }
 .np-text { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.15; }
 .np-text b { font: 700 16px var(--display); text-transform: uppercase; letter-spacing: .03em; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .np-text span { font: 500 14px var(--body); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -535,7 +546,7 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 #npMute svg path.on, #npMute svg path.off { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linecap: round; }
 #npMute svg path.off { display: none; }
 .now-playing.muted #npMute svg path.on { display: none; } .now-playing.muted #npMute svg path.off { display: block; stroke: var(--red-hi); }
-.now-playing.muted .np-text, .now-playing.muted #npSkip, .now-playing.muted .np-cover { display: none; }
+.now-playing.muted .np-text, .now-playing.muted #npSkip, .now-playing.muted .np-cov { display: none; }
 .now-playing.muted { padding: 6px; }
 .now-playing.muted.fixed { width: auto; }
 /* on a phone it sits in the home menu, under the buttons */
