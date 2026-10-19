@@ -38,6 +38,9 @@ window.visualViewport?.addEventListener("resize", () => { if (!document.activeEl
 addEventListener("keydown", () => { if (touch && !isTouchDevice()) { touch = false; document.documentElement.classList.remove("touch"); } }, { capture: true, passive: true });
 
 // iPhone: every tap/keypress re-asserts "music playback" so the silent switch doesn't mute the game.
+// before the sound unlocks below: was the menu song already sounding (renderNowPlaying)?
+let npArmed = false;
+addEventListener("pointerdown", (e) => { const el = document.getElementById("nowPlaying"); npArmed = !!el?.contains(e.target) && !el.matches(".locked, .muted"); }, { capture: true, passive: true });
 ["pointerdown", "pointerup", "touchend", "keydown", "click"].forEach((t) => addEventListener(t, unlockAudio, { capture: true, passive: true }));
 
 /* ================= renderer + attract mode ================= */
@@ -201,7 +204,7 @@ function renderNowPlaying() {
     npSong = info.song;
     $("npTitle").textContent = info.song.name;
     const cov = coverOf(info.song);
-    $("npCover").hidden = !cov; if (cov) $("npCover").src = cov;
+    $("npCov").classList.toggle("nocov", !cov); $("npCover").hidden = !cov; if (cov) $("npCover").src = cov;
   }
   const sub = blocked ? (touch ? "Toca la pantalla para escucharla" : "Haz clic o presiona una tecla para escucharla") : info.song?.artist || "";
   if ($("npArtist").textContent !== sub) $("npArtist").textContent = sub;
@@ -209,6 +212,17 @@ function renderNowPlaying() {
 }
 $("npMute").onclick = () => { if (music.info().blocked) return; settings.menuMusic = music.muted; save(); music.setMuted(!music.muted); syncMenuMusic(); };
 $("npSkip").onclick = () => { if (!music.info().blocked) music.skip(); };
+// the song playing is one touch from playing it: the setup screen, as if picked in the library
+// (the touch that lets the browser play sound only does that: it'd be a surprise to leave the menu with it. The sound
+// starts with that touch, so whether it was already on is read as the finger goes down, before anything else: npArmed)
+$("nowPlaying").addEventListener("click", (e) => {
+  const info = music.info(), armed = npArmed;
+  npArmed = false;
+  if (e.target.closest(".np-btn") || !armed || !info.song || info.muted) return;
+  const s = app.songs.find((x) => x.id === info.song.id) || info.song;
+  app.mode = "solo"; try { sfx.click(); } catch {}
+  pickLibrarySong(s);
+});
 wideMQ.addEventListener?.("change", renderNowPlaying);
 addEventListener("resize", () => renderNowPlaying());
 document.addEventListener("visibilitychange", () => syncMenuMusic());
