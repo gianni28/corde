@@ -248,6 +248,7 @@ function show(name, push = true) {
   $("hud").hidden = !(app.game && ["play", "pause", "settings"].includes(name));
   if (name === "play") $("hud").hidden = false;
   if (name === "home") { renderHomeBoard(); renderDailyCard(); if (online && !daily.day) loadDaily(); }
+  if (name === "library") renderSongs(); // back from a song: its stars, the bananas and the events' cards up to date
   if (name !== "settings") stopMotionTest();
   if (notices.queue.length && !notices.current) setTimeout(showNextNotice, 400);
   if (name !== "tienda") endShopPreview(); // leaving the shop any way at all puts back what you have on
@@ -1727,6 +1728,11 @@ function keepLearnedSync(g) {
 // with two players, the one who played the most notes teaches the sync
 const syncTeacher = () => games().reduce((a, b) => (b.hits > a.hits ? b : a), app.game);
 function stopGame() {
+  // left mid-song: the bananas picked up are kept all the same (a finished song counts them in finishGame)
+  if (app.bananaRun) {
+    const got = app.bananaRun.got; app.bananaRun = null;
+    if (got) { bananas += got; saveBananas(); const fresh = unlock(forBananas(bananas)); syncSoon(); if (fresh.length) setTimeout(() => celebrateAchievements(fresh), 600); }
+  }
   app.practice = null; app.failing = false; R.setHype(0.5); hideStarTip(); clearFx(); $("mpPos").hidden = true;
   if (!app.game) return;
   keepLearnedSync(syncTeacher());
