@@ -13,7 +13,7 @@ import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from 
 import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, nameStyles, songRequest, myNotices, noticeSeen, noticeReply, myFulfilled, fulfilledSeen } from "./net.js";
 import { shareCard, retoUrl, readReto } from "./share.js";
 import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau } from "./achievements.js";
-import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretOpen, secretBoard, songById, fetchMiauProgress } from "./net.js";
+import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretOpen, secretBoard, songById, fetchMiauProgress, roomDirectory } from "./net.js";
 import { VENUES, TO_ENCORE, TOUR_PRIZES, TOUR_THEMES, prizesWon, savedTourDiffs, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song, separateExisting } from "./admin.js";
 import { fillDifficulties } from "./reduce.js";
@@ -175,6 +175,7 @@ const split = { on: false, stop: false, rows: [] }; // the library's songs whose
 const notices = { queue: [], current: null, asked: false }; // the admin's messages waiting for this player (see checkNotices)
 let previewing = null, previewLoading = null; // the song list's ▶ (see previewSong): up here, the menu music asks from the start
 const mp = { fx: { terremoto: 0, niebla: 0, apagon: 0, turbo: 0 }, on: "", lastPos: 0, posAt: 0, bannerT: 0 }; // multiplayer battle (see launchAttack)
+const PUBLIC_MAX = 4, dir = { ch: null, list: [], last: "" }; // the open rooms (see syncDir): up here, show() keeps it in step
 // while the admin uploads or separates songs, the stage and the menu music rest (they'd take the processor from it)
 function adminWorking() { return adm.busy || split.on; }
 function adminWorkChanged() { syncMenuMusic(); }
@@ -252,6 +253,7 @@ function show(name, push = true) {
     : name === "loading" ? null : "bar";
   if (look) R.setStage?.(look);
   syncMenuMusic();
+  syncDir();
 }
 function back() {
   if (app.screen === "settings" && app.settingsFromPause) { backToPause(); return; }
@@ -3041,7 +3043,7 @@ R.onGraphicsTrouble = gfxFail;
 
 /* ================= multiplayer ================= */
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
-function enterRoom(code) {
+function enterRoom(code, pub = null) {
   const name = $("mpName").value.trim().slice(0, 16);
   if (!name) { $("mpErr").textContent = "Escribe tu nombre."; $("mpErr").hidden = false; return; }
   if (!online) { $("mpErr").textContent = "El multijugador necesita que el juego esté conectado a Supabase."; $("mpErr").hidden = false; return; }
@@ -3050,18 +3052,35 @@ function enterRoom(code) {
   app.mode = "mp";
   app.roomConfig = null; app.loadedRoomSong = null;
   app.room = joinRoom(code, app.me, {
-    onPeers: (ps) => { app.peers = ps; syncConfig(); renderLobby(); if (app.screen === "results") renderCup($("cupRes"), app.roomConfig); },
+    onPeers: (ps) => {
+      app.peers = ps; syncConfig(); renderLobby(); if (app.screen === "results") renderCup($("cupRes"), app.roomConfig);
+      // a public room holds PUBLIC_MAX: whoever came in past that (two at once) goes back out
+      const i = ps.findIndex((p) => p.id === app.me?.id);
+      if (ps[0]?.config?.pub && i >= PUBLIC_MAX) { leaveRoom("mp"); toast("Esa sala ya se llenó."); return; }
+      announceRoom();
+    },
     onEvent: onRoomEvent,
     onStatus: (s) => { if (s === "error") toast("No se pudo conectar a la sala."); },
   });
   $("roomCode").textContent = code;
+  if (pub != null) setRoomConfig({ pub }); // a new room: public or private, as picked
   try { navigator.wakeLock?.request("screen").then((l) => (app.lobbyWake = l)).catch(() => {}); } catch {} // a sleeping phone drops out of the room
   renderInvite();
   if (!app.songs.length) loadLibrary().then((s) => { app.songs = s; renderLobby(); }).catch(() => {});
   renderLobby();
   show("lobby");
 }
-$("createRoom").onclick = () => enterRoom(newRoomCode());
+$("createRoom").onclick = () => enterRoom(newRoomCode(), newRoomPub);
+// a new room is private unless the player picks public (then it shows in everyone's list)
+let newRoomPub = false;
+function renderNewRoomVis() { $("newRoomVis").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.v === "pub") === newRoomPub))); }
+$("newRoomVis").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; newRoomPub = b.dataset.v === "pub"; renderNewRoomVis(); };
+renderNewRoomVis();
+// the host turns the room public or private any time
+$("roomVis").onclick = (e) => {
+  const b = e.target.closest("button"); if (!b || !amHost()) return;
+  setRoomConfig({ pub: b.dataset.v === "pub" }); announceRoom();
+};
 $("joinRoom").onclick = () => {
   const c = $("joinCode").value.trim().toUpperCase();
   if (!/^[A-Z]{4}$/.test(c)) { $("mpErr").textContent = "El código tiene 4 letras."; $("mpErr").hidden = false; return; }
@@ -3113,7 +3132,69 @@ async function openFromReto() {
 }
 setTimeout(openFromReto, 0);
 addEventListener("hashchange", joinFromLink);
-$("leaveRoom").onclick = () => { app.room?.leave(); app.room = null; app.mode = "solo"; app.history = []; try { app.lobbyWake?.release(); } catch {} show("home", false); };
+function leaveRoom(to = "home") { app.room?.leave(); app.room = null; app.mode = "solo"; app.history = []; try { app.lobbyWake?.release(); } catch {} announceRoom(); show(to, false); }
+$("leaveRoom").onclick = () => leaveRoom();
+
+/* the open rooms: every room's host tells a shared channel how it's going (net.js roomDirectory); the multiplayer
+   screen lists the public ones to join, the admin panel shows all of them live. Only open while one of those is on. */
+function syncDir() {
+  const need = online && (app.screen === "mp" || !!app.room || (app.screen === "admin" && adminOk));
+  if (need && !dir.ch) dir.ch = roomDirectory((l) => { dir.list = l; renderOpenRooms(); renderLiveRooms(); });
+  else if (!need && dir.ch) { dir.ch.close(); dir.ch = null; dir.list = []; dir.last = ""; }
+  announceRoom();
+  renderOpenRooms(); renderLiveRooms(); // the screen that just opened shows what's already known
+}
+function announceRoom() {
+  if (!dir.ch) return;
+  let info = null;
+  if (app.room && amHost() && app.peers.length) {
+    const cfg = app.roomConfig || {}, pub = !!cfg.pub, song = cfg.songId ? app.songs.find((s) => s.id === cfg.songId) : null;
+    info = {
+      pub, n: app.peers.length, playing: !!app.game, names: app.peers.map((p) => p.name),
+      song: song ? (song.secret ? "Canción secreta" : song.name) : "", cup: cfg.plan ? [Math.min(cfg.plan.idx + 1, cfg.plan.songs.length), cfg.plan.songs.length] : null,
+      ...(pub ? { code: app.room.code } : {}), // a private room's code never leaves the room
+    };
+  }
+  const k = JSON.stringify(info);
+  if (k === dir.last) return;
+  dir.last = k;
+  dir.ch.set(info && { ...info, at: Date.now() });
+}
+setInterval(announceRoom, 3000); // a round starting or ending, the song changing
+const roomWhat = (r) => (r.playing ? "Tocando" : "Esperando") + (r.song ? ` · ${r.song}` : "") + (r.cup ? ` · copa ${r.cup[0]}/${r.cup[1]}` : "");
+function renderOpenRooms() {
+  if (app.screen !== "mp") return;
+  const rooms = dir.list.filter((r) => r.pub && r.code).sort((a, b) => (a.playing - b.playing) || (a.n - b.n));
+  const ul = $("openRooms"); ul.innerHTML = "";
+  $("openEmpty").hidden = rooms.length > 0;
+  rooms.forEach((r) => {
+    const li = document.createElement("li"), full = r.n >= PUBLIC_MAX;
+    li.innerHTML = `<div class="or-text"><b></b><small></small></div><span class="or-n"></span><button class="btn"></button>`;
+    li.querySelector("b").textContent = `Sala de ${r.names?.[0] || "alguien"}`;
+    li.querySelector("small").textContent = roomWhat(r);
+    li.querySelector(".or-n").textContent = `${r.n}/${PUBLIC_MAX}`;
+    const b = li.querySelector("button");
+    b.textContent = full ? "Llena" : r.playing ? "Jugando" : "Entrar";
+    b.disabled = full || r.playing; // in the middle of a song: wait for the round to end
+    b.onclick = () => { $("joinCode").value = r.code; $("mpErr").hidden = true; enterRoom(r.code); };
+    ul.appendChild(li);
+  });
+}
+function renderLiveRooms() {
+  if (app.screen !== "admin" || !adminOk) return;
+  const rooms = [...dir.list].sort((a, b) => b.n - a.n), people = rooms.reduce((t, r) => t + (r.n || 0), 0);
+  $("liveCount").textContent = rooms.length ? `${people} ${people === 1 ? "persona" : "personas"} en ${rooms.length} ${rooms.length === 1 ? "sala" : "salas"} ahora mismo.` : "Nadie está en multijugador ahora mismo.";
+  const ul = $("liveRooms"); ul.innerHTML = "";
+  rooms.forEach((r) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="lr-tag"></span><div class="or-text"><b></b><small></small></div>`;
+    li.querySelector(".lr-tag").textContent = r.pub ? `Pública · ${r.code}` : "Privada";
+    li.querySelector(".lr-tag").classList.toggle("pub", !!r.pub);
+    li.querySelector("b").textContent = (r.names || []).join(", ");
+    li.querySelector("small").textContent = roomWhat(r);
+    ul.appendChild(li);
+  });
+}
 // back from another app (sharing the code, a message): the sound and the room may have gone to sleep
 document.addEventListener("visibilitychange", () => {
   if (document.hidden || !app.room) return;
@@ -3155,6 +3236,8 @@ function renderLobby() {
   const ul = $("players"); ul.innerHTML = "";
   const roomCfg = app.roomConfig || {}, cfg = roomCfg.songId ? roomCfg : null;
   renderLobbyMode(roomCfg); renderCup($("cupLobby"), roomCfg); renderRoomSongs(amHost(), roomCfg);
+  $("roomVis").querySelectorAll("button").forEach((b) => { b.setAttribute("aria-pressed", String((b.dataset.v === "pub") === !!roomCfg.pub)); b.disabled = !amHost(); });
+  $("roomVisHint").textContent = roomCfg.pub ? `Aparece en la lista de salas abiertas (máximo ${PUBLIC_MAX}).` : "Solo entra quien tenga el código o el enlace.";
   app.peers.forEach((p, i) => {
     const li = document.createElement("li");
     const ready = cfg && p.ready && p.songId === cfg.songId;
@@ -3482,7 +3565,7 @@ async function adminEnter(quiet = false) {
   $("adminEnter").disabled = true; msg.textContent = quiet ? "" : "Revisando…";
   try {
     await adminCall({ code, action: "check" });
-    adminOk = true;
+    adminOk = true; syncDir();
     try { localStorage.setItem(ADMIN_KEY, code); } catch {}
     msg.textContent = ""; $("adminGate").hidden = true; $("adminBody").hidden = false;
     loadAutoList(); loadInbox();

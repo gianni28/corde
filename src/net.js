@@ -104,6 +104,24 @@ export function joinRoom(code, me, h) {
   };
 }
 
+/**
+ * The open rooms: one shared channel where each room's host tells how it's going (code and players for a public room;
+ * for a private one, no code). Whoever only watches doesn't show up in it. onList gets every room on each change.
+ */
+export function roomDirectory(onList) {
+  if (!supabase) return null;
+  const ch = supabase.channel("corde:salas", { config: { presence: { key: Math.random().toString(36).slice(2) } } });
+  let mine = null, ok = false;
+  const list = () => Object.values(ch.presenceState()).map((a) => a[a.length - 1]).filter((r) => r && r.at);
+  ch.on("presence", { event: "sync" }, () => onList(list()));
+  ch.subscribe((st) => { if (st === "SUBSCRIBED") { ok = true; if (mine) ch.track(mine); } });
+  return {
+    /** This browser's room (null: none). */
+    set(info) { mine = info; if (ok) (info ? ch.track(info) : ch.untrack()).catch?.(() => {}); },
+    close: () => supabase.removeChannel(ch),
+  };
+}
+
 /* ---------------- secret songs ---------------- */
 // Songs the admin hid: the public library never includes them; the database hands them out only with the secret code.
 const rpcError = (error) => { const e = new Error(error.message); e.wrongCode = error.code === "28000"; return e; };
