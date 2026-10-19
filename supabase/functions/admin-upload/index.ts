@@ -169,6 +169,33 @@ Deno.serve(async (req) => {
     return json({ ok: true });
   }
 
+  // the comments wall (comments.sql): all of them, an answer (or none: null), hidden or shown, gone
+  if (body.action === "comments") {
+    const { data, error } = await admin.rpc("admin_comments");
+    if (error) return json({ error: error.message }, 500);
+    return json({ comments: data || [] });
+  }
+  if (body.action === "comment_reply") {
+    const text = typeof body.reply === "string" ? body.reply.trim() : "";
+    if (!Number.isInteger(body.id) || text.length > 1000) return json({ error: "Datos inválidos" }, 400);
+    const patch = text ? { reply: text, replied_at: new Date().toISOString(), reply_seen: false } : { reply: null, replied_at: null, reply_seen: false };
+    const { error } = await admin.from("comments").update(patch).eq("id", body.id);
+    if (error) return json({ error: error.message }, 500);
+    return json({ ok: true });
+  }
+  if (body.action === "comment_hide") {
+    if (!Number.isInteger(body.id) || typeof body.hidden !== "boolean") return json({ error: "Datos inválidos" }, 400);
+    const { error } = await admin.from("comments").update({ hidden: body.hidden }).eq("id", body.id);
+    if (error) return json({ error: error.message }, 500);
+    return json({ ok: true });
+  }
+  if (body.action === "comment_delete") {
+    if (!Number.isInteger(body.id)) return json({ error: "Datos inválidos" }, 400);
+    const { error } = await admin.from("comments").delete().eq("id", body.id);
+    if (error) return json({ error: error.message }, 500);
+    return json({ ok: true });
+  }
+
   // the song files that were in Supabase Storage before R2: each one deleted only once R2 answers that it has it.
   // A call works for at most ~100 s (the function's limit is 150); the panel calls again while it deletes something.
   if (body.action === "storage_cleanup") {
