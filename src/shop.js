@@ -143,7 +143,7 @@ export const ITEMS = [
   { slot: "name", id: "electrico", name: "Eléctrico", price: 0, lvl: 10, desc: "Tu nombre echando chispas. Premio del nivel 10." },
   { slot: "name", id: "estrella", name: "Estrella", price: 0, lvl: 20, desc: "Tu nombre con una estrella que brilla. Premio del nivel 20." },
   { slot: "name", id: "heavy", name: "Heavy Metal", price: 0, req: "dia-14", streak: 14, desc: "Tu nombre en metal cromado con los cuernos arriba, en todas las clasificaciones. Premio por tocar la canción del día 14 días seguidos." },
-  { slot: "name", id: "festival", name: "Festival", price: 0, req: "gira-hard-bar", tour: "hard", desc: "Tu nombre en los colores de un festival, con su pulsera. Premio de la gira en Difícil: supera el Bar La Cueva." },
+  { slot: "name", id: "festival", name: "Festival", price: 0, req: "gira-hard-bar", tour: "hard", desc: "Tu nombre en la marquesina de un festival, entre dos filas de bombillas con las luces corriendo. Premio de la gira en Difícil: supera el Bar La Cueva." },
   // rachas (the "¡Racha de 50!" pop-up)
   { slot: "streak", id: "clasica", name: "Clásica", price: 0 },
   { slot: "streak", id: "neon", name: "Neón", price: 250 },
