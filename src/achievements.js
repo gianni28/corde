@@ -48,9 +48,9 @@ export const ACHIEVEMENTS = [
   { id: "coro-gatitos", name: "Coro de gatitos", desc: "Saca 80% o más en 3 canciones miau (o en todas, si hay menos).", secret: true },
   // the Otaku event (its songs behind a code): golden bananas on some notes fill a bar with three surprise gifts.
   // surprise: not listed anywhere (nor their prizes in the shop) until won
-  { id: "otaku-titi", name: "Bigotes del Emperador", desc: `Junta ${BANANA_GIFTS[0]} bananas doradas en las canciones Otaku.`, secret: true, surprise: true },
-  { id: "otaku-nero", name: "El anti-pájaro", desc: `Junta ${BANANA_GIFTS[1]} bananas doradas en las canciones Otaku.`, secret: true, surprise: true },
-  { id: "otaku-antimagia", name: "Antimagia", desc: `Junta ${BANANA_GIFTS[2]} bananas doradas en las canciones Otaku.`, secret: true, surprise: true },
+  { id: "otaku-titi", name: "Bigotes del Emperador", desc: `Junta ${BANANA_GIFTS[0]} bananas doradas en la Expedición del Emperador.`, secret: true, surprise: true },
+  { id: "otaku-nero", name: "El anti-pájaro", desc: `Junta ${BANANA_GIFTS[1]} bananas doradas en la Expedición del Emperador.`, secret: true, surprise: true },
+  { id: "otaku-antimagia", name: "Antimagia", desc: `Junta ${BANANA_GIFTS[2]} bananas doradas en la Expedición del Emperador.`, secret: true, surprise: true },
   // the bands' events: a surprise gift (the band as pets) for 4 stars on each of its songs
   { id: "one-direction", name: "Directioner", desc: "Saca 4 estrellas o más en las 6 canciones de One Direction, en Media o más difícil.", secret: true, surprise: true },
   { id: "bts", name: "ARMY", desc: "Saca 4 estrellas o más en las 6 canciones de BTS, en Media o más difícil.", secret: true, surprise: true },
