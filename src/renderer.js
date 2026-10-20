@@ -554,121 +554,152 @@ function makeMember(m) {
   };
   return g;
 }
-// Eddie, Iron Maiden's, as on the Killers cover (the Iron Maiden event's secret gift): not one of the little band
-// figures but his own bony self: a long skull of a face with the skin drawn tight over big cheekbones, a scowling brow
-// over deep sockets with small glowing eyes, a hole for a nose and a wide grin of teeth with no lips over them; long,
-// straight, pale yellow hair from a high hairline down past his shoulders; a dark sleeveless shirt over sinewy arms
-// with clawed hands, dark jeans and a belt, the bloody hatchet held up by his head.
-// He headbangs: his head drops on every beat (harder in the loud parts, on a long streak and with star power) and his
-// hair, in jointed locks that lag behind on springs, whips forward and back. pose() as the others' plus the beat.
+// Eddie, Iron Maiden's, a copy of the Killers cover (the Iron Maiden event's secret gift): not one of the little band
+// figures but his own lanky grown-up self, lit like the painting with a hard yellow light on every edge. A huge wild
+// mane of pale yellow hair swept back from the forehead, flaring out and falling past the shoulders; a long skull of a
+// face under a furrowed brow, small glowing eyes deep in the shadow, a hole for a nose, big cheekbones and an enormous
+// grin of teeth with the lips pulled back; a ripped dark shirt showing his ribs, sinewy bare arms, the bloody hatchet
+// held up by his head and the other hand an open claw; grey jeans and a belt.
+// He headbangs: his head drops on every beat (harder in the loud parts, on a long streak and with star power) and the
+// mane, in locks of three joints on springs, lags behind and whips. pose() as the others' plus the beat.
 function makeEddie() {
   const g = new THREE.Group(), b = new THREE.Group(); g.add(b); g.lift = 0.3;
-  const mat = (color, roughness = 0.6, metalness = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
+  // the cover's light: a yellow glare along every edge (one strength for all, so they share one program)
+  const rimify = (m) => {
+    m.onBeforeCompile = (sh) => {
+      sh.fragmentShader = sh.fragmentShader.replace("#include <emissivemap_fragment>",
+        "#include <emissivemap_fragment>\n{ float fr = 1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0); totalEmissiveRadiance += vec3(1.0, 0.82, 0.22) * 0.45 * pow(max(fr, 1e-4), 3.0); }");
+    };
+    return m;
+  };
+  const mat = (color, roughness = 0.6, metalness = 0) => rimify(new THREE.MeshStandardMaterial({ color, roughness, metalness }));
   const add = (geo, mt, parent = b) => { const o = new THREE.Mesh(geo, mt); parent.add(o); return o; };
-  const sph = (r, ws = 18, hs = 12) => new THREE.SphereGeometry(r, ws, hs);
-  const SKIN = mat(0x8c8366, 0.7), SHADE = mat(0x5c5440, 0.85), DARK = mat(0x120a06, 0.95), SHIRT = mat(0x2a2a30, 0.5, 0.2);
-  const JEANS = mat(0x262c3a, 0.85), HAIR = mat(0xe6d68a, 0.55), HAIR2 = mat(0xf4ecc0, 0.5), TOOTH = mat(0xe0d6b4, 0.4), BLOOD = mat(0x8a0a0a, 0.3);
-  const GLOW = new THREE.MeshBasicMaterial({ color: 0xffe060 });
-  // legs: dark jeans, the belt and its buckle, boots
+  const sph = (r, ws = 16, hs = 12) => new THREE.SphereGeometry(r, ws, hs);
+  const SKIN = mat(0x7a6c4e, 0.7), SHADE = mat(0x463c2a, 0.85), DARK = new THREE.MeshBasicMaterial({ color: 0x0a0604 });
+  const SHIRT = mat(0x2c2c30, 0.45, 0.25), JEANS = mat(0x55585e, 0.8), TOOTH = mat(0xe4dcbc, 0.4), GUM = mat(0x4a1210, 0.7);
+  const HAIR = [mat(0xe2c96a, 0.5), mat(0xf2e3a0, 0.45), mat(0xc4a450, 0.6)], BLOOD = mat(0x8a0a0a, 0.3);
+  const GLOW = new THREE.MeshBasicMaterial({ color: 0xffe24a });
+  // legs apart, grey jeans, the belt and buckle, boots
   for (const side of [-1, 1]) {
-    add(new THREE.CylinderGeometry(0.048, 0.04, 0.36, 12), JEANS).position.set(side * 0.055, 0.21, 0);
-    const sh = add(sph(1), mat(0x14110e, 0.5)); sh.scale.set(0.05, 0.035, 0.085); sh.position.set(side * 0.055, 0.03, 0.03);
+    const leg = new THREE.Group(); leg.position.set(side * 0.06, 0.5, 0); leg.rotation.z = side * 0.1; b.add(leg);
+    add(new THREE.CylinderGeometry(0.062, 0.05, 0.25, 10), JEANS, leg).position.y = -0.125;
+    add(new THREE.CylinderGeometry(0.05, 0.042, 0.23, 10), JEANS, leg).position.y = -0.36;
+    const boot = add(sph(1), mat(0x1a1612, 0.4), leg); boot.scale.set(0.045, 0.035, 0.08); boot.position.set(0, -0.48, 0.025);
   }
-  add(new THREE.CylinderGeometry(0.1, 0.1, 0.035, 18), mat(0x16110d, 0.35, 0.3)).position.y = 0.4;
-  add(new THREE.BoxGeometry(0.036, 0.028, 0.01), mat(0xb8b0a0, 0.3, 0.8)).position.set(0, 0.4, 0.103);
-  // the shirt: tight, sleeveless with deep armholes, its neck torn open; bony shoulders and collarbones bare
-  const torso = add(new THREE.CylinderGeometry(0.115, 0.095, 0.3, 18), SHIRT); torso.position.y = 0.56; torso.scale.z = 0.8;
-  const chest = add(new THREE.CircleGeometry(0.05, 3), SKIN); chest.position.set(0, 0.665, 0.095); chest.rotation.set(-0.2, 0, -Math.PI / 2); chest.scale.set(1.5, 1, 1);
+  add(new THREE.CylinderGeometry(0.098, 0.098, 0.035, 16), mat(0x1c140e, 0.35, 0.3)).position.y = 0.5;
+  add(new THREE.BoxGeometry(0.034, 0.026, 0.01), mat(0xb8b0a0, 0.3, 0.8)).position.set(0, 0.5, 0.1);
+  // the torso: a V of a dark shirt, ripped down the front over his ribs; bare bony shoulders, a sinewy neck
+  const torso = add(new THREE.LatheGeometry([[0.001, 0], [0.095, 0], [0.1, 0.08], [0.13, 0.2], [0.155, 0.3], [0.15, 0.33], [0.1, 0.36], [0.045, 0.375]].map(([x, y]) => new THREE.Vector2(x, y)), 18), SHIRT);
+  torso.position.y = 0.5; torso.scale.z = 0.62;
+  const rip = new THREE.Shape([[-0.05, 0.16], [0.0, 0.14], [0.055, 0.16], [0.045, 0.1], [0.062, 0.05], [0.04, 0.0], [0.05, -0.05], [0.02, -0.08], [0.01, -0.14], [-0.02, -0.07], [-0.045, -0.02], [-0.035, 0.03], [-0.058, 0.08], [-0.04, 0.12]].map(([x, y]) => new THREE.Vector2(x, y)));
+  const chest = add(new THREE.ShapeGeometry(rip), SKIN); chest.position.set(0, 0.69, 0.083); chest.rotation.x = -0.1;
+  for (let i = 0; i < 5; i++) { const rib = add(new THREE.BoxGeometry(0.075 - i * 0.008, 0.006, 0.004), SHADE); rib.position.set(0, 0.82 - i * 0.03, 0.087 - i * 0.002); rib.rotation.x = -0.1; } // his ribs through the rip
   for (const side of [-1, 1]) {
-    add(sph(0.045, 12, 8), SKIN).position.set(side * 0.12, 0.69, 0);
-    const cb = add(new THREE.CylinderGeometry(0.009, 0.009, 0.1, 6), SHADE); cb.position.set(side * 0.06, 0.705, 0.06); cb.rotation.z = Math.PI / 2 + side * 0.25;
+    const sh = add(sph(0.048, 12, 10), SKIN); sh.scale.set(1, 0.8, 0.9); sh.position.set(side * 0.155, 0.83, 0);
+    const t = add(new THREE.CylinderGeometry(0.008, 0.008, 0.08, 6), SHADE); t.position.set(side * 0.022, 0.88, 0.03); t.rotation.z = side * -0.3; // the neck's cords
   }
-  add(new THREE.CylinderGeometry(0.032, 0.038, 0.08, 10), SKIN).position.y = 0.74;
-  // arms: shoulder and elbow joints; sinewy, the hands long claws
+  add(new THREE.CylinderGeometry(0.036, 0.045, 0.09, 10), SKIN).position.y = 0.88;
+  // arms: shoulder, elbow, a long-fingered claw
   const arm = (side) => {
-    const sh = new THREE.Group(); sh.position.set(side * 0.14, 0.69, 0); b.add(sh);
-    add(new THREE.CylinderGeometry(0.03, 0.024, 0.17, 8), SKIN, sh).position.y = -0.085;
-    const el = new THREE.Group(); el.position.y = -0.17; sh.add(el);
+    const sh = new THREE.Group(); sh.position.set(side * 0.165, 0.82, 0); b.add(sh);
+    const bi = add(sph(1, 10, 8), SKIN, sh); bi.scale.set(0.03, 0.105, 0.032); bi.position.y = -0.1;
+    const el = new THREE.Group(); el.position.y = -0.2; sh.add(el);
     add(sph(0.026, 8, 6), SHADE, el);
-    add(new THREE.CylinderGeometry(0.024, 0.02, 0.16, 8), SKIN, el).position.y = -0.08;
-    const hand = new THREE.Group(); hand.position.y = -0.17; el.add(hand);
-    add(sph(0.028), SKIN, hand).scale.set(0.9, 1, 0.7);
-    for (let f = 0; f < 4; f++) { const fg = add(new THREE.ConeGeometry(0.008, 0.075, 5), SKIN, hand); fg.position.set(-0.021 + f * 0.014, -0.04, 0.012); fg.rotation.set(Math.PI - 0.5, 0, (f - 1.5) * 0.15); }
+    const fa = add(sph(1, 10, 8), SKIN, el); fa.scale.set(0.025, 0.1, 0.027); fa.position.y = -0.09;
+    const hand = new THREE.Group(); hand.position.y = -0.19; el.add(hand);
+    add(sph(1, 10, 8), SKIN, hand).scale.set(0.03, 0.03, 0.018);
+    for (let f = 0; f < 5; f++) {
+      const thumb = f === 4, k = new THREE.Group(); hand.add(k);
+      k.position.set(thumb ? side * -0.03 : -0.024 + f * 0.016, thumb ? -0.005 : -0.022, 0.006); k.rotation.set(0.4, 0, thumb ? side * -0.8 : (f - 1.5) * 0.18);
+      add(new THREE.CylinderGeometry(0.006, 0.005, 0.04, 5), SKIN, k).position.y = -0.02;
+      const tip = new THREE.Group(); tip.position.y = -0.04; tip.rotation.x = 0.7; k.add(tip);
+      add(new THREE.ConeGeometry(0.005, 0.035, 5), SHADE, tip).rotation.x = Math.PI; // a claw
+    }
     return { sh, el, hand };
   };
   const R = arm(-1), L = arm(1);
-  // the hatchet: wooden handle, the steel head and blood on its edge, dripping
-  const axe = new THREE.Group(); axe.position.set(0, -0.01, 0.02); R.hand.add(axe);
-  add(new THREE.CylinderGeometry(0.01, 0.012, 0.28, 8), mat(0x6b4a2a, 0.7), axe).position.y = 0.07;
-  add(new THREE.BoxGeometry(0.018, 0.065, 0.09), mat(0xc8ccd2, 0.3, 0.6), axe).position.set(0, 0.18, 0.04);
-  add(new THREE.BoxGeometry(0.02, 0.065, 0.02), BLOOD, axe).position.set(0, 0.18, 0.085);
-  for (let i = 0; i < 3; i++) { const d = add(sph(0.007, 6, 4), BLOOD, axe); d.position.set(0, 0.14 - i * 0.03, 0.083); d.scale.set(1, 1.6, 1); }
+  // the hatchet: short handle, the steel head with blood on its edge, dripping
+  const axe = new THREE.Group(); axe.position.set(0, -0.015, 0.012); R.hand.add(axe);
+  add(new THREE.CylinderGeometry(0.009, 0.011, 0.22, 8), mat(0x5a3c22, 0.7), axe).position.y = 0.05;
+  add(new THREE.BoxGeometry(0.014, 0.05, 0.075), mat(0xb8bcc2, 0.3, 0.6), axe).position.set(0, 0.14, 0.035);
+  add(new THREE.BoxGeometry(0.016, 0.05, 0.016), BLOOD, axe).position.set(0, 0.14, 0.07);
+  for (let i = 0; i < 4; i++) { const d = add(sph(0.006, 6, 4), BLOOD, axe); d.position.set(0, 0.11 - i * 0.025, 0.07 + (i % 2) * 0.004); d.scale.set(1, 1.7, 1); }
   // the head, hinged at the neck so it can bang
-  const neck = new THREE.Group(); neck.position.y = 0.76; b.add(neck);
-  const head = new THREE.Group(); head.position.y = 0.16; neck.add(head);
-  const skull = add(sph(0.18, 28, 20), SKIN, head); skull.scale.set(0.88, 1.12, 1); skull.position.y = 0.03;
-  add(sph(0.16, 20, 14), SHADE, head).position.set(0, -0.02, -0.03); // the sunken temples
+  const neck = new THREE.Group(); neck.position.y = 0.9; b.add(neck);
+  const head = new THREE.Group(); head.position.y = 0.11; neck.add(head);
+  add(sph(0.12, 24, 18), SKIN, head).scale.set(0.92, 1.08, 1.08);
+  const face = add(sph(0.1, 20, 14), SKIN, head); face.scale.set(0.8, 1.15, 0.92); face.position.set(0, -0.055, 0.03);
   const lights = [];
   for (const side of [-1, 1]) {
-    const cheek = add(sph(0.045, 14, 10), SKIN, head); cheek.scale.set(1, 0.62, 0.75); cheek.position.set(side * 0.09, -0.035, 0.135); // big cheekbones
-    const hollow = add(sph(0.038, 12, 10), SHADE, head); hollow.scale.set(0.6, 1, 0.45); hollow.position.set(side * 0.1, -0.1, 0.12);
-    const sock = add(sph(0.044, 16, 12), DARK, head); sock.scale.set(1, 0.8, 0.5); sock.position.set(side * 0.058, 0.01, 0.158);
-    const eye = add(sph(0.011, 10, 8), GLOW, head); eye.position.set(side * 0.055, 0.004, 0.178); lights.push(eye);
-    const brow = add(sph(1, 14, 8), SKIN, head); brow.scale.set(0.055, 0.02, 0.035); brow.position.set(side * 0.058, 0.05, 0.16); brow.rotation.z = side * 0.4; // a scowl
+    const brow = add(sph(1, 12, 8), SKIN, head); brow.scale.set(0.045, 0.014, 0.025); brow.position.set(side * 0.04, 0.045, 0.112); brow.rotation.z = side * 0.4; // furrowed down to the nose
+    const sock = add(sph(0.026, 12, 10), DARK, head); sock.scale.set(1, 0.65, 0.5); sock.position.set(side * 0.04, 0.026, 0.108);
+    const eye = add(sph(0.008, 8, 6), GLOW, head); eye.position.set(side * 0.04, 0.024, 0.12); lights.push(eye);
+    const cheek = add(sph(0.03, 12, 10), SKIN, head); cheek.scale.set(1, 0.6, 0.8); cheek.position.set(side * 0.064, -0.01, 0.085);
+    const hollow = add(sph(0.026, 10, 8), SHADE, head); hollow.scale.set(0.6, 1.1, 0.4); hollow.position.set(side * 0.068, -0.055, 0.075);
+    const fold = add(new THREE.CylinderGeometry(0.004, 0.004, 0.05, 5), SHADE, head); fold.position.set(side * 0.05, -0.04, 0.105); fold.rotation.z = side * 0.5; // the grin's creases
   }
-  const nose = add(new THREE.ConeGeometry(0.022, 0.045, 3), DARK, head); nose.position.set(0, -0.045, 0.178); nose.rotation.set(-0.35, 0, Math.PI); nose.scale.set(1, 1, 0.4);
-  // the grin: wide, curling up at the corners, the upper teeth in the skull and the lower in the jaw
-  const tooth = (parent, x, y, z, hgt) => { const tt = add(new THREE.BoxGeometry(0.012, hgt, 0.012), TOOTH, parent); tt.position.set(x, y, z); tt.rotation.y = -x * 4; };
-  add(new THREE.BoxGeometry(0.16, 0.014, 0.03), mat(0x5a1414, 0.8), head).position.set(0, -0.086, 0.145);
-  for (let t = 0; t < 12; t++) { const x = -0.071 + t * 0.013; tooth(head, x, -0.104 + x * x * 3, 0.165 - x * x * 3, 0.034); }
-  const jaw = new THREE.Group(); jaw.position.set(0, -0.09, 0.02); head.add(jaw);
-  const chin = add(sph(1, 18, 12), SKIN, jaw); chin.scale.set(0.095, 0.05, 0.11); chin.position.set(0, -0.07, 0.04);
-  add(new THREE.BoxGeometry(0.15, 0.045, 0.05), DARK, jaw).position.set(0, -0.04, 0.095);
-  for (let t = 0; t < 12; t++) { const x = -0.066 + t * 0.012; tooth(jaw, x, -0.042 + x * x * 3, 0.142 - x * x * 3, 0.028); }
-  // the hair: a cap from a high hairline over the crown and back, then the long straight locks round the sides and the
-  // back, each in two jointed parts (the lower one swings more), the front ones falling past the face to the chest
-  const cap = add(new THREE.SphereGeometry(0.195, 28, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), HAIR, head); cap.rotation.x = -0.72; cap.position.y = 0.05; cap.scale.set(1.02, 1.2, 1.1);
-  const puff = add(sph(0.2, 20, 14), HAIR, head); puff.scale.set(1.08, 1, 0.9); puff.position.set(0, 0.07, -0.07); // the volume at the back
+  add(new THREE.BoxGeometry(0.012, 0.03, 0.012), SKIN, head).position.set(0, 0.012, 0.122); // the bridge of the nose
+  const nose = add(new THREE.ConeGeometry(0.014, 0.025, 3), DARK, head); nose.position.set(0, -0.012, 0.122); nose.rotation.set(-0.3, 0, Math.PI); nose.scale.z = 0.4;
+  // the grin: enormous, the lips pulled right back, the corners up into the cheeks; upper teeth in the skull, lower in the jaw
+  const row = (parent, y0, z0, h, n, w) => { for (let t = 0; t < n; t++) { const x = -w / 2 + (t + 0.5) * (w / n), c = x * x * 9; const tt = add(new THREE.BoxGeometry((w / n) * 0.85, h, 0.01), TOOTH, parent); tt.position.set(x, y0 + c * 0.6, z0 - c * 0.9); tt.rotation.y = -x * 5; } };
+  add(new THREE.BoxGeometry(0.1, 0.04, 0.02), DARK, head).position.set(0, -0.085, 0.095); // the inside of the mouth
+  add(new THREE.BoxGeometry(0.11, 0.008, 0.02), GUM, head).position.set(0, -0.058, 0.108); // the gums over the teeth
+  row(head, -0.074, 0.118, 0.03, 12, 0.11);
+  const jaw = new THREE.Group(); jaw.position.set(0, -0.075, 0.01); head.add(jaw);
+  const chin = add(sph(1, 14, 10), SKIN, jaw); chin.scale.set(0.058, 0.034, 0.06); chin.position.set(0, -0.06, 0.06);
+  row(jaw, -0.032, 0.106, 0.026, 12, 0.104);
+  // the mane: the crown swept back from a high forehead, a mass behind, and the locks flaring out and falling
+  const crown = add(new THREE.SphereGeometry(0.128, 24, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), HAIR[0], head); crown.rotation.x = -0.45; crown.position.set(0, 0.012, -0.004); crown.scale.set(1.02, 1.1, 1.12);
+  const top = add(sph(0.12, 18, 12), HAIR[1], head); top.scale.set(1.15, 0.85, 1.1); top.position.set(0, 0.085, -0.035); // the volume on top, swept back
+  const mass = add(sph(0.14, 18, 12), HAIR[2], head); mass.scale.set(1.25, 1.2, 0.9); mass.position.set(0, -0.03, -0.075);
   const locks = [];
-  for (let i = 0; i < 34; i++) {
-    const a = -Math.PI + (i / 34) * Math.PI * 2 + 0.05;
-    if (Math.abs(a) < 0.62) continue; // the face stays clear
-    const front = Math.abs(a) < 1.4, top = new THREE.Group(); head.add(top);
-    top.position.set(Math.sin(a) * 0.185, 0.1 - (front ? 0.03 : 0), Math.cos(a) * 0.17 - 0.03);
-    top.rotation.y = a;
-    const len1 = 0.2 + (i % 3) * 0.02, len2 = (front ? 0.22 : 0.3) + ((i * 5) % 4) * 0.03, w = 0.042 + (i % 2) * 0.01, M = i % 5 ? HAIR : HAIR2;
-    const up = new THREE.Group(); top.add(up);
-    const u = add(new THREE.CylinderGeometry(w, w * 0.85, len1, 6), M, up); u.position.y = -len1 / 2; u.scale.z = 0.45;
-    const lo = new THREE.Group(); lo.position.y = -len1; up.add(lo);
-    const l = add(new THREE.ConeGeometry(w * 0.85, len2, 6), M, lo); l.position.y = -len2 / 2; l.rotation.x = Math.PI; l.scale.z = 0.45;
-    const out = 0.3 + (front ? 0.04 : 0); // hanging out a little from the head, over the shoulders
-    locks.push({ up, lo, out, s1: 0, v1: 0, s2: 0, v2: 0, k: 1 + (i % 4) * 0.08 });
+  const lock = (root, M, wd, lens, bend) => {
+    const segs = []; let p = root, r0 = wd;
+    for (let k = 0; k < 3; k++) {
+      const s = new THREE.Group(); p.add(s); segs.push(s);
+      const r1 = k === 2 ? 0.002 : r0 * 0.85, m = add(new THREE.CylinderGeometry(r0, r1, lens[k], 6), M, s); m.position.y = -lens[k] / 2; m.scale.z = 0.45;
+      const tip = new THREE.Group(); tip.position.y = -lens[k]; s.add(tip); p = tip; r0 = r1;
+    }
+    locks.push({ segs, bend, st: [0, 0, 0], v: [0, 0, 0], k: 0.85 + (locks.length % 4) * 0.1 });
+  };
+  // round the sides and the back: out from the head, then down past the shoulders (longest at the back)
+  for (let i = 0; i < 52; i++) {
+    const a = -Math.PI + ((i + 0.5) / 52) * Math.PI * 2;
+    if (Math.abs(a) < 0.95) continue; // the face stays clear
+    const root = new THREE.Group(); head.add(root);
+    const back = Math.abs(a) > 2.2, hi = [0.1, 0.06, 0.02][i % 3];
+    root.position.set(Math.sin(a) * 0.118, hi, Math.cos(a) * 0.122 - 0.012);
+    root.rotation.y = a + Math.sign(a) * Math.max(0, 1.8 - Math.abs(a)) * 0.6; // the ones by the temples turned away, to the sides
+    const l3 = (back ? 0.2 : 0.15) + ((i * 7) % 5) * 0.022;
+    lock(root, HAIR[i % 5 ? (i % 3 ? 0 : 2) : 1], 0.052 + (i % 3) * 0.01, [0.05, 0.11, l3], [-1.35 - (i % 3) * 0.15, 0.8, 0.35]);
   }
   const zz = napZ(); g.add(zz);
   let last = null, bang = 0, drive = 0;
   g.pose = ({ lid, wing, sleep, now, pulse = 0, star = false, happy = false, energy = 0.55 }) => {
     const dt = last == null ? 1 / 60 : Math.min(0.05, Math.max(0, now - last)); last = now;
-    const glow = sleep ? 0.12 : 1 - lid * 0.75;
-    lights.forEach((l) => { l.material.color.setRGB(glow, glow * 0.88, glow * 0.38); l.scale.setScalar(0.7 + glow * 0.5); });
+    const glow = sleep ? 0.1 : 1 - lid * 0.7;
+    lights.forEach((l) => { l.material.color.setRGB(glow, glow * 0.88, glow * 0.3); l.scale.setScalar(0.8 + glow * 0.5); });
     // how hard he bangs: a nod in the quiet parts, more as the song gets loud, all out on a streak or with star power
     const want = sleep ? 0 : star ? 1 : happy ? 0.75 : 0.2 + 0.45 * Math.min(1, Math.max(0, (energy - 0.45) / 0.4));
     drive += (want - drive) * Math.min(1, dt * 3);
-    bang += ((sleep ? 0.5 : pulse * (0.15 + drive * 0.75)) - bang) * Math.min(1, dt * (sleep ? 2 : 22));
-    neck.rotation.set(bang - 0.05, 0, sleep ? 0.15 : Math.sin(now * 2.1) * 0.04 * (1 - drive));
-    jaw.rotation.x = sleep ? 0.2 : drive * 0.25 + pulse * drive * 0.2;
-    // the hair hangs straight down whatever the head does (so it swings the other way), and lags on its springs
+    bang += ((sleep ? 0.5 : pulse * (0.15 + drive * 0.8)) - bang) * Math.min(1, dt * (sleep ? 2 : 22));
+    neck.rotation.set(bang + 0.08, 0, sleep ? 0.15 : Math.sin(now * 2.1) * 0.04 * (1 - drive));
+    jaw.rotation.x = sleep ? 0.15 : 0.05 + drive * 0.2 + pulse * drive * 0.15;
+    // the mane hangs whatever the head does (so it swings the other way), lagging on its springs: the tips most
     for (const h of locks) {
-      const t1 = -bang * 0.9, t2 = -(bang + h.s1) * 0.35;
-      h.v1 += ((t1 - h.s1) * 90 * h.k - h.v1 * 7) * dt; h.s1 += h.v1 * dt;
-      h.v2 += ((t2 - h.s2) * 70 * h.k - h.v2 * 5) * dt; h.s2 += h.v2 * dt;
-      h.up.rotation.set(-h.out + h.s1, 0, 0); h.lo.rotation.set(h.out * 0.7 + h.s2, 0, 0);
+      let acc = bang;
+      for (let k = 0; k < 3; k++) {
+        const tgt = -acc * (k ? 0.45 : 0.6);
+        h.v[k] += ((tgt - h.st[k]) * (80 - k * 15) * h.k - h.v[k] * (7 - k)) * dt; h.st[k] += h.v[k] * dt;
+        h.segs[k].rotation.x = h.bend[k] + h.st[k]; acc += h.st[k];
+      }
     }
-    // the hatchet held up by his head, raised high and shaken with star power; the other claw reaching out
-    const up = star ? 1 : wing * 0.6;
-    R.sh.rotation.set(-0.3 - up * 0.6, 0, -(0.35 + up * 2.0)); R.el.rotation.set(0, 0, -(1.9 - up * 1.2) + (star ? pulse * 0.6 : 0));
-    axe.rotation.set(0.2, 0, 1.6 - up * 0.9);
-    L.sh.rotation.set(-0.7 - wing * 0.4, 0, 0.25 + wing * 0.5); L.el.rotation.set(-0.6, 0, 0.2);
-    zz.visible = sleep; zz.position.set(0.4, 1.3 + ((now * 0.4) % 1) * 0.2, 0); zz.material.opacity = 1 - ((now * 0.4) % 1);
+    // the hatchet up by his head (high and shaken with star power), the other hand a claw reaching out
+    const up = star ? 1 : Math.min(1, wing);
+    R.sh.rotation.set(-0.3 - up * 0.3, 0, -(0.95 + up * 0.7)); R.el.rotation.set(-0.25, 0, -(2.2 - up * 0.6) + (star ? pulse * 0.5 : 0));
+    axe.rotation.set(0.15, 0, Math.PI + 0.25); // the head of it up above his fist
+    L.sh.rotation.set(-0.55 - wing * 0.4, 0, 0.45 + wing * 0.3); L.el.rotation.set(-0.5, 0, 0.25); L.hand.rotation.set(-0.2, 0, 0.2);
+    zz.visible = sleep; zz.position.set(0.35, 1.35 + ((now * 0.4) % 1) * 0.2, 0); zz.material.opacity = 1 - ((now * 0.4) % 1);
   };
   return g;
 }
