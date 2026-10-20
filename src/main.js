@@ -2681,22 +2681,22 @@ function memberSvg(m) {
     + `<circle cx="51" cy="47" r="3.6" fill="#141012"/><circle cx="69" cy="47" r="3.6" fill="#141012"/><circle cx="52.2" cy="45.6" r="1.2" fill="#fff"/><circle cx="70.2" cy="45.6" r="1.2" fill="#fff"/>`
     + `<path d="M54 56q6 5 12 0" stroke="#8a3a34" stroke-width="2.4" fill="none" stroke-linecap="round"/><g fill="${H}">${hair}</g>${over}</svg>`;
 }
-// Eddie for the card (renderer.js makeEddie), as on Killers: the long straight pale hair from a high hairline down past
-// his shoulders, the long skull with its scowl, glowing eyes, nose hole and wide grin, the dark sleeveless shirt over
-// bony arms, the bloody hatchet held up in one claw
+// Eddie for the card (renderer.js makeEddie), a copy of the Killers cover: the huge wild pale mane, the long skull
+// with its scowl, small glowing eyes and enormous grin, the ripped dark shirt over his ribs, thin bare arms, the bloody
+// hatchet up by his head and the other hand a claw; the cover's yellow light along the edges
 const EDDIE_SVG = `<svg class="member" viewBox="0 0 120 110" aria-hidden="true">`
-  + `<path d="M36 40c-2-24 10-34 24-34s26 10 24 34l6 54-8-4-2 8-6-10-4 6-4-40H54l-4 40-4-6-6 10-2-8-8 4z" fill="#e6d68a"/>`
-  + `<path d="M48 102h10v8H48zM62 102h10v8H62z" fill="#262c3a"/><path d="M44 106c0-22 4-34 16-34s16 12 16 34z" fill="#2a2a30"/><path d="M54 72h12l-6 9z" fill="#8c8366"/>`
-  + `<path d="M44 78 34 64l4-3 10 13zM76 78l10 18-4 2-10-17z" fill="#8c8366"/><path d="M44 102h32v4H44z" fill="#16110d"/>`
-  + `<path d="M35 64 24 24" stroke="#6b4a2a" stroke-width="3"/><path d="M19 22l12-6 4 10-12 5z" fill="#c8ccd2"/><path d="M19 22l4 9" stroke="#8a0a0a" stroke-width="2.5"/>`
-  + `<circle cx="36" cy="63" r="4" fill="#8c8366"/><path d="M84 96l-3 7M86 97l-1 7M88 96l1 7" stroke="#8c8366" stroke-width="1.6"/>`
-  + `<ellipse cx="60" cy="44" rx="17" ry="24" fill="#8c8366"/><path d="M43 34q17-20 34 0q-2-14-17-16-15 2-17 16z" fill="#e6d68a"/>`
-  + `<path d="M46 37l11 5M74 37l-11 5" stroke="#5c5440" stroke-width="3.2" stroke-linecap="round"/>`
-  + `<ellipse cx="52" cy="45" rx="5.5" ry="4.5" fill="#120a06"/><ellipse cx="68" cy="45" rx="5.5" ry="4.5" fill="#120a06"/>`
-  + `<circle cx="52" cy="45.5" r="2" fill="#ffe060"/><circle cx="68" cy="45.5" r="2" fill="#ffe060"/><path d="M57.5 55h5l-2.5-5z" fill="#120a06"/>`
-  + `<path d="M46 52q2 7 4 9M74 52q-2 7-4 9" stroke="#5c5440" stroke-width="2.5" fill="none"/>`
-  + `<path d="M46 57q14 6 28 0v10q-14 5-28 0z" fill="#120a06"/>`
-  + `<path d="M48.5 58v5M51.5 59v5M54.5 59.6v5M57.5 60v5M60.5 60v5M63.5 60v5M66.5 59.6v5M69.5 59v5M72 58v5M49 63v4.5M52 63.6v4.5M55 64v4.5M58 64.4v4.5M61 64.4v4.5M64 64.4v4.5M67 64v4.5M70 63.6v4.5" stroke="#e0d6b4" stroke-width="2.2"/></svg>`;
+  + `<path d="M60 5c20-2 33 10 33 25 6 10 2 20 7 32-6 2-4 12-11 18l-4-10-2 10-6-14H44l-6 14-2-10-4 10c-7-6-5-16-11-18 5-12 1-22 7-32 0-15 13-27 32-25z" fill="#e2c96a" stroke="#f6e7a6" stroke-width="1.2" stroke-linejoin="round"/>`
+  + `<path d="M30 34q-2 16 4 30M90 34q2 16-4 30M36 22q-6 14-2 30M84 22q6 14 2 30M25 46q2 10 6 20M95 46q-2 10-6 20" stroke="#b8963e" stroke-width="1.4" fill="none"/>`
+  + `<path d="M50 104h9v6h-9zM61 104h9v6h-9z" fill="#55585e"/><path d="M44 106l-2-22q2-12 18-14 16 2 18 14l-2 22z" fill="#2c2c30" stroke="#f2c832" stroke-width="1.2"/>`
+  + `<path d="M55 72l5 3 5-3-2 10 2 6-4 10-3-8-3-6z" fill="#7a6c4e"/><path d="M56 78h8M56 82h8M57 86h6" stroke="#463c2a" stroke-width="1.3"/><path d="M44 102h32v4H44z" fill="#1c140e"/>`
+  + `<path d="M43 80 32 70l3-4 11 10z" fill="#7a6c4e" stroke="#f2c832" stroke-width="1"/><path d="M33 70 28 46" stroke="#5a3c22" stroke-width="3"/><path d="M22 42l12-6 3 10-12 4z" fill="#b8bcc2"/><path d="M22 42l3 8" stroke="#8a0a0a" stroke-width="2.6"/><path d="M27 50v6M24 49v4" stroke="#8a0a0a" stroke-width="1.4"/>`
+  + `<circle cx="31" cy="69" r="4" fill="#7a6c4e"/><path d="M77 80l12 14-3 3-12-13z" fill="#7a6c4e" stroke="#f2c832" stroke-width="1"/><path d="M86 96l-4 8M89 97l-1 9M92 96l2 8M85 93l-6 3" stroke="#7a6c4e" stroke-width="1.8" stroke-linecap="round"/>`
+  + `<path d="M45 30q0-22 15-22t15 22v14q-2 14-15 20-13-6-15-20z" fill="#7a6c4e" stroke="#f2c832" stroke-width="1.2"/><path d="M46 24q14-14 28 0q-3-12-14-13-11 1-14 13z" fill="#e2c96a"/>`
+  + `<path d="M47 31l11 5M73 31l-11 5" stroke="#463c2a" stroke-width="3" stroke-linecap="round"/>`
+  + `<ellipse cx="53" cy="36" rx="4.5" ry="3" fill="#0a0604"/><ellipse cx="67" cy="36" rx="4.5" ry="3" fill="#0a0604"/><circle cx="53" cy="36" r="1.6" fill="#ffe24a"/><circle cx="67" cy="36" r="1.6" fill="#ffe24a"/>`
+  + `<path d="M58 45h4l-2-4z" fill="#0a0604"/><path d="M47 43q2 5 4 6M73 43q-2 5-4 6" stroke="#463c2a" stroke-width="2" fill="none"/>`
+  + `<path d="M47 47q13 5 26 0l-2 9q-11 5-22 0z" fill="#0a0604"/>`
+  + `<path d="M49 48v4M51.5 48.7v4M54 49.2v4.2M56.5 49.6v4.3M59 49.8v4.3M61.5 49.8v4.3M64 49.6v4.3M66.5 49.2v4.2M69 48.7v4M71 48v4M51 52v4M53.5 52.8v4M56 53.3v4M58.5 53.6v4M61 53.6v4M63.5 53.3v4M66 52.8v4M68.5 52v4" stroke="#e4dcbc" stroke-width="2"/></svg>`;
 // an emperor tamarin for the card (renderer.js gemShape "titi"): the furry head in the lane colour, the black face, the
 // pink muzzle and the white moustache hanging down
 const TITI_SVG = `<svg viewBox="-40 -48 80 100" aria-hidden="true"><circle cy="-10" r="35" fill="#0a0809"/>`
