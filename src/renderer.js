@@ -588,8 +588,17 @@ function makeEddie() {
   }
   add(new THREE.CylinderGeometry(0.098, 0.098, 0.035, 16), mat(0x1c140e, 0.35, 0.3)).position.y = 0.5;
   add(new THREE.BoxGeometry(0.034, 0.026, 0.01), mat(0xb8b0a0, 0.3, 0.8)).position.set(0, 0.5, 0.1);
-  // the torso: a V of a dark shirt, ripped down the front over his ribs; bare bony shoulders, a sinewy neck
-  const torso = add(new THREE.LatheGeometry([[0.001, 0], [0.095, 0], [0.1, 0.08], [0.13, 0.2], [0.155, 0.3], [0.15, 0.33], [0.1, 0.36], [0.045, 0.375]].map(([x, y]) => new THREE.Vector2(x, y)), 18), SHIRT);
+  // the torso: a V of a dark shirt, ripped down the front over his ribs and torn ragged
+  // at the bottom over his bare belly; a sinewy neck
+  const FOLD = mat(0x222226, 0.5, 0.2);
+  const belly = add(new THREE.CylinderGeometry(0.092, 0.095, 0.1, 14), SKIN); belly.position.y = 0.55; belly.scale.z = 0.62;
+  for (const y of [0.535, 0.565]) add(new THREE.BoxGeometry(0.05, 0.005, 0.004), SHADE).position.set(0, y, 0.059);
+  add(new THREE.BoxGeometry(0.005, 0.07, 0.004), SHADE).position.set(0, 0.55, 0.06);
+  for (let i = 0; i < 12; i++) { // the torn hem: rags hanging over the belly
+    const a = (i / 12) * Math.PI * 2, rag = add(new THREE.ConeGeometry(0.02 + (i % 3) * 0.005, 0.04 + (i % 2) * 0.025, 4), SHIRT);
+    rag.position.set(Math.sin(a) * 0.1, 0.565 - (i % 2) * 0.012, Math.cos(a) * 0.063); rag.rotation.set(Math.PI, a, 0); rag.scale.z = 0.4;
+  }
+  const torso = add(new THREE.LatheGeometry([[0.001, 0.07], [0.1, 0.07], [0.104, 0.1], [0.13, 0.2], [0.155, 0.3], [0.15, 0.33], [0.1, 0.36], [0.045, 0.375]].map(([x, y]) => new THREE.Vector2(x, y)), 18), SHIRT);
   torso.position.y = 0.5; torso.scale.z = 0.62;
   const rip = new THREE.Shape([[-0.05, 0.16], [0.0, 0.14], [0.055, 0.16], [0.045, 0.1], [0.062, 0.05], [0.04, 0.0], [0.05, -0.05], [0.02, -0.08], [0.01, -0.14], [-0.02, -0.07], [-0.045, -0.02], [-0.035, 0.03], [-0.058, 0.08], [-0.04, 0.12]].map(([x, y]) => new THREE.Vector2(x, y)));
   const chest = add(new THREE.ShapeGeometry(rip), SKIN); chest.position.set(0, 0.69, 0.083); chest.rotation.x = -0.1;
@@ -603,6 +612,10 @@ function makeEddie() {
   const arm = (side) => {
     const sh = new THREE.Group(); sh.position.set(side * 0.165, 0.82, 0); b.add(sh);
     const bi = add(sph(1, 10, 8), SKIN, sh); bi.scale.set(0.03, 0.105, 0.032); bi.position.y = -0.1;
+    // a short sleeve, rolled up at its edge and torn
+    add(new THREE.CylinderGeometry(0.044, 0.04, 0.09, 10), SHIRT, sh).position.y = -0.035;
+    const roll = add(new THREE.TorusGeometry(0.04, 0.01, 6, 14), FOLD, sh); roll.position.y = -0.08; roll.rotation.x = Math.PI / 2;
+    for (let i = 0; i < 4; i++) { const a = i * 1.7, rag = add(new THREE.ConeGeometry(0.012, 0.03, 4), SHIRT, sh); rag.position.set(Math.sin(a) * 0.04, -0.098, Math.cos(a) * 0.04); rag.rotation.x = Math.PI; }
     const el = new THREE.Group(); el.position.y = -0.2; sh.add(el);
     add(sph(0.026, 8, 6), SHADE, el);
     const fa = add(sph(1, 10, 8), SKIN, el); fa.scale.set(0.025, 0.1, 0.027); fa.position.y = -0.09;
@@ -620,10 +633,12 @@ function makeEddie() {
   const R = arm(-1), L = arm(1);
   // the hatchet: short handle, the steel head with blood on its edge, dripping
   const axe = new THREE.Group(); axe.position.set(0, -0.015, 0.012); R.hand.add(axe);
-  add(new THREE.CylinderGeometry(0.009, 0.011, 0.22, 8), mat(0x5a3c22, 0.7), axe).position.y = 0.05;
-  add(new THREE.BoxGeometry(0.014, 0.05, 0.075), mat(0xb8bcc2, 0.3, 0.6), axe).position.set(0, 0.14, 0.035);
-  add(new THREE.BoxGeometry(0.016, 0.05, 0.016), BLOOD, axe).position.set(0, 0.14, 0.07);
-  for (let i = 0; i < 4; i++) { const d = add(sph(0.006, 6, 4), BLOOD, axe); d.position.set(0, 0.11 - i * 0.025, 0.07 + (i % 2) * 0.004); d.scale.set(1, 1.7, 1); }
+  add(new THREE.CylinderGeometry(0.014, 0.017, 0.24, 8), mat(0x5a3c22, 0.7), axe).position.y = 0.05;
+  const STEEL = mat(0xb8bcc2, 0.3, 0.6);
+  add(new THREE.BoxGeometry(0.022, 0.06, 0.07), STEEL, axe).position.set(0, 0.15, 0.04); // a broad blade, flaring to its edge
+  add(new THREE.BoxGeometry(0.018, 0.1, 0.022), STEEL, axe).position.set(0, 0.15, 0.08);
+  add(new THREE.BoxGeometry(0.02, 0.1, 0.012), BLOOD, axe).position.set(0, 0.15, 0.093);
+  for (let i = 0; i < 4; i++) { const d = add(sph(0.006, 6, 4), BLOOD, axe); d.position.set(0, 0.1 - i * 0.025, 0.093 + (i % 2) * 0.004); d.scale.set(1, 1.7, 1); }
   // the head, hinged at the neck so it can bang
   const neck = new THREE.Group(); neck.position.y = 0.9; b.add(neck);
   const head = new THREE.Group(); head.position.y = 0.11; neck.add(head);
@@ -648,30 +663,38 @@ function makeEddie() {
   const jaw = new THREE.Group(); jaw.position.set(0, -0.075, 0.01); head.add(jaw);
   const chin = add(sph(1, 14, 10), SKIN, jaw); chin.scale.set(0.058, 0.034, 0.06); chin.position.set(0, -0.06, 0.06);
   row(jaw, -0.032, 0.106, 0.026, 12, 0.104);
-  // the mane: the crown swept back from a high forehead, a mass behind, and the locks flaring out and falling
-  const crown = add(new THREE.SphereGeometry(0.128, 24, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), HAIR[0], head); crown.rotation.x = -0.45; crown.position.set(0, 0.012, -0.004); crown.scale.set(1.02, 1.1, 1.12);
-  const top = add(sph(0.12, 18, 12), HAIR[1], head); top.scale.set(1.15, 0.85, 1.1); top.position.set(0, 0.085, -0.035); // the volume on top, swept back
-  const mass = add(sph(0.14, 18, 12), HAIR[2], head); mass.scale.set(1.25, 1.2, 0.9); mass.position.set(0, -0.03, -0.075);
+  // the mane, huge and swept back as if by the wind: a great rounded mass behind the head that frames the face like a
+  // hood and falls to the shoulders, wavy locks over it streaming back, their ends curling out in points behind
+  const crown = add(sph(0.14, 22, 14), HAIR[0], head); crown.scale.set(1.08, 1.0, 1.0); crown.position.set(0, 0.07, -0.05);
+  const mass = add(sph(0.17, 22, 14), HAIR[2], head); mass.scale.set(1.25, 1.12, 1.0); mass.position.set(0, -0.01, -0.13);
+  const fall = add(sph(0.15, 18, 12), HAIR[2], head); fall.scale.set(1.35, 1.25, 0.9); fall.position.set(0, -0.15, -0.13);
+  for (const side of [-1, 1]) { const hood = add(sph(0.1, 16, 12), HAIR[0], head); hood.scale.set(0.6, 1.35, 1.0); hood.position.set(side * 0.145, -0.03, -0.035); }
   const locks = [];
-  const lock = (root, M, wd, lens, bend) => {
+  const lock = (root, M, wd, lens, bend, curl) => {
     const segs = []; let p = root, r0 = wd;
     for (let k = 0; k < 3; k++) {
       const s = new THREE.Group(); p.add(s); segs.push(s);
-      const r1 = k === 2 ? 0.002 : r0 * 0.85, m = add(new THREE.CylinderGeometry(r0, r1, lens[k], 6), M, s); m.position.y = -lens[k] / 2; m.scale.z = 0.45;
-      const tip = new THREE.Group(); tip.position.y = -lens[k]; s.add(tip); p = tip; r0 = r1;
+      const m = add(new THREE.CapsuleGeometry(r0, lens[k], 3, 7), M, s); m.position.y = -lens[k] / 2; m.scale.z = 0.5;
+      const tip = new THREE.Group(); tip.position.y = -lens[k]; s.add(tip); p = tip; r0 *= 0.85;
     }
+    if (curl) { const c = add(new THREE.ConeGeometry(r0 * 0.9, 0.06, 6), M, p); c.position.y = -0.02; c.rotation.x = Math.PI + curl; c.scale.z = 0.5; } // the end curling out to a point
     locks.push({ segs, bend, st: [0, 0, 0], v: [0, 0, 0], k: 0.85 + (locks.length % 4) * 0.1 });
   };
-  // round the sides and the back: out from the head, then down past the shoulders (longest at the back)
-  for (let i = 0; i < 52; i++) {
-    const a = -Math.PI + ((i + 0.5) / 52) * Math.PI * 2;
-    if (Math.abs(a) < 0.95) continue; // the face stays clear
+  // from the hairline round the face, over the top and down the sides, streaming back (and falling, the lower ones)
+  for (let i = 0; i < 26; i++) {
+    const t = i / 25, ang = -1.25 + t * 2.5; // round the face: from one cheek over the top to the other
     const root = new THREE.Group(); head.add(root);
-    const back = Math.abs(a) > 2.2, hi = [0.1, 0.06, 0.02][i % 3];
-    root.position.set(Math.sin(a) * 0.118, hi, Math.cos(a) * 0.122 - 0.012);
-    root.rotation.y = a + Math.sign(a) * Math.max(0, 1.8 - Math.abs(a)) * 0.6; // the ones by the temples turned away, to the sides
-    const l3 = (back ? 0.2 : 0.15) + ((i * 7) % 5) * 0.022;
-    lock(root, HAIR[i % 5 ? (i % 3 ? 0 : 2) : 1], 0.052 + (i % 3) * 0.01, [0.05, 0.11, l3], [-1.35 - (i % 3) * 0.15, 0.8, 0.35]);
+    root.position.set(Math.sin(ang) * 0.135, Math.cos(ang) * 0.15 - 0.01, 0.03 - Math.abs(ang) * 0.03);
+    root.rotation.y = -ang * 0.35; // fanning out to the sides as they go back
+    const fall2 = Math.abs(ang) / 1.25; // the side ones fall more, the top ones stream straight back
+    lock(root, HAIR[i % 4 ? (i % 3 ? 0 : 2) : 1], 0.034 + (i % 3) * 0.006, [0.06, 0.09, 0.1 + (i % 4) * 0.025],
+      [1.5 - fall2 * 0.6, -(0.35 + fall2 * 0.25), -0.25], i % 2 ? 1.0 : 0);
+  }
+  // and down the back, falling past the shoulders
+  for (let i = 0; i < 8; i++) {
+    const a = Math.PI + (i - 3.5) * 0.3, root = new THREE.Group(); head.add(root);
+    root.position.set(Math.sin(a) * 0.17, -0.02, Math.cos(a) * 0.2 - 0.1); root.rotation.y = a;
+    lock(root, HAIR[i % 3], 0.045, [0.05, 0.1, 0.12], [-0.5, 0.2, 0.2], i % 2 ? -0.9 : 0);
   }
   const zz = napZ(); g.add(zz);
   let last = null, bang = 0, drive = 0;
