@@ -207,7 +207,7 @@ export async function secretOpen(code) {
   if (!supabase) return { id: 0, name: "", songs: [] };
   const { data, error } = await supabase.rpc("secret_open", { p_code: code.trim() });
   if (error) throw rpcError(error);
-  return { id: data.id, name: data.name, songs: data.songs || [] };
+  return { id: data.id, name: data.name, event: data.event || null, songs: data.songs || [] };
 }
 /** A hidden song's leaderboard (the public board views can't see hidden songs). Same rows as topScores. */
 // Boards show everyone (up to this many rows, far more than ever play one song).
