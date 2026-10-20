@@ -937,6 +937,7 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 .secret-admin .row input { flex: 1 1 180px; width: auto; }
 .secret-admin .hint:empty { display: none; }
 .adm-select { background: rgba(0,0,0,.5); color: var(--ink); border: 1px solid #000; border-radius: 3px; padding: 8px 10px; font: 500 16px var(--body); max-width: 100%; }
+.secret-list li { grid-template-columns: 1fr auto auto; }
 .secret-list .adm-select { max-width: 46vw; width: auto; }
 .secret-list .adm-select.on { border-color: #d42a86; box-shadow: 0 0 0 1px #d42a86; }
 .secret-groups li { display: flex; flex-wrap: wrap; gap: 6px 8px; }

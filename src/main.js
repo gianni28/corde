@@ -4452,8 +4452,21 @@ function renderSecretAdmin() {
   $("secretEmpty").textContent = !adm.lib ? "Escribe el código de administrador para ver la biblioteca." : list.length ? "" : q ? "Ninguna canción coincide." : "Todavía no hay canciones secretas. Búscalas aquí para moverlas a un código, o súbelas eligiendo el código.";
   for (const x of list) {
     const li = document.createElement("li");
-    li.innerHTML = `<span class="n"><span class="t"></span> <span class="a"></span></span><select class="adm-select" aria-label="Dónde está"></select>`;
+    li.innerHTML = `<span class="n"><span class="t"></span> <span class="a"></span></span><select class="adm-select" aria-label="Dónde está"></select><button type="button">Borrar</button>`;
     li.querySelector(".t").textContent = x.name; li.querySelector(".a").textContent = x.artist ? `· ${x.artist}` : "";
+    // any song can go for good (its files, its row and its scores)
+    li.querySelector("button").onclick = async (e) => {
+      const code = adminCodeOr("secretStatus"); if (!code) return;
+      if (!confirm(`¿Borrar «${x.name}»${x.artist ? ` de ${x.artist}` : ""}? Se borran sus archivos y todos sus puntajes. No se puede deshacer.`)) return;
+      e.target.disabled = true;
+      try {
+        await adminCall({ code, action: "delete", id: x.id });
+        adm.lib = (adm.lib || []).filter((y) => y.id !== x.id);
+        $("secretStatus").textContent = `Borrada: «${x.name}».`;
+        app.songs = []; if (app.loadedSongId === x.id) app.loadedSongId = null;
+      } catch (err) { $("secretStatus").textContent = err.message; e.target.disabled = false; return; }
+      renderSecretAdmin(); loadAutoList();
+    };
     const s = li.querySelector("select");
     const opts = [["", "Biblioteca"], ...adm.groups.map((g) => [String(g.id), g.name])];
     if (x.hidden && !adm.groups.some((g) => g.id === x.secret_group)) opts.push(["none", "Escondida (sin código)"]);
