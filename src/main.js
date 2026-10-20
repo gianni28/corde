@@ -12,7 +12,7 @@ import { motionAvailable, motionNeedsPermission, motionReady, requestMotion, onL
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
 import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, nameStyles, songRequest, myNotices, noticeSeen, noticeReply, myFulfilled, fulfilledSeen } from "./net.js";
 import { shareCard, retoUrl, readReto } from "./share.js";
-import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau, forBananas, BANANA_GIFTS, BANANA_LOGROS, BANDS, BAND_STARS, BAND_DIFF, forBand, MAIDEN, BEAST_GIFTS, BEAST_LOGROS, EDDIE_STARS, forBeast } from "./achievements.js";
+import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau, forBananas, BANANA_GIFTS, BANANA_LOGROS, BANDS, BAND_STARS, BAND_DIFF, forBand, MAIDEN, BEAST_GIFTS, BEAST_LOGROS, EDDIE_STARS, EDDIE_SONGS, forBeast } from "./achievements.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretOpen, secretBoard, songById, fetchMiauProgress, roomDirectory, commentPost, myComments, myCommentReplies, commentReplySeen } from "./net.js";
 import { VENUES, TO_ENCORE, TOUR_PRIZES, TOUR_THEMES, prizesWon, savedTourDiffs, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song, separateExisting } from "./admin.js";
@@ -2112,7 +2112,7 @@ function showNextNotice() {
     try { localStorage.setItem(BEAST_INTRO_KEY, "1"); } catch {}
     notices.go = () => { app.mode = "solo"; app.libTab = "all"; $("libSearch").value = "Iron Maiden"; openLibrary(); };
     $("noticeKicker").textContent = "Evento · La Gira de la Bestia";
-    $("noticeBody").textContent = `La Bestia sale de gira. Cada canción de Iron Maiden suma estrellas de la Bestia: tus mejores estrellas en cada una, en Media o más difícil.\n\nCon ${BEAST_GIFTS.join(", ").replace(/, (\d+)$/, " y $1")} estrellas se abren regalos sorpresa, y hay uno secreto para quien saque ${EDDIE_STARS} estrellas en todas, en la dificultad que quiera. ¿Qué serán? Solo lo sabrás cuando los ganes.`;
+    $("noticeBody").textContent = `La Bestia sale de gira. Cada canción de Iron Maiden suma estrellas de la Bestia: tus mejores estrellas en cada una, en Media o más difícil.\n\nCon ${BEAST_GIFTS.join(", ").replace(/, (\d+)$/, " y $1")} estrellas se abren regalos sorpresa, y hay uno secreto para quien saque ${EDDIE_STARS} estrellas en ${EDDIE_SONGS} de ellas, en la dificultad que quiera. ¿Qué serán? Solo lo sabrás cuando los ganes.`;
     $("noticeForm").querySelector(".notice-reply").hidden = true; $("noticeGo").hidden = false; $("noticeGo").textContent = "Ir a las canciones";
     $("noticeMsg").textContent = ""; $("noticeModal").hidden = false;
     return;
@@ -2252,13 +2252,20 @@ function queueBandIntros(delay = 0) {
 }
 /* ================= the Iron Maiden event: La Gira de la Bestia ================= */
 // For everyone, on the Iron Maiden songs of the library. The Beast's stars: the best stars on each of them (Media or
-// harder) added up; each mark opens a surprise gift (achievements.js BEAST_GIFTS), and Eddie comes once every one of
-// them has EDDIE_STARS on any difficulty. Nothing shows anywhere until it's won.
+// harder) added up; each mark opens a surprise gift (achievements.js BEAST_GIFTS), and Eddie comes once EDDIE_SONGS of
+// them have EDDIE_STARS on any difficulty. A song in two versions (studio and live, a remaster) counts once: its best.
+// Nothing shows anywhere until it's won.
 const maidenSongs = () => app.songs.filter((s) => MAIDEN.test(s.artist || ""));
+const maidenKey = (s) => nameKey(s.name.replace(/\s*[([][^)\]]*[)\]]/g, " "));
+// the best of each song's versions: Map(key → stars)
+const maidenBest = (stars) => maidenSongs().reduce((m, s) => m.set(maidenKey(s), Math.max(m.get(maidenKey(s)) || 0, stars(s.id))), new Map());
 const beastLive = () => maidenSongs().length >= 3 && !!giftOf(BEAST_LOGROS[0]);
-const beastStars = (extra = () => 0) => maidenSongs().reduce((n, s) => n + Math.max(bandStars(s.id), extra(s.id)), 0);
+const beastStars = (extra = () => 0) => [...maidenBest((id) => Math.max(bandStars(id), extra(id))).values()].reduce((n, x) => n + x, 0);
 const anyStars = (id) => Math.max(0, ...Object.values(bests[id] || {}).map((x) => x?.stars || 0));
-const beastAll = (extra = () => 0) => maidenSongs().every((s) => Math.max(anyStars(s.id), extra(s.id)) >= EDDIE_STARS);
+const beastAll = (extra = () => 0) => {
+  const best = [...maidenBest((id) => Math.max(anyStars(id), extra(id))).values()];
+  return best.filter((x) => x >= EDDIE_STARS).length >= Math.min(EDDIE_SONGS, best.length);
+};
 function beastCard() {
   const won = achievementsWon(), n = beastStars(), max = BEAST_GIFTS[BEAST_GIFTS.length - 1];
   const next = BEAST_GIFTS.find((g, i) => !won[BEAST_LOGROS[i]]);
@@ -2271,9 +2278,9 @@ function beastCard() {
   const card = document.createElement("div"); card.className = "otaku-card beast-card";
   card.innerHTML = `<div class="ok-head"><span class="bk-mark" aria-hidden="true">666</span><div><b>La Gira de la Bestia</b><small></small></div><span class="ok-count">${n}<i>★</i></span></div>`
     + `<div class="ok-bar"><i style="width:${Math.min(100, (n / max) * 100)}%"></i>${marks}</div>`
-    + `<button type="button" class="bk-secret${eddie ? " won" : ""}" data-l="bestia-eddie" ${eddie ? "" : "disabled"}>${eddie ? `<span class="sw"></span>` : `<svg aria-hidden="true"><use href="#gift"/></svg><em>?</em>`}<small>${EDDIE_STARS}★ en todas</small></button>`;
+    + `<button type="button" class="bk-secret${eddie ? " won" : ""}" data-l="bestia-eddie" ${eddie ? "" : "disabled"}>${eddie ? `<span class="sw"></span>` : `<svg aria-hidden="true"><use href="#gift"/></svg><em>?</em>`}<small>${EDDIE_STARS}★ en ${EDDIE_SONGS}</small></button>`;
   card.querySelector(".ok-head small").textContent = next == null ? "¡Ganaste todos los regalos de la Bestia! Están en la Tienda."
-    : `Suma estrellas en las canciones de Iron Maiden (Media o más difícil). Faltan ${Math.max(0, next - n)} para el próximo regalo sorpresa. Y hay uno secreto si sacas ${EDDIE_STARS} estrellas en todas.`;
+    : `Suma estrellas en las canciones de Iron Maiden (Media o más difícil). Faltan ${Math.max(0, next - n)} para el próximo regalo sorpresa. Y hay uno secreto si sacas ${EDDIE_STARS} estrellas en ${EDDIE_SONGS} de ellas.`;
   card.querySelectorAll("button.won").forEach((b) => {
     const it = giftOf(b.dataset.l); if (!it) return;
     fillSwatch(b.querySelector(".sw"), it);
