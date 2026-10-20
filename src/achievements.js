@@ -21,9 +21,9 @@ export const forBand = (band, ids, stars) => (ids.length >= band.songs && ids.ev
 // or harder) added up; each mark opens a surprise gift. Eddie comes apart: an Iron Maiden song without a single miss
 // on Difícil or harder
 export const MAIDEN = /iron\s*maiden/i;
-export const BEAST_GIFTS = [10, 25, 40, 60, 80];
+export const BEAST_GIFTS = [15, 30, 50, 75, 100];
 export const BEAST_LOGROS = ["bestia-powerslave", "bestia-trooper", "bestia-piramide", "bestia-fear", "bestia-nombre"];
-export const EDDIE_STARS = 4; // Eddie: at least this on every Iron Maiden song, any difficulty
+export const EDDIE_STARS = 4, EDDIE_SONGS = 20; // Eddie: at least this many stars on this many Iron Maiden songs, any difficulty
 export const forBeast = (n) => BEAST_LOGROS.filter((_, i) => n >= BEAST_GIFTS[i]);
 
 export const ACHIEVEMENTS = [
@@ -67,7 +67,7 @@ export const ACHIEVEMENTS = [
   { id: "bestia-piramide", name: "Pirámide", desc: `Junta ${BEAST_GIFTS[2]} estrellas de la Bestia en las canciones de Iron Maiden.`, secret: true, surprise: true },
   { id: "bestia-fear", name: "Fear of the Dark", desc: `Junta ${BEAST_GIFTS[3]} estrellas de la Bestia en las canciones de Iron Maiden.`, secret: true, surprise: true },
   { id: "bestia-nombre", name: "El número de la Bestia", desc: `Junta ${BEAST_GIFTS[4]} estrellas de la Bestia en las canciones de Iron Maiden.`, secret: true, surprise: true },
-  { id: "bestia-eddie", name: "Killers", desc: `Saca ${EDDIE_STARS} estrellas o más en todas las canciones de Iron Maiden, en cualquier dificultad.`, secret: true, surprise: true },
+  { id: "bestia-eddie", name: "Killers", desc: `Saca ${EDDIE_STARS} estrellas o más en ${EDDIE_SONGS} canciones de Iron Maiden, en cualquier dificultad.`, secret: true, surprise: true },
   { id: "bts", name: "ARMY", desc: "Saca 4 estrellas o más en las 6 canciones de BTS, en Media o más difícil.", secret: true, surprise: true },
 ];
 const BY_ID = Object.fromEntries(ACHIEVEMENTS.map((a) => [a.id, a]));
