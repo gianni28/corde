@@ -23,7 +23,7 @@ export const forBand = (band, ids, stars) => (ids.length >= band.songs && ids.ev
 export const MAIDEN = /iron\s*maiden/i;
 export const BEAST_GIFTS = [10, 25, 40, 60, 80];
 export const BEAST_LOGROS = ["bestia-powerslave", "bestia-trooper", "bestia-piramide", "bestia-fear", "bestia-nombre"];
-export const EDDIE_STARS = 3; // Eddie: at least this on every Iron Maiden song, any difficulty
+export const EDDIE_STARS = 4; // Eddie: at least this on every Iron Maiden song, any difficulty
 export const forBeast = (n) => BEAST_LOGROS.filter((_, i) => n >= BEAST_GIFTS[i]);
 
 export const ACHIEVEMENTS = [
