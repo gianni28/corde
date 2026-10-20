@@ -554,96 +554,104 @@ function makeMember(m) {
   };
   return g;
 }
-// Eddie, Iron Maiden's (the Iron Maiden event's secret gift): the Killers cover's Eddie, from a model made from the
-// cover (public/models/eddie.glb: from the waist up, the hatchet's stick and his victim's hands cut away), made one of
-// the pets like the others: a bigger head, legs in jeans and boots, a hatchet in his fist, and their moves: both arms up
-// and waving with star power, jumping, asleep after misses. He also headbangs: his head and mane turn about his neck on
-// every beat (harder in the loud parts, on a long streak and with star power), the mane's ends lagging behind on a
-// spring so they whip. It all moves in the vertex shader (the model has no bones); it loads the first time he's worn.
-// The model's own units (1 tall, centred): where his hips, neck and head are, his right shoulder, his left elbow (only
-// that forearm moves: the upper arm runs down along his side) and his fist.
-const EDDIE = { hips: [-0.07, -0.5, -0.15], neck: [-0.1, 0.15, -0.03], head: -0.14, armR: [-0.3, 0.16, -0.05], armL: [0.14, -0.08, -0.08], fist: [-0.22, 0.0, 0.2], legs: 0.3, size: 0.82 };
-let eddieGltf = null;
+// Eddie, Iron Maiden's (the Iron Maiden event's secret gift), as on the Killers cover, made like the bands' figures
+// (makeMember: a big head, the same body, the same moves) with his own face: a skull with the skin drawn over it,
+// glowing yellow eyes deep in their sockets under a scowl, a hole for a nose and a wide grin of teeth; a dark grey
+// T-shirt streaked yellow by the cover's light, its short sleeves and hem torn, grey jeans and boots, bony arms, clawed
+// hands and the bloody hatchet. His hair is the cover's own wild mane, taken from a model made from the cover
+// (public/models/eddie-hair.glb, loaded the first time he's worn). He headbangs on every beat (harder in the loud
+// parts, on a long streak and with star power), the mane swinging after his head on a spring.
+let eddieHair = null;
 function makeEddie() {
-  const g = new THREE.Group(), b = new THREE.Group(); g.add(b); g.lift = 0.3; b.scale.setScalar(EDDIE.size);
-  const u = { uBang: { value: 0 }, uLag: { value: 0 }, uTilt: { value: 0 }, uArmR: { value: 0 }, uArmL: { value: 0 } };
+  const g = new THREE.Group(), b = new THREE.Group(); g.add(b); g.lift = 0.3;
   const mat = (color, roughness = 0.6, metalness = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
-  const add = (geo, mt, parent) => { const o = new THREE.Mesh(geo, mt); parent.add(o); return o; };
-  // legs: his grey jeans and boots, under the model's hips
-  const JEANS = mat(0x3d3c42, 0.85), BOOT = mat(0x161210, 0.4);
+  const SKIN = mat(0x7d6a52, 0.65), SHADE = mat(0x4a3c2c, 0.85), DARK = new THREE.MeshBasicMaterial({ color: 0x0c0806 });
+  const JEANS = mat(0x45464c, 0.85), BOOT = mat(0x16120f, 0.4), TOOTH = mat(0xe4dcbc, 0.4);
+  const SHIRT = mat(0xffffff, 0.6); SHIRT.map = canvasTex(64, 64, (c) => { // dark grey, streaked yellow by the cover's light
+    c.fillStyle = "#3a3a40"; c.fillRect(0, 0, 64, 64);
+    c.strokeStyle = "#e0a820"; c.lineCap = "round";
+    for (const [x, w, k] of [[6, 5, 0.3], [20, 3, -0.2], [31, 6, 0.15], [45, 3, 0.35], [55, 5, -0.1]]) { c.lineWidth = w; c.beginPath(); c.moveTo(x, -4); c.quadraticCurveTo(x + k * 30, 32, x - k * 10, 68); c.stroke(); }
+  }, { repeat: true });
+  const add = (geo, mt, parent = b) => { const o = new THREE.Mesh(geo, mt); parent.add(o); return o; };
+  const sph = (r, ws = 18, hs = 12) => new THREE.SphereGeometry(r, ws, hs);
+  // legs and boots
   for (const side of [-1, 1]) {
-    add(new THREE.CylinderGeometry(0.075, 0.062, EDDIE.legs, 10), JEANS, b).position.set(side * 0.08, EDDIE.legs / 2 + 0.03, 0);
-    const boot = add(new THREE.SphereGeometry(1, 12, 8), BOOT, b); boot.scale.set(0.07, 0.05, 0.11); boot.position.set(side * 0.08, 0.04, 0.03);
+    add(new THREE.CylinderGeometry(0.055, 0.06, 0.24, 12), JEANS).position.set(side * 0.07, 0.17, 0);
+    const sh = add(sph(1), BOOT); sh.scale.set(0.065, 0.045, 0.1); sh.position.set(side * 0.07, 0.04, 0.025);
   }
-  // the model, turned so his face (turned to his left in the painting) looks ahead, his hips on the legs
-  const turn = new THREE.Group(); turn.position.y = EDDIE.legs; turn.rotation.set(-0.25, -0.4, 0, "YXZ"); b.add(turn); // and he hunches: leaned back a little, his face turns up to us
-  const rig = new THREE.Group(); rig.position.set(-EDDIE.hips[0], -EDDIE.hips[1], -EDDIE.hips[2]); turn.add(rig);
-  // the hatchet in his fist, swung up with his arm (the same turn the shader gives the arm)
-  const armR = new THREE.Group(); armR.position.set(...EDDIE.armR); rig.add(armR);
-  const axe = new THREE.Group(); axe.position.set(...EDDIE.fist.map((v, i) => v - EDDIE.armR[i])); axe.rotation.set(0.3, 0, 0.35); armR.add(axe);
+  add(new THREE.CylinderGeometry(0.155, 0.155, 0.03, 18), mat(0x1c140e, 0.35, 0.3)).position.y = 0.29; // the belt
+  // the shirt, torn at the hem; through a rip at the front, his ribs
+  const shirt = add(new THREE.CylinderGeometry(0.13, 0.16, 0.28, 18), SHIRT); shirt.position.y = 0.44;
+  for (let i = 0; i < 14; i++) { const a = (i / 14) * Math.PI * 2, rag = add(new THREE.ConeGeometry(0.025, 0.05 + (i % 3) * 0.02, 4), SHIRT); rag.position.set(Math.sin(a) * 0.158, 0.3 - (i % 3) * 0.008, Math.cos(a) * 0.158); rag.rotation.set(Math.PI, a, 0); rag.scale.z = 0.4; }
+  const rip = add(new THREE.CircleGeometry(0.06, 5), SKIN); rip.position.set(0.02, 0.47, 0.147); rip.rotation.x = -0.1; rip.scale.set(0.8, 1.4, 1);
+  for (let i = 0; i < 4; i++) add(new THREE.BoxGeometry(0.06, 0.007, 0.004), SHADE).position.set(0.02, 0.53 - i * 0.03, 0.15 - i * 0.002);
+  add(new THREE.CylinderGeometry(0.045, 0.05, 0.07, 12), SKIN).position.y = 0.6;
+  // arms, hung from the shoulders (pose() raises them): short torn sleeves, bony arms, claws
+  const arms = [-1, 1].map((side) => {
+    const p = new THREE.Group(); p.position.set(side * 0.155, 0.55, 0); b.add(p);
+    add(new THREE.CylinderGeometry(0.052, 0.048, 0.1, 10), SHIRT, p).position.y = -0.04;
+    for (let i = 0; i < 4; i++) { const a = i * 1.6, r = add(new THREE.ConeGeometry(0.014, 0.035, 4), SHIRT, p); r.position.set(Math.sin(a) * 0.046, -0.1, Math.cos(a) * 0.046); r.rotation.x = Math.PI; }
+    add(new THREE.CylinderGeometry(0.034, 0.03, 0.24, 8), SKIN, p).position.y = -0.14;
+    const hand = new THREE.Group(); hand.position.y = -0.27; p.add(hand);
+    add(sph(0.04), SKIN, hand).scale.set(0.9, 1, 0.75);
+    for (let f = 0; f < 4; f++) { const k = add(new THREE.ConeGeometry(0.008, 0.06, 5), SHADE, hand); k.position.set(-0.021 + f * 0.014, -0.045, 0.012); k.rotation.set(Math.PI - 0.5, 0, (f - 1.5) * 0.15); }
+    return { p, hand };
+  });
+  // the hatchet in his right hand: a wooden handle, a broad blade, blood on its edge
+  const axe = new THREE.Group(); axe.position.set(0, -0.02, 0.03); axe.rotation.set(1.2, 0, 0); arms[0].hand.add(axe);
+  add(new THREE.CylinderGeometry(0.013, 0.016, 0.26, 8), mat(0x5a3c22, 0.7), axe).position.y = 0.05;
   const STEEL = mat(0xb8bcc2, 0.3, 0.6), BLOOD = mat(0x8a0a0a, 0.3);
-  add(new THREE.CylinderGeometry(0.016, 0.02, 0.3, 8), mat(0x5a3c22, 0.7), axe).position.y = 0.06;
-  add(new THREE.BoxGeometry(0.025, 0.08, 0.09), STEEL, axe).position.set(0, 0.18, 0.05);
-  add(new THREE.BoxGeometry(0.022, 0.12, 0.025), STEEL, axe).position.set(0, 0.18, 0.1);
-  add(new THREE.BoxGeometry(0.024, 0.12, 0.012), BLOOD, axe).position.set(0, 0.18, 0.115);
-  for (let i = 0; i < 3; i++) { const d = add(new THREE.SphereGeometry(0.008, 6, 4), BLOOD, axe); d.position.set(0, 0.13 - i * 0.03, 0.115); d.scale.set(1, 1.7, 1); }
-  eddieGltf ??= import("three/examples/jsm/loaders/GLTFLoader.js").then(({ GLTFLoader }) => new GLTFLoader().loadAsync("/models/eddie.glb"));
-  eddieGltf.then((gltf) => {
-    const m = gltf.scene.clone(true);
-    const v3 = (a) => `vec3(${a.map((x) => x.toFixed(3)).join(", ")})`;
-    m.traverse((o) => {
-      if (!o.isMesh) return;
-      const mt = o.material = o.material.clone();
-      // a little of his own light, so he reads in the dark beside the neck
-      mt.emissive = new THREE.Color(0xffffff); mt.emissiveMap = mt.map; mt.emissiveIntensity = 0.22;
-      mt.onBeforeCompile = (sh) => {
-        Object.assign(sh.uniforms, u);
-        const rig = `
-          vec3 pN = ${v3(EDDIE.neck)}, pR = ${v3(EDDIE.armR)}, pL = ${v3(EDDIE.armL)};
-          vec3 q = position;
-          // the head and mane (above the shoulders, within the mane's width), the mane's ends, the arms
-          float wH = smoothstep(0.11, 0.19, q.y) * (1.0 - smoothstep(0.19, 0.25, abs(q.x - (${EDDIE.head.toFixed(3)}))));
-          float wT = wH * smoothstep(0.15, 0.3, length(q - pN));
-          float under = 1.0 - smoothstep(0.17, 0.22, q.y);
-          float high = smoothstep(-0.27, -0.2, q.y); // not the shirt's torn hem below
-          float wR = under * high * max(1.0 - smoothstep(-0.33, -0.25, q.x), step(q.x, -0.13) * smoothstep(0.06, 0.11, q.z) * step(q.y, 0.1));
-          float wL = under * high * smoothstep(0.17, 0.22, q.x);
-          float ah = uBang + uLag * wT / max(wH, 0.001);
-          mat3 hx = mat3(1.0, 0.0, 0.0, 0.0, cos(ah), sin(ah), 0.0, -sin(ah), cos(ah));
-          mat3 hz = mat3(cos(uTilt), sin(uTilt), 0.0, -sin(uTilt), cos(uTilt), 0.0, 0.0, 0.0, 1.0);
-          mat3 rR = mat3(cos(uArmR), sin(uArmR), 0.0, -sin(uArmR), cos(uArmR), 0.0, 0.0, 0.0, 1.0);
-          mat3 rL = mat3(cos(uArmL), sin(uArmL), 0.0, -sin(uArmL), cos(uArmL), 0.0, 0.0, 0.0, 1.0);
-          mat3 hR = hz * hx;`;
-        sh.vertexShader = "uniform float uBang, uLag, uTilt, uArmR, uArmL;\n" + sh.vertexShader
-          .replace("#include <beginnormal_vertex>", `#include <beginnormal_vertex>\n${rig}
-            objectNormal = normalize(mix(objectNormal, hR * objectNormal, wH));
-            objectNormal = normalize(mix(objectNormal, rR * objectNormal, wR));
-            objectNormal = normalize(mix(objectNormal, rL * objectNormal, wL));`)
-          .replace("#include <begin_vertex>", `#include <begin_vertex>
-            transformed = mix(transformed, pN + hR * ((transformed - pN) * 1.25), wH); // a bigger head, like the other pets'
-            transformed = mix(transformed, pR + rR * (transformed - pR), wR);
-            transformed = mix(transformed, pL + rL * (transformed - pL), wL);`);
-      };
-      mt.customProgramCacheKey = () => "eddie-rig";
-    });
-    rig.add(m);
-  }).catch(() => { eddieGltf = null; }); // offline: no Eddie this time, another try next time he's worn
+  add(new THREE.BoxGeometry(0.02, 0.07, 0.08), STEEL, axe).position.set(0, 0.16, 0.045);
+  add(new THREE.BoxGeometry(0.018, 0.1, 0.02), STEEL, axe).position.set(0, 0.16, 0.085);
+  add(new THREE.BoxGeometry(0.02, 0.1, 0.01), BLOOD, axe).position.set(0, 0.16, 0.097);
+  // the head: a big one, as the others', on a neck that can bang
+  const neck = new THREE.Group(); neck.position.y = 0.6; b.add(neck);
+  const head = new THREE.Group(); head.position.y = 0.21; neck.add(head);
+  add(sph(0.25, 28, 20), SKIN, head).scale.set(0.95, 1.02, 0.95);
+  const lids = [], lights = [];
+  for (const side of [-1, 1]) {
+    const cheek = add(sph(0.06, 14, 10), SKIN, head); cheek.scale.set(1, 0.6, 0.7); cheek.position.set(side * 0.12, -0.04, 0.18); // big cheekbones
+    const hollow = add(sph(0.05, 12, 10), SHADE, head); hollow.scale.set(0.6, 1, 0.4); hollow.position.set(side * 0.135, -0.11, 0.16);
+    const e = new THREE.Group(); e.position.set(side * 0.085, 0.02, 0.2); head.add(e);
+    add(sph(0.052, 16, 12), DARK, e).scale.set(1, 0.8, 0.5); // the socket
+    const eye = add(sph(0.022, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffd040 }), e); eye.position.z = 0.016; lights.push(eye);
+    const lid = new THREE.Group(); e.add(lid); lids.push(lid);
+    add(new THREE.SphereGeometry(0.056, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), SKIN, lid).scale.set(1, 0.85, 0.55);
+    const brow = add(sph(1, 14, 8), SHADE, head); brow.scale.set(0.075, 0.022, 0.04); brow.position.set(side * 0.085, 0.085, 0.215); brow.rotation.z = side * 0.42; // a scowl
+  }
+  const nose = add(new THREE.ConeGeometry(0.03, 0.055, 3), DARK, head); nose.position.set(0, -0.045, 0.235); nose.rotation.set(-0.35, 0, Math.PI); nose.scale.z = 0.4;
+  // the grin: wide, the corners up into the cheeks; upper teeth in the skull, the lower ones on the jaw
+  const row = (parent, y0, z0, h, n, w) => { for (let t = 0; t < n; t++) { const x = -w / 2 + (t + 0.5) * (w / n), c = x * x * 4; const tt = add(new THREE.BoxGeometry((w / n) * 0.85, h, 0.014), TOOTH, parent); tt.position.set(x, y0 + c * 0.7, z0 - c * 1.1); tt.rotation.y = -x * 3; } };
+  add(new THREE.BoxGeometry(0.2, 0.07, 0.04), DARK, head).position.set(0, -0.125, 0.19);
+  add(new THREE.BoxGeometry(0.21, 0.012, 0.03), mat(0x4a1210, 0.7), head).position.set(0, -0.095, 0.205);
+  row(head, -0.112, 0.222, 0.04, 12, 0.21);
+  const jaw = new THREE.Group(); jaw.position.set(0, -0.12, 0.02); head.add(jaw);
+  const chin = add(sph(1, 14, 10), SKIN, jaw); chin.scale.set(0.11, 0.055, 0.12); chin.position.set(0, -0.06, 0.1);
+  row(jaw, -0.032, 0.197, 0.034, 12, 0.2);
+  // the mane, from the model: it hangs from a pivot at the crown so it can swing after the head
+  const mane = new THREE.Group(); mane.position.set(0, 0.24, -0.02); head.add(mane);
+  eddieHair ??= import("three/examples/jsm/loaders/GLTFLoader.js").then(({ GLTFLoader }) => new GLTFLoader().loadAsync("/models/eddie-hair.glb"));
+  eddieHair.then((gltf) => {
+    const h = gltf.scene.clone(true);
+    h.scale.setScalar(2.0); h.position.set(0.012, 0.12, -0.03); h.rotation.y = -0.9; // sized to the head, turned so the face shows (in the painting he looks to his left)
+    mane.add(h);
+  }).catch(() => { eddieHair = null; }); // offline: bald this time, another try next time he's worn
   const zz = napZ(); g.add(zz);
   let last = null, bang = 0, drive = 0, lag = 0, lagV = 0;
-  g.pose = ({ wing, sleep, now, pulse = 0, star = false, happy = false, energy = 0.55 }) => {
+  g.pose = ({ lid, wing, sleep, now, pulse = 0, star = false, happy = false, energy = 0.55 }) => {
     const dt = last == null ? 1 / 60 : Math.min(0.05, Math.max(0, now - last)); last = now;
-    // how hard he bangs: a nod in the quiet parts, more as the song gets loud, all out on a streak or with star power
+    lids.forEach((l) => (l.rotation.x = -1.45 + lid * 3.0));
+    lights.forEach((l) => l.material.color.setRGB(sleep ? 0.2 : 1, sleep ? 0.15 : 0.82, sleep ? 0.05 : 0.25));
+    arms.forEach((a, i) => (a.p.rotation.z = (i ? 1 : -1) * (0.12 + wing * 2.5 + (wing > 0.4 ? Math.sin(now * 14 + i * 2) * 0.25 : 0))));
+    jaw.rotation.x = sleep ? 0.1 : wing * 0.35;
+    // headbanging: a nod in the quiet parts, more as the song gets loud, all out on a streak or with star power
     const want = sleep ? 0 : star ? 1 : happy ? 0.75 : 0.2 + 0.45 * Math.min(1, Math.max(0, (energy - 0.45) / 0.4));
     drive += (want - drive) * Math.min(1, dt * 3);
-    bang += ((sleep ? 0.45 : pulse * (0.1 + drive * 0.45)) - bang) * Math.min(1, dt * (sleep ? 2 : 22));
-    // the mane's ends hang back as the head drops, then swing past it
-    lagV += ((-bang * 0.9 - lag) * 70 - lagV * 6) * dt; lag += lagV * dt;
-    u.uBang.value = bang; u.uLag.value = lag; u.uTilt.value = sleep ? 0.15 : Math.sin(now * 2.1) * 0.05 * (1 - drive);
-    // the arms, as the other pets': up and waving with star power and on a long streak
-    const wave = wing > 0.4 ? Math.sin(now * 14) * 0.25 : 0;
-    u.uArmR.value = -(wing * 1.5 + wave); u.uArmL.value = wing * 1.7 - wave;
-    armR.rotation.z = u.uArmR.value;
-    zz.visible = sleep; zz.position.set(0.35, 1.3 + ((now * 0.4) % 1) * 0.2, 0); zz.material.opacity = 1 - ((now * 0.4) % 1);
+    bang += ((sleep ? 0.3 : pulse * (0.1 + drive * 0.45)) - bang) * Math.min(1, dt * (sleep ? 2 : 22));
+    lagV += ((-bang * 0.8 - lag) * 70 - lagV * 6) * dt; lag += lagV * dt; // the mane hangs back as the head drops, then swings past
+    neck.rotation.set(bang, 0, sleep ? 0.2 : Math.sin(now * 2.1) * 0.05 * (1 - drive));
+    mane.rotation.x = lag;
+    zz.visible = sleep; zz.position.set(0.4, 1.2 + ((now * 0.4) % 1) * 0.2, 0); zz.material.opacity = 1 - ((now * 0.4) % 1);
   };
   return g;
 }
