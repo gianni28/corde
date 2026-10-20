@@ -554,152 +554,104 @@ function makeMember(m) {
   };
   return g;
 }
-// Eddie, Iron Maiden's, a copy of the Killers cover (the Iron Maiden event's secret gift): not one of the little band
-// figures but his own lanky grown-up self, lit like the painting with a hard yellow light on every edge. A huge wild
-// mane of pale yellow hair swept back from the forehead, flaring out and falling past the shoulders; a long skull of a
-// face under a furrowed brow, small glowing eyes deep in the shadow, a hole for a nose, big cheekbones and an enormous
-// grin of teeth with the lips pulled back; a ripped dark shirt showing his ribs, sinewy bare arms, the bloody hatchet
-// held up by his head and the other hand an open claw; grey jeans and a belt.
-// He headbangs: his head drops on every beat (harder in the loud parts, on a long streak and with star power) and the
-// mane, in locks of three joints on springs, lags behind and whips. pose() as the others' plus the beat.
+// Eddie, Iron Maiden's (the Iron Maiden event's secret gift), as on the Killers cover, made like the bands' figures
+// (makeMember: a big head, the same body, the same moves) with his own face: a skull with the skin drawn over it,
+// glowing yellow eyes deep in their sockets under a scowl, a hole for a nose and a wide grin of teeth; a dark grey
+// T-shirt streaked yellow by the cover's light, its short sleeves and hem torn, grey jeans and boots, bony arms, clawed
+// hands and the bloody hatchet. His hair is the cover's own wild mane, taken from a model made from the cover
+// (public/models/eddie-hair.glb, loaded the first time he's worn). He headbangs on every beat (harder in the loud
+// parts, on a long streak and with star power), the mane swinging after his head on a spring.
+let eddieHair = null;
 function makeEddie() {
   const g = new THREE.Group(), b = new THREE.Group(); g.add(b); g.lift = 0.3;
-  // the cover's light: a yellow glare along every edge (one strength for all, so they share one program)
-  const rimify = (m) => {
-    m.onBeforeCompile = (sh) => {
-      sh.fragmentShader = sh.fragmentShader.replace("#include <emissivemap_fragment>",
-        "#include <emissivemap_fragment>\n{ float fr = 1.0 - clamp(abs(dot(normalize(normal), normalize(vViewPosition))), 0.0, 1.0); totalEmissiveRadiance += vec3(1.0, 0.82, 0.22) * 0.45 * pow(max(fr, 1e-4), 3.0); }");
-    };
-    return m;
-  };
-  const mat = (color, roughness = 0.6, metalness = 0) => rimify(new THREE.MeshStandardMaterial({ color, roughness, metalness }));
+  const mat = (color, roughness = 0.6, metalness = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
+  const SKIN = mat(0x7d6a52, 0.65), SHADE = mat(0x4a3c2c, 0.85), DARK = new THREE.MeshBasicMaterial({ color: 0x0c0806 });
+  const JEANS = mat(0x45464c, 0.85), BOOT = mat(0x16120f, 0.4), TOOTH = mat(0xe4dcbc, 0.4);
+  const SHIRT = mat(0xffffff, 0.6); SHIRT.map = canvasTex(64, 64, (c) => { // dark grey, streaked yellow by the cover's light
+    c.fillStyle = "#3a3a40"; c.fillRect(0, 0, 64, 64);
+    c.strokeStyle = "#e0a820"; c.lineCap = "round";
+    for (const [x, w, k] of [[6, 5, 0.3], [20, 3, -0.2], [31, 6, 0.15], [45, 3, 0.35], [55, 5, -0.1]]) { c.lineWidth = w; c.beginPath(); c.moveTo(x, -4); c.quadraticCurveTo(x + k * 30, 32, x - k * 10, 68); c.stroke(); }
+  }, { repeat: true });
   const add = (geo, mt, parent = b) => { const o = new THREE.Mesh(geo, mt); parent.add(o); return o; };
-  const sph = (r, ws = 16, hs = 12) => new THREE.SphereGeometry(r, ws, hs);
-  const SKIN = mat(0x7a6c4e, 0.7), SHADE = mat(0x463c2a, 0.85), DARK = new THREE.MeshBasicMaterial({ color: 0x0a0604 });
-  const SHIRT = mat(0x2c2c30, 0.45, 0.25), JEANS = mat(0x55585e, 0.8), TOOTH = mat(0xe4dcbc, 0.4), GUM = mat(0x4a1210, 0.7);
-  const HAIR = [mat(0xe2c96a, 0.5), mat(0xf2e3a0, 0.45), mat(0xc4a450, 0.6)], BLOOD = mat(0x8a0a0a, 0.3);
-  const GLOW = new THREE.MeshBasicMaterial({ color: 0xffe24a });
-  // legs apart, grey jeans, the belt and buckle, boots
+  const sph = (r, ws = 18, hs = 12) => new THREE.SphereGeometry(r, ws, hs);
+  // legs and boots
   for (const side of [-1, 1]) {
-    const leg = new THREE.Group(); leg.position.set(side * 0.06, 0.5, 0); leg.rotation.z = side * 0.1; b.add(leg);
-    add(new THREE.CylinderGeometry(0.062, 0.05, 0.25, 10), JEANS, leg).position.y = -0.125;
-    add(new THREE.CylinderGeometry(0.05, 0.042, 0.23, 10), JEANS, leg).position.y = -0.36;
-    const boot = add(sph(1), mat(0x1a1612, 0.4), leg); boot.scale.set(0.045, 0.035, 0.08); boot.position.set(0, -0.48, 0.025);
+    add(new THREE.CylinderGeometry(0.055, 0.06, 0.24, 12), JEANS).position.set(side * 0.07, 0.17, 0);
+    const sh = add(sph(1), BOOT); sh.scale.set(0.065, 0.045, 0.1); sh.position.set(side * 0.07, 0.04, 0.025);
   }
-  add(new THREE.CylinderGeometry(0.098, 0.098, 0.035, 16), mat(0x1c140e, 0.35, 0.3)).position.y = 0.5;
-  add(new THREE.BoxGeometry(0.034, 0.026, 0.01), mat(0xb8b0a0, 0.3, 0.8)).position.set(0, 0.5, 0.1);
-  // the torso: a V of a dark shirt, ripped down the front over his ribs; bare bony shoulders, a sinewy neck
-  const torso = add(new THREE.LatheGeometry([[0.001, 0], [0.095, 0], [0.1, 0.08], [0.13, 0.2], [0.155, 0.3], [0.15, 0.33], [0.1, 0.36], [0.045, 0.375]].map(([x, y]) => new THREE.Vector2(x, y)), 18), SHIRT);
-  torso.position.y = 0.5; torso.scale.z = 0.62;
-  const rip = new THREE.Shape([[-0.05, 0.16], [0.0, 0.14], [0.055, 0.16], [0.045, 0.1], [0.062, 0.05], [0.04, 0.0], [0.05, -0.05], [0.02, -0.08], [0.01, -0.14], [-0.02, -0.07], [-0.045, -0.02], [-0.035, 0.03], [-0.058, 0.08], [-0.04, 0.12]].map(([x, y]) => new THREE.Vector2(x, y)));
-  const chest = add(new THREE.ShapeGeometry(rip), SKIN); chest.position.set(0, 0.69, 0.083); chest.rotation.x = -0.1;
-  for (let i = 0; i < 5; i++) { const rib = add(new THREE.BoxGeometry(0.075 - i * 0.008, 0.006, 0.004), SHADE); rib.position.set(0, 0.82 - i * 0.03, 0.087 - i * 0.002); rib.rotation.x = -0.1; } // his ribs through the rip
+  add(new THREE.CylinderGeometry(0.155, 0.155, 0.03, 18), mat(0x1c140e, 0.35, 0.3)).position.y = 0.29; // the belt
+  // the shirt, torn at the hem; through a rip at the front, his ribs
+  const shirt = add(new THREE.CylinderGeometry(0.13, 0.16, 0.28, 18), SHIRT); shirt.position.y = 0.44;
+  for (let i = 0; i < 14; i++) { const a = (i / 14) * Math.PI * 2, rag = add(new THREE.ConeGeometry(0.025, 0.05 + (i % 3) * 0.02, 4), SHIRT); rag.position.set(Math.sin(a) * 0.158, 0.3 - (i % 3) * 0.008, Math.cos(a) * 0.158); rag.rotation.set(Math.PI, a, 0); rag.scale.z = 0.4; }
+  const rip = add(new THREE.CircleGeometry(0.06, 5), SKIN); rip.position.set(0.02, 0.47, 0.147); rip.rotation.x = -0.1; rip.scale.set(0.8, 1.4, 1);
+  for (let i = 0; i < 4; i++) add(new THREE.BoxGeometry(0.06, 0.007, 0.004), SHADE).position.set(0.02, 0.53 - i * 0.03, 0.15 - i * 0.002);
+  add(new THREE.CylinderGeometry(0.045, 0.05, 0.07, 12), SKIN).position.y = 0.6;
+  // arms, hung from the shoulders (pose() raises them): short torn sleeves, bony arms, claws
+  const arms = [-1, 1].map((side) => {
+    const p = new THREE.Group(); p.position.set(side * 0.155, 0.55, 0); b.add(p);
+    add(new THREE.CylinderGeometry(0.052, 0.048, 0.1, 10), SHIRT, p).position.y = -0.04;
+    for (let i = 0; i < 4; i++) { const a = i * 1.6, r = add(new THREE.ConeGeometry(0.014, 0.035, 4), SHIRT, p); r.position.set(Math.sin(a) * 0.046, -0.1, Math.cos(a) * 0.046); r.rotation.x = Math.PI; }
+    add(new THREE.CylinderGeometry(0.034, 0.03, 0.24, 8), SKIN, p).position.y = -0.14;
+    const hand = new THREE.Group(); hand.position.y = -0.27; p.add(hand);
+    add(sph(0.04), SKIN, hand).scale.set(0.9, 1, 0.75);
+    for (let f = 0; f < 4; f++) { const k = add(new THREE.ConeGeometry(0.008, 0.06, 5), SHADE, hand); k.position.set(-0.021 + f * 0.014, -0.045, 0.012); k.rotation.set(Math.PI - 0.5, 0, (f - 1.5) * 0.15); }
+    return { p, hand };
+  });
+  // the hatchet in his right hand: a wooden handle, a broad blade, blood on its edge
+  const axe = new THREE.Group(); axe.position.set(0, -0.02, 0.03); axe.rotation.set(1.2, 0, 0); arms[0].hand.add(axe);
+  add(new THREE.CylinderGeometry(0.013, 0.016, 0.26, 8), mat(0x5a3c22, 0.7), axe).position.y = 0.05;
+  const STEEL = mat(0xb8bcc2, 0.3, 0.6), BLOOD = mat(0x8a0a0a, 0.3);
+  add(new THREE.BoxGeometry(0.02, 0.07, 0.08), STEEL, axe).position.set(0, 0.16, 0.045);
+  add(new THREE.BoxGeometry(0.018, 0.1, 0.02), STEEL, axe).position.set(0, 0.16, 0.085);
+  add(new THREE.BoxGeometry(0.02, 0.1, 0.01), BLOOD, axe).position.set(0, 0.16, 0.097);
+  // the head: a big one, as the others', on a neck that can bang
+  const neck = new THREE.Group(); neck.position.y = 0.6; b.add(neck);
+  const head = new THREE.Group(); head.position.y = 0.21; neck.add(head);
+  add(sph(0.25, 28, 20), SKIN, head).scale.set(0.95, 1.02, 0.95);
+  const lids = [], lights = [];
   for (const side of [-1, 1]) {
-    const sh = add(sph(0.048, 12, 10), SKIN); sh.scale.set(1, 0.8, 0.9); sh.position.set(side * 0.155, 0.83, 0);
-    const t = add(new THREE.CylinderGeometry(0.008, 0.008, 0.08, 6), SHADE); t.position.set(side * 0.022, 0.88, 0.03); t.rotation.z = side * -0.3; // the neck's cords
+    const cheek = add(sph(0.06, 14, 10), SKIN, head); cheek.scale.set(1, 0.6, 0.7); cheek.position.set(side * 0.12, -0.04, 0.18); // big cheekbones
+    const hollow = add(sph(0.05, 12, 10), SHADE, head); hollow.scale.set(0.6, 1, 0.4); hollow.position.set(side * 0.135, -0.11, 0.16);
+    const e = new THREE.Group(); e.position.set(side * 0.085, 0.02, 0.2); head.add(e);
+    add(sph(0.052, 16, 12), DARK, e).scale.set(1, 0.8, 0.5); // the socket
+    const eye = add(sph(0.022, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffd040 }), e); eye.position.z = 0.016; lights.push(eye);
+    const lid = new THREE.Group(); e.add(lid); lids.push(lid);
+    add(new THREE.SphereGeometry(0.056, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), SKIN, lid).scale.set(1, 0.85, 0.55);
+    const brow = add(sph(1, 14, 8), SHADE, head); brow.scale.set(0.075, 0.022, 0.04); brow.position.set(side * 0.085, 0.085, 0.215); brow.rotation.z = side * 0.42; // a scowl
   }
-  add(new THREE.CylinderGeometry(0.036, 0.045, 0.09, 10), SKIN).position.y = 0.88;
-  // arms: shoulder, elbow, a long-fingered claw
-  const arm = (side) => {
-    const sh = new THREE.Group(); sh.position.set(side * 0.165, 0.82, 0); b.add(sh);
-    const bi = add(sph(1, 10, 8), SKIN, sh); bi.scale.set(0.03, 0.105, 0.032); bi.position.y = -0.1;
-    const el = new THREE.Group(); el.position.y = -0.2; sh.add(el);
-    add(sph(0.026, 8, 6), SHADE, el);
-    const fa = add(sph(1, 10, 8), SKIN, el); fa.scale.set(0.025, 0.1, 0.027); fa.position.y = -0.09;
-    const hand = new THREE.Group(); hand.position.y = -0.19; el.add(hand);
-    add(sph(1, 10, 8), SKIN, hand).scale.set(0.03, 0.03, 0.018);
-    for (let f = 0; f < 5; f++) {
-      const thumb = f === 4, k = new THREE.Group(); hand.add(k);
-      k.position.set(thumb ? side * -0.03 : -0.024 + f * 0.016, thumb ? -0.005 : -0.022, 0.006); k.rotation.set(0.4, 0, thumb ? side * -0.8 : (f - 1.5) * 0.18);
-      add(new THREE.CylinderGeometry(0.006, 0.005, 0.04, 5), SKIN, k).position.y = -0.02;
-      const tip = new THREE.Group(); tip.position.y = -0.04; tip.rotation.x = 0.7; k.add(tip);
-      add(new THREE.ConeGeometry(0.005, 0.035, 5), SHADE, tip).rotation.x = Math.PI; // a claw
-    }
-    return { sh, el, hand };
-  };
-  const R = arm(-1), L = arm(1);
-  // the hatchet: short handle, the steel head with blood on its edge, dripping
-  const axe = new THREE.Group(); axe.position.set(0, -0.015, 0.012); R.hand.add(axe);
-  add(new THREE.CylinderGeometry(0.009, 0.011, 0.22, 8), mat(0x5a3c22, 0.7), axe).position.y = 0.05;
-  add(new THREE.BoxGeometry(0.014, 0.05, 0.075), mat(0xb8bcc2, 0.3, 0.6), axe).position.set(0, 0.14, 0.035);
-  add(new THREE.BoxGeometry(0.016, 0.05, 0.016), BLOOD, axe).position.set(0, 0.14, 0.07);
-  for (let i = 0; i < 4; i++) { const d = add(sph(0.006, 6, 4), BLOOD, axe); d.position.set(0, 0.11 - i * 0.025, 0.07 + (i % 2) * 0.004); d.scale.set(1, 1.7, 1); }
-  // the head, hinged at the neck so it can bang
-  const neck = new THREE.Group(); neck.position.y = 0.9; b.add(neck);
-  const head = new THREE.Group(); head.position.y = 0.11; neck.add(head);
-  add(sph(0.12, 24, 18), SKIN, head).scale.set(0.92, 1.08, 1.08);
-  const face = add(sph(0.1, 20, 14), SKIN, head); face.scale.set(0.8, 1.15, 0.92); face.position.set(0, -0.055, 0.03);
-  const lights = [];
-  for (const side of [-1, 1]) {
-    const brow = add(sph(1, 12, 8), SKIN, head); brow.scale.set(0.045, 0.014, 0.025); brow.position.set(side * 0.04, 0.045, 0.112); brow.rotation.z = side * 0.4; // furrowed down to the nose
-    const sock = add(sph(0.026, 12, 10), DARK, head); sock.scale.set(1, 0.65, 0.5); sock.position.set(side * 0.04, 0.026, 0.108);
-    const eye = add(sph(0.008, 8, 6), GLOW, head); eye.position.set(side * 0.04, 0.024, 0.12); lights.push(eye);
-    const cheek = add(sph(0.03, 12, 10), SKIN, head); cheek.scale.set(1, 0.6, 0.8); cheek.position.set(side * 0.064, -0.01, 0.085);
-    const hollow = add(sph(0.026, 10, 8), SHADE, head); hollow.scale.set(0.6, 1.1, 0.4); hollow.position.set(side * 0.068, -0.055, 0.075);
-    const fold = add(new THREE.CylinderGeometry(0.004, 0.004, 0.05, 5), SHADE, head); fold.position.set(side * 0.05, -0.04, 0.105); fold.rotation.z = side * 0.5; // the grin's creases
-  }
-  add(new THREE.BoxGeometry(0.012, 0.03, 0.012), SKIN, head).position.set(0, 0.012, 0.122); // the bridge of the nose
-  const nose = add(new THREE.ConeGeometry(0.014, 0.025, 3), DARK, head); nose.position.set(0, -0.012, 0.122); nose.rotation.set(-0.3, 0, Math.PI); nose.scale.z = 0.4;
-  // the grin: enormous, the lips pulled right back, the corners up into the cheeks; upper teeth in the skull, lower in the jaw
-  const row = (parent, y0, z0, h, n, w) => { for (let t = 0; t < n; t++) { const x = -w / 2 + (t + 0.5) * (w / n), c = x * x * 9; const tt = add(new THREE.BoxGeometry((w / n) * 0.85, h, 0.01), TOOTH, parent); tt.position.set(x, y0 + c * 0.6, z0 - c * 0.9); tt.rotation.y = -x * 5; } };
-  add(new THREE.BoxGeometry(0.1, 0.04, 0.02), DARK, head).position.set(0, -0.085, 0.095); // the inside of the mouth
-  add(new THREE.BoxGeometry(0.11, 0.008, 0.02), GUM, head).position.set(0, -0.058, 0.108); // the gums over the teeth
-  row(head, -0.074, 0.118, 0.03, 12, 0.11);
-  const jaw = new THREE.Group(); jaw.position.set(0, -0.075, 0.01); head.add(jaw);
-  const chin = add(sph(1, 14, 10), SKIN, jaw); chin.scale.set(0.058, 0.034, 0.06); chin.position.set(0, -0.06, 0.06);
-  row(jaw, -0.032, 0.106, 0.026, 12, 0.104);
-  // the mane: the crown swept back from a high forehead, a mass behind, and the locks flaring out and falling
-  const crown = add(new THREE.SphereGeometry(0.128, 24, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), HAIR[0], head); crown.rotation.x = -0.45; crown.position.set(0, 0.012, -0.004); crown.scale.set(1.02, 1.1, 1.12);
-  const top = add(sph(0.12, 18, 12), HAIR[1], head); top.scale.set(1.15, 0.85, 1.1); top.position.set(0, 0.085, -0.035); // the volume on top, swept back
-  const mass = add(sph(0.14, 18, 12), HAIR[2], head); mass.scale.set(1.25, 1.2, 0.9); mass.position.set(0, -0.03, -0.075);
-  const locks = [];
-  const lock = (root, M, wd, lens, bend) => {
-    const segs = []; let p = root, r0 = wd;
-    for (let k = 0; k < 3; k++) {
-      const s = new THREE.Group(); p.add(s); segs.push(s);
-      const r1 = k === 2 ? 0.002 : r0 * 0.85, m = add(new THREE.CylinderGeometry(r0, r1, lens[k], 6), M, s); m.position.y = -lens[k] / 2; m.scale.z = 0.45;
-      const tip = new THREE.Group(); tip.position.y = -lens[k]; s.add(tip); p = tip; r0 = r1;
-    }
-    locks.push({ segs, bend, st: [0, 0, 0], v: [0, 0, 0], k: 0.85 + (locks.length % 4) * 0.1 });
-  };
-  // round the sides and the back: out from the head, then down past the shoulders (longest at the back)
-  for (let i = 0; i < 52; i++) {
-    const a = -Math.PI + ((i + 0.5) / 52) * Math.PI * 2;
-    if (Math.abs(a) < 0.95) continue; // the face stays clear
-    const root = new THREE.Group(); head.add(root);
-    const back = Math.abs(a) > 2.2, hi = [0.1, 0.06, 0.02][i % 3];
-    root.position.set(Math.sin(a) * 0.118, hi, Math.cos(a) * 0.122 - 0.012);
-    root.rotation.y = a + Math.sign(a) * Math.max(0, 1.8 - Math.abs(a)) * 0.6; // the ones by the temples turned away, to the sides
-    const l3 = (back ? 0.2 : 0.15) + ((i * 7) % 5) * 0.022;
-    lock(root, HAIR[i % 5 ? (i % 3 ? 0 : 2) : 1], 0.052 + (i % 3) * 0.01, [0.05, 0.11, l3], [-1.35 - (i % 3) * 0.15, 0.8, 0.35]);
-  }
+  const nose = add(new THREE.ConeGeometry(0.03, 0.055, 3), DARK, head); nose.position.set(0, -0.045, 0.235); nose.rotation.set(-0.35, 0, Math.PI); nose.scale.z = 0.4;
+  // the grin: wide, the corners up into the cheeks; upper teeth in the skull, the lower ones on the jaw
+  const row = (parent, y0, z0, h, n, w) => { for (let t = 0; t < n; t++) { const x = -w / 2 + (t + 0.5) * (w / n), c = x * x * 4; const tt = add(new THREE.BoxGeometry((w / n) * 0.85, h, 0.014), TOOTH, parent); tt.position.set(x, y0 + c * 0.7, z0 - c * 1.1); tt.rotation.y = -x * 3; } };
+  add(new THREE.BoxGeometry(0.2, 0.07, 0.04), DARK, head).position.set(0, -0.125, 0.19);
+  add(new THREE.BoxGeometry(0.21, 0.012, 0.03), mat(0x4a1210, 0.7), head).position.set(0, -0.095, 0.205);
+  row(head, -0.112, 0.222, 0.04, 12, 0.21);
+  const jaw = new THREE.Group(); jaw.position.set(0, -0.12, 0.02); head.add(jaw);
+  const chin = add(sph(1, 14, 10), SKIN, jaw); chin.scale.set(0.11, 0.055, 0.12); chin.position.set(0, -0.06, 0.1);
+  row(jaw, -0.032, 0.197, 0.034, 12, 0.2);
+  // the mane, from the model: it hangs from a pivot at the crown so it can swing after the head
+  const mane = new THREE.Group(); mane.position.set(0, 0.24, -0.02); head.add(mane);
+  eddieHair ??= import("three/examples/jsm/loaders/GLTFLoader.js").then(({ GLTFLoader }) => new GLTFLoader().loadAsync("/models/eddie-hair.glb"));
+  eddieHair.then((gltf) => {
+    const h = gltf.scene.clone(true);
+    h.scale.setScalar(2.0); h.position.set(0.012, 0.12, -0.03); h.rotation.y = -0.9; // sized to the head, turned so the face shows (in the painting he looks to his left)
+    mane.add(h);
+  }).catch(() => { eddieHair = null; }); // offline: bald this time, another try next time he's worn
   const zz = napZ(); g.add(zz);
-  let last = null, bang = 0, drive = 0;
+  let last = null, bang = 0, drive = 0, lag = 0, lagV = 0;
   g.pose = ({ lid, wing, sleep, now, pulse = 0, star = false, happy = false, energy = 0.55 }) => {
     const dt = last == null ? 1 / 60 : Math.min(0.05, Math.max(0, now - last)); last = now;
-    const glow = sleep ? 0.1 : 1 - lid * 0.7;
-    lights.forEach((l) => { l.material.color.setRGB(glow, glow * 0.88, glow * 0.3); l.scale.setScalar(0.8 + glow * 0.5); });
-    // how hard he bangs: a nod in the quiet parts, more as the song gets loud, all out on a streak or with star power
+    lids.forEach((l) => (l.rotation.x = -1.45 + lid * 3.0));
+    lights.forEach((l) => l.material.color.setRGB(sleep ? 0.2 : 1, sleep ? 0.15 : 0.82, sleep ? 0.05 : 0.25));
+    arms.forEach((a, i) => (a.p.rotation.z = (i ? 1 : -1) * (0.12 + wing * 2.5 + (wing > 0.4 ? Math.sin(now * 14 + i * 2) * 0.25 : 0))));
+    jaw.rotation.x = sleep ? 0.1 : wing * 0.35;
+    // headbanging: a nod in the quiet parts, more as the song gets loud, all out on a streak or with star power
     const want = sleep ? 0 : star ? 1 : happy ? 0.75 : 0.2 + 0.45 * Math.min(1, Math.max(0, (energy - 0.45) / 0.4));
     drive += (want - drive) * Math.min(1, dt * 3);
-    bang += ((sleep ? 0.5 : pulse * (0.15 + drive * 0.8)) - bang) * Math.min(1, dt * (sleep ? 2 : 22));
-    neck.rotation.set(bang + 0.08, 0, sleep ? 0.15 : Math.sin(now * 2.1) * 0.04 * (1 - drive));
-    jaw.rotation.x = sleep ? 0.15 : 0.05 + drive * 0.2 + pulse * drive * 0.15;
-    // the mane hangs whatever the head does (so it swings the other way), lagging on its springs: the tips most
-    for (const h of locks) {
-      let acc = bang;
-      for (let k = 0; k < 3; k++) {
-        const tgt = -acc * (k ? 0.45 : 0.6);
-        h.v[k] += ((tgt - h.st[k]) * (80 - k * 15) * h.k - h.v[k] * (7 - k)) * dt; h.st[k] += h.v[k] * dt;
-        h.segs[k].rotation.x = h.bend[k] + h.st[k]; acc += h.st[k];
-      }
-    }
-    // the hatchet up by his head (high and shaken with star power), the other hand a claw reaching out
-    const up = star ? 1 : Math.min(1, wing);
-    R.sh.rotation.set(-0.3 - up * 0.3, 0, -(0.95 + up * 0.7)); R.el.rotation.set(-0.25, 0, -(2.2 - up * 0.6) + (star ? pulse * 0.5 : 0));
-    axe.rotation.set(0.15, 0, Math.PI + 0.25); // the head of it up above his fist
-    L.sh.rotation.set(-0.55 - wing * 0.4, 0, 0.45 + wing * 0.3); L.el.rotation.set(-0.5, 0, 0.25); L.hand.rotation.set(-0.2, 0, 0.2);
-    zz.visible = sleep; zz.position.set(0.35, 1.35 + ((now * 0.4) % 1) * 0.2, 0); zz.material.opacity = 1 - ((now * 0.4) % 1);
+    bang += ((sleep ? 0.3 : pulse * (0.1 + drive * 0.45)) - bang) * Math.min(1, dt * (sleep ? 2 : 22));
+    lagV += ((-bang * 0.8 - lag) * 70 - lagV * 6) * dt; lag += lagV * dt; // the mane hangs back as the head drops, then swings past
+    neck.rotation.set(bang, 0, sleep ? 0.2 : Math.sin(now * 2.1) * 0.05 * (1 - drive));
+    mane.rotation.x = lag;
+    zz.visible = sleep; zz.position.set(0.4, 1.2 + ((now * 0.4) % 1) * 0.2, 0); zz.material.opacity = 1 - ((now * 0.4) % 1);
   };
   return g;
 }
