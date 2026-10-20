@@ -450,7 +450,7 @@ async function loadLibrary() {
     // the code is fine but its songs didn't come (connection): keep the ones we had
     if (!g) { next.push(k); out.push(...app.songs.filter((x) => x.secret && x.secret === k.id)); return; }
     if (next.some((x) => x.id === g.id)) return; // two codes of the same group (one was changed)
-    next.push({ code: k.code, id: g.id, name: g.name });
+    next.push({ code: k.code, id: g.id, name: g.name, ...(g.event ? { event: g.event } : {}) });
     out.push(...g.songs.map((x) => ({ ...x, secret: g.id })));
   });
   let v1 = false; try { v1 = !!localStorage.getItem(SECRET_KEY); } catch {}
@@ -492,7 +492,7 @@ $("secretForm").onsubmit = async (e) => {
   try {
     const g = await secretOpen(code);
     const known = secretGroups().some((x) => x.id === g.id);
-    saveSecrets([...secretList().filter((x) => x.id !== g.id && x.code.toLowerCase() !== code.toLowerCase()), { code, id: g.id, name: g.name }]);
+    saveSecrets([...secretList().filter((x) => x.id !== g.id && x.code.toLowerCase() !== code.toLowerCase()), { code, id: g.id, name: g.name, ...(g.event ? { event: g.event } : {}) }]);
     app.songs = [...app.songs.filter((x) => x.secret !== g.id), ...g.songs.map((x) => ({ ...x, secret: g.id }))];
     closeSecret();
     app.libTab = g.id; renderSongs(); $("songList").scrollTop = 0;
@@ -500,7 +500,7 @@ $("secretForm").onsubmit = async (e) => {
     sfx.unlock();
     const n = g.songs.length;
     if (g.songs.some((x) => x.miau)) { queueMiauIntro(3200); refreshMiau(); } // after the celebration
-    if (nameKey(g.name) === "otaku") queueOtakuIntro(3200);
+    if (g.event === "otaku" || nameKey(g.name) === "otaku") queueOtakuIntro(3200);
     queueBandIntros(3200);
     celebrate({ kicker: "Código correcto", title: g.name, kind: "secret", ms: 2800,
       sub: n ? `${n} ${n === 1 ? "canción desbloqueada" : "canciones desbloqueadas"}. Las encuentras en «${g.name}».` : "Ya quedaron desbloqueadas, aunque todavía no hay ninguna." });
@@ -2096,8 +2096,8 @@ function showNextNotice() {
     try { localStorage.setItem(OTAKU_INTRO_KEY, "1"); } catch {}
     notices.go = () => { app.mode = "solo"; app.libTab = otakuGroup(); openLibrary(); };
     $("noticeKicker").textContent = "Evento · Otaku";
-    $("noticeBody").textContent = "¡Bienvenida a la Expedición del Emperador!\n\nEn las canciones Otaku, algunas notas traen una banana dorada encima. Tócalas para recogerlas: mientras más juntes, más regalos sorpresa vas abriendo. ¿Qué serán? Solo lo sabrás cuando los ganes.";
-    $("noticeForm").querySelector(".notice-reply").hidden = true; $("noticeGo").hidden = false; $("noticeGo").textContent = "Ir a las canciones Otaku";
+    $("noticeBody").textContent = "¡Bienvenida a la Expedición del Emperador!\n\nEn las canciones de este evento, algunas notas traen una banana dorada encima. Tócalas para recogerlas: mientras más juntes, más regalos sorpresa vas abriendo. ¿Qué serán? Solo lo sabrás cuando los ganes.";
+    $("noticeForm").querySelector(".notice-reply").hidden = true; $("noticeGo").hidden = false; $("noticeGo").textContent = "Ir a las canciones";
     $("noticeMsg").textContent = ""; $("noticeModal").hidden = false;
     return;
   }
@@ -2139,10 +2139,12 @@ function miauProgress() {
 }
 const catsHtml = (p) => Array.from({ length: p.need }, (_, i) => `<i class="${i < p.done || p.won ? "on" : ""}"></i>`).join("");
 /* ================= the Otaku event ================= */
-// The anime songs are a secret group named "Otaku" (its code from the admin panel). Some of their notes carry a golden
-// banana; the bananas picked up fill a bar with three surprise gifts (achievements.js BANANA_GIFTS), which show
-// nowhere, not even in the shop, until they're won.
-const otakuGroup = () => secretList().find((g) => nameKey(g.name) === "otaku")?.id ?? null;
+// The anime songs are a secret group marked as the Otaku event (its code and name from the admin panel). Some of
+// their notes carry a golden banana; the bananas picked up fill a bar with three surprise gifts (achievements.js
+// BANANA_GIFTS), which show nowhere, not even in the shop, until they're won.
+// the group is marked in the database (secret_groups.event), so renaming it keeps the event; an old browser that
+// hasn't asked yet still knows it by its first name
+const otakuGroup = () => secretList().find((g) => g.event === "otaku" || nameKey(g.name) === "otaku")?.id ?? null;
 const isOtaku = (s) => { const g = otakuGroup(); return g != null && !!s && s.secret === g; };
 // about one note in twenty, the same ones each time for a song and difficulty; never a star note nor part of a chord
 function markBananas(notes, seed) {
@@ -2174,7 +2176,7 @@ function otakuCard() {
   card.innerHTML = otakuCardHtml();
   const won = achievementsWon(), next = BANANA_GIFTS.find((n, i) => !won[BANANA_LOGROS[i]]);
   card.querySelector(".ok-head small").textContent = next == null ? "¡Encontraste todos los regalos! Están en la Tienda."
-    : `Toca las bananas doradas de las canciones Otaku. Faltan ${Math.max(0, next - bananas)} para el próximo regalo sorpresa.`;
+    : `Toca las bananas doradas de estas canciones. Faltan ${Math.max(0, next - bananas)} para el próximo regalo sorpresa.`;
   card.querySelectorAll(".ok-gift.won").forEach((b) => {
     const it = giftOf(BANANA_LOGROS[+b.dataset.i]); if (!it) return;
     fillSwatch(b.querySelector(".sw"), it);
