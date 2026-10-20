@@ -12,7 +12,7 @@ import { motionAvailable, motionNeedsPermission, motionReady, requestMotion, onL
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
 import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, nameStyles, songRequest, myNotices, noticeSeen, noticeReply, myFulfilled, fulfilledSeen } from "./net.js";
 import { shareCard, retoUrl, readReto } from "./share.js";
-import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau, forBananas, BANANA_GIFTS, BANANA_LOGROS, BANDS, BAND_STARS, BAND_DIFF, forBand } from "./achievements.js";
+import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau, forBananas, BANANA_GIFTS, BANANA_LOGROS, BANDS, BAND_STARS, BAND_DIFF, forBand, MAIDEN, BEAST_GIFTS, BEAST_LOGROS, EDDIE_STARS, forBeast } from "./achievements.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretOpen, secretBoard, songById, fetchMiauProgress, roomDirectory, commentPost, myComments, myCommentReplies, commentReplySeen } from "./net.js";
 import { VENUES, TO_ENCORE, TOUR_PRIZES, TOUR_THEMES, prizesWon, savedTourDiffs, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song, separateExisting } from "./admin.js";
@@ -360,7 +360,7 @@ renderHomeBoard();
 Promise.resolve().then(() => {
   if (!online) return;
   loadLibrary()
-    .then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); backfillAchievements(); queueMiauIntro(); queueOtakuIntro(); queueBandIntros(); refreshMiau(); })
+    .then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); backfillAchievements(); queueMiauIntro(); queueOtakuIntro(); queueBandIntros(); queueBeastIntro(); refreshMiau(); })
     .catch((e) => console.warn("library:", e.message))
     .finally(() => loadDaily());
 });
@@ -587,6 +587,8 @@ function renderSongs() {
   box.innerHTML = "";
   // the Otaku event's bar, on top of its tab
   if (secretTab && app.libTab === otakuGroup()) box.appendChild(otakuCard());
+  // the Iron Maiden event's bar, on top of the library (or when looking for them)
+  if (app.libTab === "all" && beastLive() && (!q || MAIDEN.test(q) || "iron maiden".includes(q))) box.appendChild(beastCard());
   // the One Direction event's card, on top of the tab that has its songs
   for (const b of BANDS) if (secretTab && bandLive(b) && tab.some((s) => bandOf(s) === b)) box.appendChild(bandCard(b));
   // the kittens' challenge, on top of the tab that has the miau songs
@@ -1474,7 +1476,7 @@ function celebrateAchievements(list) {
 }
 // what your saved bests already prove (players from before the logros existed get theirs without replaying), silently
 function backfillAchievements() {
-  const ids = [...forMiau(miauIds(), bestAcc), ...forBananas(bananas), ...BANDS.flatMap((b) => (bandLive(b) ? forBand(b, bandIds(b), bandStars) : []))], n = songsDone();
+  const ids = [...forMiau(miauIds(), bestAcc), ...forBananas(bananas), ...BANDS.flatMap((b) => (bandLive(b) ? forBand(b, bandIds(b), bandStars) : [])), ...(beastLive() ? [...forBeast(beastStars()), ...(beastAll() ? ["bestia-eddie"] : [])] : [])], n = songsDone();
   // the tour's prizes for venues already cleared (before there were prizes, or on another device)
   if (publicSongs().length) for (const d of savedTourDiffs()) { const t = tourFor(d, publicSongs()); if (t) ids.push(...prizesWon(tourProgress(t, bestOf))); }
   if (n >= 1) ids.push("primer-acorde");
@@ -1886,6 +1888,11 @@ function finishGame() {
   const run = app.bananaRun; app.bananaRun = null;
   $("bananaRes").hidden = !run; $("giftBtn").hidden = true;
   if (run) { bananas += run.got; saveBananas(); ids.push(...forBananas(bananas)); }
+  // the Iron Maiden event: the Beast's stars with this run in, and Eddie once every song has its stars
+  if (app.song && MAIDEN.test(app.song.artist || "") && !sum.failed && beastLive()) {
+    ids.push(...forBeast(beastStars((id) => (id === app.song.id && diffOk(app.diff) ? sum.stars : 0))));
+    if (beastAll((id) => (id === app.song.id ? sum.stars : 0))) ids.push("bestia-eddie");
+  }
   const band = bandOf(app.song);
   if (band && !sum.failed && bandLive(band)) ids.push(...forBand(band, bandIds(band), (id) => Math.max(bandStars(id), id === app.song.id && diffOk(app.diff) ? sum.stars : 0)));
   const fresh = unlock(ids).sort((a, b) => !!b.surprise - !!a.surprise); // a surprise gift first: it's the big news
@@ -2101,6 +2108,15 @@ function showNextNotice() {
     $("noticeMsg").textContent = ""; $("noticeModal").hidden = false;
     return;
   }
+  if (n.kind === "beast") {
+    try { localStorage.setItem(BEAST_INTRO_KEY, "1"); } catch {}
+    notices.go = () => { app.mode = "solo"; app.libTab = "all"; $("libSearch").value = "Iron Maiden"; openLibrary(); };
+    $("noticeKicker").textContent = "Evento · La Gira de la Bestia";
+    $("noticeBody").textContent = `La Bestia sale de gira. Cada canción de Iron Maiden suma estrellas de la Bestia: tus mejores estrellas en cada una, en Media o más difícil.\n\nCon ${BEAST_GIFTS.join(", ").replace(/, (\d+)$/, " y $1")} estrellas se abren regalos sorpresa, y hay uno secreto para quien saque ${EDDIE_STARS} estrellas en todas, en la dificultad que quiera. ¿Qué serán? Solo lo sabrás cuando los ganes.`;
+    $("noticeForm").querySelector(".notice-reply").hidden = true; $("noticeGo").hidden = false; $("noticeGo").textContent = "Ir a las canciones";
+    $("noticeMsg").textContent = ""; $("noticeModal").hidden = false;
+    return;
+  }
   if (n.kind === "band") {
     const band = BANDS.find((b) => b.id === n.band);
     try { localStorage.setItem(bandIntroKey(band), "1"); } catch {}
@@ -2233,6 +2249,44 @@ function queueBandIntros(delay = 0) {
     notices.queue.unshift({ kind: "band", band: b.id });
     setTimeout(showNextNotice, delay);
   }
+}
+/* ================= the Iron Maiden event: La Gira de la Bestia ================= */
+// For everyone, on the Iron Maiden songs of the library. The Beast's stars: the best stars on each of them (Media or
+// harder) added up; each mark opens a surprise gift (achievements.js BEAST_GIFTS), and Eddie comes once every one of
+// them has EDDIE_STARS on any difficulty. Nothing shows anywhere until it's won.
+const maidenSongs = () => app.songs.filter((s) => MAIDEN.test(s.artist || ""));
+const beastLive = () => maidenSongs().length >= 3 && !!giftOf(BEAST_LOGROS[0]);
+const beastStars = (extra = () => 0) => maidenSongs().reduce((n, s) => n + Math.max(bandStars(s.id), extra(s.id)), 0);
+const anyStars = (id) => Math.max(0, ...Object.values(bests[id] || {}).map((x) => x?.stars || 0));
+const beastAll = (extra = () => 0) => maidenSongs().every((s) => Math.max(anyStars(s.id), extra(s.id)) >= EDDIE_STARS);
+function beastCard() {
+  const won = achievementsWon(), n = beastStars(), max = BEAST_GIFTS[BEAST_GIFTS.length - 1];
+  const next = BEAST_GIFTS.find((g, i) => !won[BEAST_LOGROS[i]]);
+  const marks = BEAST_GIFTS.map((g, i) => {
+    const got = !!won[BEAST_LOGROS[i]], it = giftOf(BEAST_LOGROS[i]);
+    return `<button type="button" class="ok-gift${got ? " won" : ""}" style="left:${(g / max) * 100}%" data-l="${BEAST_LOGROS[i]}" ${got ? "" : "disabled"} aria-label="${got ? it?.name || "Regalo" : "Regalo sorpresa"}">`
+      + (got ? `<span class="sw"></span>` : `<svg aria-hidden="true"><use href="#gift"/></svg><em>?</em>`) + `<small>${g}</small></button>`;
+  }).join("");
+  const eddie = !!won["bestia-eddie"];
+  const card = document.createElement("div"); card.className = "otaku-card beast-card";
+  card.innerHTML = `<div class="ok-head"><span class="bk-mark" aria-hidden="true">666</span><div><b>La Gira de la Bestia</b><small></small></div><span class="ok-count">${n}<i>★</i></span></div>`
+    + `<div class="ok-bar"><i style="width:${Math.min(100, (n / max) * 100)}%"></i>${marks}</div>`
+    + `<button type="button" class="bk-secret${eddie ? " won" : ""}" data-l="bestia-eddie" ${eddie ? "" : "disabled"}>${eddie ? `<span class="sw"></span>` : `<svg aria-hidden="true"><use href="#gift"/></svg><em>?</em>`}<small>${EDDIE_STARS}★ en todas</small></button>`;
+  card.querySelector(".ok-head small").textContent = next == null ? "¡Ganaste todos los regalos de la Bestia! Están en la Tienda."
+    : `Suma estrellas en las canciones de Iron Maiden (Media o más difícil). Faltan ${Math.max(0, next - n)} para el próximo regalo sorpresa. Y hay uno secreto si sacas ${EDDIE_STARS} estrellas en todas.`;
+  card.querySelectorAll("button.won").forEach((b) => {
+    const it = giftOf(b.dataset.l); if (!it) return;
+    fillSwatch(b.querySelector(".sw"), it);
+    b.onclick = () => openShopAt(it.slot, it.id);
+  });
+  return card;
+}
+const BEAST_INTRO_KEY = "corde.beast.intro.v1";
+function queueBeastIntro(delay = 0) {
+  let seen = false; try { seen = !!localStorage.getItem(BEAST_INTRO_KEY); } catch {}
+  if (seen || !beastLive() || [notices.current, ...notices.queue].some((x) => x?.kind === "beast")) return;
+  notices.queue.push({ kind: "beast" });
+  setTimeout(showNextNotice, delay);
 }
 function queueMiauIntro(delay = 0) {
   const p = miauProgress();
@@ -2627,6 +2681,21 @@ function memberSvg(m) {
     + `<circle cx="51" cy="47" r="3.6" fill="#141012"/><circle cx="69" cy="47" r="3.6" fill="#141012"/><circle cx="52.2" cy="45.6" r="1.2" fill="#fff"/><circle cx="70.2" cy="45.6" r="1.2" fill="#fff"/>`
     + `<path d="M54 56q6 5 12 0" stroke="#8a3a34" stroke-width="2.4" fill="none" stroke-linecap="round"/><g fill="${H}">${hair}</g>${over}</svg>`;
 }
+// Eddie for the card (renderer.js makeEddie), as on Killers: the wild pale mane, the long skull with its scowl, glowing
+// eyes, nose hole and grin of teeth, the dark sleeveless shirt over bony arms, the bloody hatchet up in one claw
+const EDDIE_SVG = `<svg class="member" viewBox="0 0 120 110" aria-hidden="true">`
+  + `<path d="M60 4 66 14 76 6l2 12 12-6-2 13 13-2-6 12 12 3-9 9 10 7-11 4 8 10-12 1 4 12-11-5-2 14-8-12-6 14-6-14-8 12-2-14-11 5 4-12-12-1 8-10-11-4 10-7-9-9 12-3-6-12 13 2-2-13 12 6 2-12 10 8z" fill="#e2d59a"/>`
+  + `<path d="M48 102h10v8H48zM62 102h10v8H62z" fill="#2e3a52"/><path d="M42 106c0-22 4-34 18-34s18 12 18 34z" fill="#2c2c32"/><path d="M54 72h12l-6 9z" fill="#9a8f74"/>`
+  + `<path d="M42 78 30 64l4-3 12 13zM78 78l10 18-4 2-10-17z" fill="#9a8f74"/><path d="M42 102h36v4H42z" fill="#1a1410"/>`
+  + `<path d="M31 64 22 22" stroke="#6b4a2a" stroke-width="3"/><path d="M17 20l12-6 4 10-12 5z" fill="#c8ccd2"/><path d="M17 20l4 9" stroke="#8a0a0a" stroke-width="2.5"/>`
+  + `<circle cx="32" cy="63" r="4" fill="#9a8f74"/><path d="M84 96l-3 7M86 97l-1 7M88 96l1 7" stroke="#9a8f74" stroke-width="1.6"/>`
+  + `<ellipse cx="60" cy="44" rx="19" ry="25" fill="#9a8f74"/><path d="M43 28q17-10 34 0l-4-8q-13-6-26 0z" fill="#e2d59a"/>`
+  + `<path d="M44 36l13 5M76 36l-13 5" stroke="#5a4e3e" stroke-width="3.2" stroke-linecap="round"/>`
+  + `<ellipse cx="51" cy="44" rx="6.5" ry="5.5" fill="#140c08"/><ellipse cx="69" cy="44" rx="6.5" ry="5.5" fill="#140c08"/>`
+  + `<circle cx="51" cy="44.5" r="2.6" fill="#fff3a0"/><circle cx="69" cy="44.5" r="2.6" fill="#fff3a0"/><path d="M57 55h6l-3-5z" fill="#140c08"/>`
+  + `<path d="M44 55q2 8 4 9M76 55q-2 8-4 9" stroke="#5a4e3e" stroke-width="2.5" fill="none"/>`
+  + `<rect x="47" y="58" width="26" height="11" rx="2" fill="#140c08"/><path d="M47 58.5h26" stroke="#5a1414" stroke-width="2"/>`
+  + `<path d="M49.5 59v5M52.5 59v5M55.5 59v5M58.5 59v5M61.5 59v5M64.5 59v5M67.5 59v5M70.5 59v5M50 64v5M53 64v5M56 64v5M59 64v5M62 64v5M65 64v5M68 64v5M71 64v5" stroke="#d8cfb0" stroke-width="2.2"/></svg>`;
 // an emperor tamarin for the card (renderer.js gemShape "titi"): the furry head in the lane colour, the black face, the
 // pink muzzle and the white moustache hanging down
 const TITI_SVG = `<svg viewBox="-40 -48 80 100" aria-hidden="true"><circle cy="-10" r="35" fill="#0a0809"/>`
@@ -2640,6 +2709,12 @@ const TITI_SVG = `<svg viewBox="-40 -48 80 100" aria-hidden="true"><circle cy="-
   + `<g fill="none" stroke="#fff" stroke-linecap="round"><path d="M3 6c12 1 23 5 29 13s1 22 4 31M-3 6c-12 1-23 5-29 13s-1 22-4 31" stroke-width="4.5"/>`
   + `<path d="M4 8c10 3 18 9 21 19s1 12 3 16M-4 8c-10 3-18 9-21 19s-1 12-3 16" stroke-width="3"/>`
   + `<path d="M4 10c7 5 12 12 13 22M-4 10c-7 5-12 12-13 22" stroke-width="2"/></g></svg>`;
+// Powerslave's scarab for the card (renderer.js gemShape "scarab"): lane-coloured wing cases, gold head, the sun above
+const SCARAB_SVG = `<svg viewBox="-40 -50 80 100" aria-hidden="true"><g stroke="#4a3212" stroke-width="4" stroke-linecap="round" fill="none">`
+  + `<path d="M-10-6l-14-8-6-12M10-6l14-8 6-12M-14 6h-16l-8 9M14 6h16l8 9M-13 20l-14 10-3 12M13 20l14 10 3 12"/></g>`
+  + `<ellipse cy="-36" rx="8.5" ry="8.5" style="fill:var(--c)" stroke="#ffd76a" stroke-width="1.5"/><ellipse cy="-19" rx="9" ry="6" fill="#d8a83a"/><ellipse cy="-7" rx="16" ry="10" fill="#e8b84a"/>`
+  + `<path d="M0 3C-6 3-17 6-18 22S-8 46 0 46Z" style="fill:var(--c)" stroke="#000" stroke-width="1.2"/><path d="M0 3C6 3 17 6 18 22S8 46 0 46Z" style="fill:var(--c)" stroke="#000" stroke-width="1.2"/>`
+  + `<path d="M-9 12q-3 10 0 22" stroke="rgba(255,255,255,.4)" stroke-width="2" fill="none"/></svg>`;
 // the card's little picture: the catalog's CSS, plus gems, flames, a name or a streak drawn with elements
 function fillSwatch(el, it) {
   el.className = `sw sw-${it.slot}`;
@@ -2647,7 +2722,7 @@ function fillSwatch(el, it) {
   if (it.slot === "gems") {
     el.classList.add("g-" + (it.shape || "round"));
     if (it.ring) el.style.setProperty("--ring", it.ring);
-    el.innerHTML = it.cols.map((c) => `<i style="--c:${c}">${it.shape === "titi" ? TITI_SVG : ""}</i>`).join("");
+    el.innerHTML = it.cols.map((c) => `<i style="--c:${c}">${it.shape === "titi" ? TITI_SVG : it.shape === "scarab" ? SCARAB_SVG : ""}</i>`).join("");
   } else if (it.slot === "flames") {
     el.classList.toggle("rainbow", !!it.rainbow);
     if (it.glow) el.style.setProperty("--glow", it.glow);
@@ -2655,12 +2730,13 @@ function fillSwatch(el, it) {
     // flames that aren't a fire: their own little picture (style.css .fa-*)
     const art = { bubbles: "<i></i>".repeat(7), embers: "<i></i>".repeat(8), nova: "<i></i>", stars: "<i></i>".repeat(5), curtain: "<i></i>".repeat(4),
       bolt: `<svg viewBox="0 0 40 60" aria-hidden="true"><path d="M24 2 9 33h11l-6 25 19-34H21z"/></svg>`,
-      antimagic: [1, 2, 3].map(() => `<svg aria-hidden="true"><use href="#flame"/></svg>`).join("") }[it.art];
+      antimagic: [1, 2, 3].map(() => `<svg aria-hidden="true"><use href="#flame"/></svg>`).join(""),
+      pyramid: [1, 2, 3].map(() => `<svg viewBox="0 0 40 46" aria-hidden="true"><path d="M20 2c3 6-2 8 0 12h0L38 44H2L20 14c-2-4-3-6 0-12z"/><path d="M14 30h12M20 24v16M8 40h24" stroke="#fff6d0" stroke-width="1.6" fill="none" opacity=".9"/></svg>`).join("") }[it.art];
     if (art) { el.classList.add("fa-" + it.art); el.innerHTML = art; }
     else el.innerHTML = it.cols.map((c) => `<svg aria-hidden="true" style="--c:${c}"><use href="#flame"/></svg>`).join("") + (it.art === "campfire" ? "<em></em>".repeat(6) : "");
   } else if (it.slot === "pet") {
     el.classList.add("pet-" + it.id);
-    el.innerHTML = it.id === "nero" ? NERO_SVG : MEMBERS[it.id] ? memberSvg(MEMBERS[it.id]) : `<span class="pet-none" aria-hidden="true"></span>`;
+    el.innerHTML = it.id === "nero" ? NERO_SVG : it.id === "eddie" ? EDDIE_SVG : MEMBERS[it.id] ? memberSvg(MEMBERS[it.id]) : `<span class="pet-none" aria-hidden="true"></span>`;
   } else if (it.slot === "crowd") {
     // five people from behind, holding up what this crowd holds up (style.css .cw-*)
     el.classList.add("cw-" + it.id);

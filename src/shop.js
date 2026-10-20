@@ -33,6 +33,14 @@ const glow = (c) => `radial-gradient(circle at 50% 50%, #fff 0 7%, ${c} 20%, tra
  *  who can win it: see main.js), desc?, sw?, cols? } — req: the logro that gives it (it's claimed, not bought);
  *  sw: the card's CSS background; cols: the colours of the card's little gems / flames / name / streak. */
 // items shown in the shop as one card that opens to its members (a band: pick your favourite); main.js renderShop
+// Fear of the Dark's card: the moon, the branches reaching in from both sides, eyes in the dark
+const FEAR_SW = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 60' preserveAspectRatio='xMidYMid slice'>`
+  + `<defs><radialGradient id='h'><stop offset='0' stop-color='#a8c0ff' stop-opacity='.55'/><stop offset='1' stop-color='#3a5ab4' stop-opacity='0'/></radialGradient></defs>`
+  + `<rect width='100' height='60' fill='#09102a'/><circle cx='74' cy='20' r='22' fill='url(#h)'/><circle cx='74' cy='20' r='10' fill='#e6eaf0'/>`
+  + `<g fill='none' stroke='#010206' stroke-linecap='round'><path d='M0 46q14-4 22-14t20-12' stroke-width='3.2'/><path d='M14 40q6-12 2-24M22 32q10 4 16 14M30 24q2-10 12-14' stroke-width='1.6'/>`
+  + `<path d='M100 52q-12-2-22-12t-24-8' stroke-width='3.2'/><path d='M86 46q-4-14 4-22M76 38q-6 10-16 12M66 33q-4-10-12-12' stroke-width='1.6'/></g>`
+  + `<g fill='#ffd84a'><ellipse cx='8' cy='18' rx='2.4' ry='1' transform='rotate(12 8 18)'/><ellipse cx='14' cy='18' rx='2.4' ry='1' transform='rotate(-12 14 18)'/>`
+  + `<ellipse cx='86' cy='56' rx='2.4' ry='1' transform='rotate(12 86 56)'/><ellipse cx='92' cy='56' rx='2.4' ry='1' transform='rotate(-12 92 56)'/></g></svg>`)}") center / cover`;
 export const GROUPS = { "one-direction": { name: "One Direction" }, bts: { name: "BTS" } };
 export const ITEMS = [
   // mástiles (the neck the notes come down)
@@ -82,6 +90,13 @@ export const ITEMS = [
   { slot: "pet", id: "louis", name: "Louis", price: 0, req: "one-direction", group: "one-direction", secret: true, surprise: true, desc: "Louis, con el flequillo de lado y su camiseta blanca. Se aburre, se duerme si fallas, celebra tus rachas y salta con el poder estrella. Regalo del evento One Direction." },
   { slot: "pet", id: "niall", name: "Niall", price: 0, req: "one-direction", group: "one-direction", secret: true, surprise: true, desc: "Niall, con su copete rubio y el suéter celeste. Se aburre, se duerme si fallas, celebra tus rachas y salta con el poder estrella. Regalo del evento One Direction." },
   { slot: "pet", id: "zayn", name: "Zayn", price: 0, req: "one-direction", group: "one-direction", secret: true, surprise: true, desc: "Zayn, con su tupé negro y el suéter rojo. Se aburre, se duerme si fallas, celebra tus rachas y salta con el poder estrella. Regalo del evento One Direction." },
+  // the Iron Maiden event (La Gira de la Bestia): surprise gifts as the Beast's stars add up, Eddie for stars on every song
+  { slot: "gems", id: "powerslave", name: "Powerslave", price: 0, req: "bestia-powerslave", secret: true, surprise: true, cols: LANES, shape: "scarab", desc: "Escarabajos sagrados de Powerslave: el caparazón en el color de cada cuerda, cabeza de oro y el sol en alto. Las alas se abren con el ritmo. Regalo de la Gira de la Bestia." },
+  { slot: "crowd", id: "banderas", name: "The Trooper", price: 0, req: "bestia-trooper", secret: true, surprise: true, desc: "El público se viste como Eddie en The Trooper: casaca roja con las correas blancas cruzadas, y agita banderas de batalla toda la canción, más fuerte cuando galopa. Regalo de la Gira de la Bestia." },
+  { slot: "flames", id: "piramide", name: "Pirámide", price: 0, req: "bestia-piramide", secret: true, surprise: true, art: "pyramid", cols: ["#ffd76a", "#ff8a1a", "#7a3a06"], glow: "#ffb020", desc: "Pirámides de fuego dorado con jeroglíficos que se encienden. Regalo de la Gira de la Bestia." },
+  { slot: "neck", id: "fear-of-the-dark", name: "Fear of the Dark", price: 0, req: "bestia-fear", secret: true, surprise: true, sw: FEAR_SW, desc: "La noche de Fear of the Dark: un bosque azul bajo la luna llena, ramas torcidas que se estiran desde los bordes y ojos que brillan en la oscuridad. Regalo de la Gira de la Bestia." },
+  { slot: "name", id: "bestia", name: "Bestia", price: 0, req: "bestia-nombre", secret: true, surprise: true, desc: "Tu nombre en metal rojo sangre, con el número de la Bestia. Regalo de la Gira de la Bestia." },
+  { slot: "pet", id: "eddie", name: "Eddie", price: 0, req: "bestia-eddie", secret: true, surprise: true, desc: "Eddie, el de Killers: la melena salvaje, los ojos que brillan, la sonrisa de calavera y el hacha. Se aburre, se duerme si fallas, celebra tus rachas y levanta el hacha con el poder estrella. Regalo secreto de la Gira de la Bestia." },
   // BTS: the band's event's gift, all seven (whoever wins picks their favourite)
   { slot: "pet", id: "rm", name: "RM", price: 0, req: "bts", group: "bts", secret: true, surprise: true, desc: "RM, con sus lentes redondos y el blazer verde. Se aburre, se duerme si fallas, celebra tus rachas y salta con el poder estrella. Regalo del evento BTS." },
   { slot: "pet", id: "jin", name: "Jin", price: 0, req: "bts", group: "bts", secret: true, surprise: true, desc: "Jin, con su traje rosado. Se aburre, se duerme si fallas, celebra tus rachas y salta con el poder estrella. Regalo del evento BTS." },
