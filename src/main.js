@@ -2095,7 +2095,7 @@ function showNextNotice() {
   if (n.kind === "otaku") {
     try { localStorage.setItem(OTAKU_INTRO_KEY, "1"); } catch {}
     notices.go = () => { app.mode = "solo"; app.libTab = otakuGroup(); openLibrary(); };
-    $("noticeKicker").textContent = "Evento · Otaku";
+    $("noticeKicker").textContent = `Evento · ${secretList().find((g) => g.id === otakuGroup())?.name || "Expedición del Emperador"}`; // the group's name, whatever the admin calls it
     $("noticeBody").textContent = "¡Bienvenida a la Expedición del Emperador!\n\nEn las canciones de este evento, algunas notas traen una banana dorada encima. Tócalas para recogerlas: mientras más juntes, más regalos sorpresa vas abriendo. ¿Qué serán? Solo lo sabrás cuando los ganes.";
     $("noticeForm").querySelector(".notice-reply").hidden = true; $("noticeGo").hidden = false; $("noticeGo").textContent = "Ir a las canciones";
     $("noticeMsg").textContent = ""; $("noticeModal").hidden = false;
