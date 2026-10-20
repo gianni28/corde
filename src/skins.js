@@ -224,6 +224,62 @@ function carbon(g, w, h) {
   sides(g, w, h, 0.6, "0,0,0", 0.08);
 }
 
+// Fear of the Dark (the Iron Maiden event): the cover's night: a dark blue wood under the full moon, twisted black
+// branches reaching in from both sides like fingers, mist, and eyes glowing in the dark between the trees. The trees
+// keep to the edges and only their twigs reach over the lanes; everything is drawn wrapped so the board tiles.
+function fearDark(g, w, h) {
+  const bg = g.createLinearGradient(0, 0, w, 0);
+  bg.addColorStop(0, "#1c2c60"); bg.addColorStop(0.5, "#0f1838"); bg.addColorStop(1, "#1a2a5c");
+  g.fillStyle = bg; g.fillRect(0, 0, w, h);
+  const wrap = (draw) => { for (const dy of [-h, 0, h]) { g.save(); g.translate(0, dy); draw(); g.restore(); } };
+  // the full moon rising behind the right-hand trees (half of it past the edge, never over the lanes), and its cold halo
+  wrap(() => {
+    const mx = w - 14, my = h * 0.3, halo = g.createRadialGradient(mx, my, 20, mx, my, 200);
+    halo.addColorStop(0, "rgba(170,195,255,.35)"); halo.addColorStop(1, "rgba(60,90,180,0)");
+    g.fillStyle = halo; g.fillRect(mx - 220, my - 220, 440, 440);
+    const moon = g.createRadialGradient(mx - 14, my - 14, 6, mx, my, 58);
+    moon.addColorStop(0, "#f4f6f0"); moon.addColorStop(0.8, "#cfd6e2"); moon.addColorStop(1, "#9aa6c0");
+    g.fillStyle = moon; g.beginPath(); g.arc(mx, my, 58, 0, TAU); g.fill();
+    g.fillStyle = "rgba(120,130,160,.35)"; for (const [x, y, r] of [[-18, 10, 12], [14, -16, 8], [20, 18, 10]]) { g.beginPath(); g.arc(mx + x, my + y, r, 0, TAU); g.fill(); }
+  });
+  // mist drifting low between the trunks
+  for (let i = 0; i < 26; i++) {
+    const x = rnd(0, w), y = rnd(0, h), r = rnd(40, 120);
+    wrap(() => { const m = g.createRadialGradient(x, y, 0, x, y, r); m.addColorStop(0, "rgba(110,140,210,.12)"); m.addColorStop(1, "rgba(110,140,210,0)"); g.fillStyle = m; g.fillRect(x - r, y - r, r * 2, r * 2); });
+  }
+  // the branches: crooked, forking, thinning to twigs; a moonlit edge under the black
+  const limbs = [];
+  const grow = (x, y, ang, len, wd, depth) => {
+    const bend = rnd(-0.6, 0.6), x2 = x + Math.cos(ang) * len, y2 = y + Math.sin(ang) * len;
+    const cx = (x + x2) / 2 + Math.cos(ang + Math.PI / 2) * len * bend * 0.4, cy = (y + y2) / 2 + Math.sin(ang + Math.PI / 2) * len * bend * 0.4;
+    limbs.push([x, y, cx, cy, x2, y2, wd]);
+    if (depth > 0) for (let k = 0, n = depth > 2 ? 2 : 3; k < n; k++) grow(x2, y2, ang + rnd(-0.85, 0.85), len * rnd(0.6, 0.8), wd * 0.62, depth - 1);
+  };
+  for (let y = 60; y < h; y += 260) {
+    grow(-6, y + rnd(-40, 40), rnd(-0.55, 0.55), rnd(95, 130), 18, 4);
+    grow(w + 6, y + 130 + rnd(-40, 40), Math.PI + rnd(-0.55, 0.55), rnd(95, 130), 18, 4);
+  }
+  g.lineCap = "round";
+  for (const [col, extra] of [["rgba(140,170,240,.5)", 3], ["#020308", 0]]) {
+    g.strokeStyle = col;
+    for (const [x, y, cx, cy, x2, y2, wd] of limbs) wrap(() => { g.lineWidth = wd + extra; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(cx, cy, x2, y2); g.stroke(); });
+  }
+  // the trunks along both edges
+  for (const x of [0, w]) { const t = g.createLinearGradient(x, 0, x === 0 ? 40 : w - 40, 0); t.addColorStop(0, "#010205"); t.addColorStop(1, "rgba(1,2,5,0)"); g.fillStyle = t; g.fillRect(x === 0 ? 0 : w - 40, 0, 40, h); }
+  // eyes in the dark: slanted yellow pairs with a glow, among the trees at the edges
+  for (const [x, y] of [[0.12, 0.15], [0.9, 0.62], [0.17, 0.55], [0.86, 0.9], [0.1, 0.86]]) {
+    const ex = w * x, ey = h * y;
+    wrap(() => {
+      const gl = g.createRadialGradient(ex, ey, 0, ex, ey, 34); gl.addColorStop(0, "rgba(255,210,60,.35)"); gl.addColorStop(1, "rgba(255,180,40,0)");
+      g.fillStyle = gl; g.fillRect(ex - 34, ey - 34, 68, 68);
+      g.fillStyle = "#ffe070";
+      for (const s of [-1, 1]) { g.beginPath(); g.ellipse(ex + s * 11, ey, 7, 3, s * -0.35, 0, TAU); g.fill(); }
+    });
+  }
+  calm(g, w, h, 0.2);
+  sides(g, w, h, 0.6, "0,0,0", 0.05);
+}
+
 // dark wood with warm 70s stripes down both sides
 function retro(g, w, h) {
   g.fillStyle = "#2a170e"; g.fillRect(0, 0, w, h);
@@ -600,6 +656,7 @@ export const NECKS = {
   llamas: { draw: paintedFlames, emissive: 0.3, rough: 0.25 },
   neon: { draw: neonGrid, emissive: 0.6, rough: 0.35 },
   galaxia: { draw: galaxy, emissive: 0.5 },
+  "fear-of-the-dark": { draw: fearDark, emissive: 0.5, rough: 0.6 },
   oro: { draw: gold, emissive: 0.15, rough: 0.32, metal: 0.45 },
   leyenda: { draw: legend, emissive: 0.4, rough: 0.3 },
   calcomanias: { draw: stickers, emissive: 0.3, rough: 0.6 },
@@ -670,6 +727,12 @@ export const GEMS = {
     lanes: LANE_HEX, shape: "titi", body: { metal: 0, rough: 0.85, mix: 0.3, to: 0x5a4a3c }, dome: { metal: 0, rough: 0.45, mix: 0.92, to: 0xe3a29c },
     ring: { color: 0xffffff, metal: 0, rough: 0.5, emissive: 0xffffff, ei: 0.4 }, base: { color: 0x0a0809, metal: 0, rough: 0.55 },
   },
+  // Powerslave's scarabs (the Iron Maiden event): wing cases in the lane colour, polished, a golden head and thorax, the
+  // sun disk glowing in the lane colour above, bronze legs
+  powerslave: {
+    lanes: LANE_HEX, shape: "scarab", body: { metal: 0.85, rough: 0.22, mix: 0.88, to: 0xd8a83a }, dome: { metal: 0.2, rough: 0.3, mix: 0.25, glow: 0.7 },
+    ring: { lane: 0.08, metal: 0.55, rough: 0.18, emissive: 0x000000, ei: 0, glow: 0.2 }, base: { color: 0x4a3212, metal: 0.75, rough: 0.35 },
+  },
   // kittens: matte fur in the lane colour, a pale muzzle, a dark face (the "ring")
   gatitos: {
     lanes: LANE_HEX, shape: "cat", body: { metal: 0, rough: 0.6 }, dome: { metal: 0, rough: 0.55, mix: 0.82 },
@@ -697,7 +760,8 @@ export const FLAMES = {
   fogata: { form: "campfire" },
   brasas: { form: "embers" },
   supernova: { tint: 0xc77dff, k: 2.2, form: "nova" },
-  antimagia: { form: "antimagic" }, // black flames with red cracks: drawn in their own colours, not added up as light
+  antimagia: { form: "antimagic" }, 
+  piramide: { form: "pyramid" }, // Powerslave's burning pyramid with its glyphs (the Iron Maiden event), in its own colours // black flames with red cracks: drawn in their own colours, not added up as light
 };
 
 /* ================= strings, rails, edges ================= */
@@ -733,12 +797,12 @@ export const STARS = {
 /* ================= the crowd's lights ================= */
 // what the crowd does: each its own thing (stagecrew.js createCrowd); "rojo" was red lights, now red laser pointers
 export const CROWDS = {
-  encendedores: "lighters", celulares: "phones", rojo: "lasers", barras: "sticks", bengalas: "sparklers", estrobos: "strobe", luciernagas: "fireflies", gatos: "cats",
+  encendedores: "lighters", celulares: "phones", rojo: "lasers", barras: "sticks", bengalas: "sparklers", estrobos: "strobe", luciernagas: "fireflies", gatos: "cats", banderas: "flags",
 };
 
 /* ================= pets: who keeps you company on the neck (renderer.js drawPet) ================= */
 export const PETS = { ninguna: null, nero: "nero", harry: "harry", liam: "liam", louis: "louis", niall: "niall", zayn: "zayn",
-  rm: "rm", jin: "jin", suga: "suga", jhope: "jhope", jimin: "jimin", v: "v", jungkook: "jungkook" };
+  rm: "rm", jin: "jin", suga: "suga", jhope: "jhope", jimin: "jimin", v: "v", jungkook: "jungkook", eddie: "eddie" };
 // the bands as little figures (the bands' events' gifts; renderer.js makeMember, main.js memberSvg): each one known by
 // his hair and his clothes. hair: the cut; top: shirt, sweater or blazer; under: what shows at the front (null:
 // closed); neck: a collar ring; pattern/stripe/pocket/earrings/glasses/hat/beret/tattoo: the details.

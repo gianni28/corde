@@ -19,10 +19,10 @@ const DOWN = new THREE.Vector3(0, -1, 0);
    a phone held upright), so they always frame the highway and never cover it.
    ====================================================================== */
 const CROWD_VS = `
-varying vec3 vN; varying vec3 vP; varying float vB;
+varying vec3 vN; varying vec3 vP; varying float vB; varying vec3 vO;
 void main() {
   vec4 p = vec4(position, 1.0); vec3 n = normal;
-  vB = 1.0;
+  vB = 1.0; vO = position;
   #ifdef USE_INSTANCING_COLOR
   vB = instanceColor.r;
   #endif
@@ -35,7 +35,7 @@ void main() {
 }`;
 const CROWD_FS = `
 uniform vec3 uRim; uniform vec3 uFill;
-varying vec3 vN; varying vec3 vP; varying float vB;
+varying vec3 vN; varying vec3 vP; varying float vB; varying vec3 vO;
 void main() {
   vec3 n = normalize(vN), v = normalize(-vP);
   float fr = 1.0 - clamp(abs(dot(n, v)), 0.0, 1.0);
@@ -43,6 +43,14 @@ void main() {
   // no pow() of 0: a Mac's GPU computes pow as exp2(y * log2(x)), undefined at 0
   float u2 = up * up;
   vec3 c = uFill + uRim * vB * (pow(max(fr, 1e-4), 3.2) * (0.2 + up) + u2 * u2 * 0.16);
+  #ifdef COAT
+  // The Trooper's red coat (the darker rows darker), and on the torso the white crossbelts over the back
+  c += uFill * (vB - 1.0) * 0.6;
+  #ifdef BELTS
+  float bx = min(abs(vO.x - 0.5 - vO.y * 0.79), abs(vO.x + 0.5 + vO.y * 0.79));
+  c = mix(c, vec3(0.62, 0.58, 0.52) * (0.35 + 0.65 * vB) + uRim * vB * 0.15, (1.0 - smoothstep(0.07, 0.1, bx)) * step(-1.25, vO.y) * step(vO.y, 0.05));
+  #endif
+  #endif
   gl_FragColor = vec4(c, 1.0);
   #include <colorspace_fragment>
 }`;
@@ -65,7 +73,7 @@ function crowdGeometries() {
 
 // The pictures of what the crowd holds up (white where the instance colour tints it)
 function propTex(kind) {
-  const W = { lighters: [64, 128], phones: [128, 232], lasers: [16, 256], sticks: [32, 160], sparklers: [8, 128] }[kind];
+  const W = { lighters: [64, 128], phones: [128, 232], lasers: [16, 256], sticks: [32, 160], sparklers: [8, 128], flags: [160, 160] }[kind];
   const c = document.createElement("canvas"); c.width = W[0]; c.height = W[1];
   const g = c.getContext("2d"), w = W[0], h = W[1];
   const rr = (x, y, ww, hh, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + ww, y, x + ww, y + hh, r); g.arcTo(x + ww, y + hh, x, y + hh, r); g.arcTo(x, y + hh, x, y, r); g.arcTo(x, y, x + ww, y, r); g.closePath(); };
@@ -105,6 +113,19 @@ function propTex(kind) {
     g.filter = "blur(6px)"; rr(6, 6, w - 12, h - 12, 10); g.fillStyle = "rgba(255,255,255,.55)"; g.fill();
     g.filter = "none"; rr(11, 14, w - 22, h - 28, 5); g.fillStyle = "rgba(255,255,255,.95)"; g.fill();
     g.fillStyle = "rgba(255,255,255,.4)"; g.fillRect(11, h - 30, w - 22, 16); // the plastic cap at the bottom
+  } else if (kind === "flags") {
+    // The Trooper's battle flag on its pole: the pole up the left, the flag (blue, a white and red cross and saltire,
+    // torn at the fly) on the top half
+    g.fillStyle = "#d8cfa8"; g.fillRect(6, 4, 5, h - 4); g.fillStyle = "#e8c45a"; g.beginPath(); g.arc(8.5, 5, 5, 0, 6.3); g.fill();
+    const fx = 11, fy = 8, fw = w - 16, fh = h * 0.5;
+    g.save(); g.beginPath(); g.moveTo(fx, fy); g.lineTo(fx + fw, fy + 4); g.lineTo(fx + fw - 10, fy + fh * 0.5); g.lineTo(fx + fw, fy + fh - 2); g.lineTo(fx, fy + fh); g.closePath(); g.clip();
+    g.fillStyle = "#1a2a7a"; g.fillRect(fx, fy, fw, fh);
+    g.strokeStyle = "#f4f2ea"; g.lineWidth = 16; g.beginPath(); g.moveTo(fx, fy); g.lineTo(fx + fw, fy + fh); g.moveTo(fx + fw, fy); g.lineTo(fx, fy + fh); g.stroke();
+    g.strokeStyle = "#c8141c"; g.lineWidth = 6; g.stroke();
+    g.fillStyle = "#f4f2ea"; g.fillRect(fx + fw / 2 - 13, fy, 26, fh); g.fillRect(fx, fy + fh / 2 - 13, fw, 26);
+    g.fillStyle = "#c8141c"; g.fillRect(fx + fw / 2 - 8, fy, 16, fh); g.fillRect(fx, fy + fh / 2 - 8, fw, 16);
+    g.fillStyle = "rgba(0,0,0,.25)"; for (let k = 0; k < 3; k++) g.fillRect(fx + 20 + k * 40, fy, 10, fh); // folds
+    g.restore();
   } else {
     // a sparkler's wire
     g.fillStyle = "#9a9590"; g.fillRect(w / 2 - 1.5, 0, 3, h);
@@ -126,6 +147,9 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
   const torso = mk(G.torso, 60);
   torso.onBeforeRender = (r) => r.clearDepth();
   const parts = { torso, head: mk(G.head, 61), hair: mk(G.hair, 61), upL: mk(G.upper, 61), foreL: mk(G.fore, 61), upR: mk(G.upper, 61), foreR: mk(G.fore, 61) };
+  // with the flags (The Trooper) they wear Eddie's red coat: the same light, a red fill, the crossbelts on the torso
+  const coat = (defines) => new THREE.ShaderMaterial({ uniforms: { uRim: uni.uRim, uFill: { value: new THREE.Color(0x5a070b) } }, defines, vertexShader: CROWD_VS, fragmentShader: CROWD_FS, fog: false });
+  const coatBody = coat({ COAT: 1, BELTS: 1 }), coatArm = coat({ COAT: 1 });
 
   // what the crowd holds up (lighters, phones, lasers…), each in its own moments of the song (see "and when" below)
   const lightPos = new Float32Array(alloc * 3), lightCol = new Float32Array(alloc * 3);
@@ -144,8 +168,8 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
   let waveT = -99, starWas = false, dropT = -99, eSlow = 0.5;
   const STICKS = [[0.35, 1, 0.2], [1, 0.25, 0.75], [0.2, 0.85, 1], [1, 0.9, 0.15], [0.65, 0.3, 1], [1, 0.5, 0.1]];
   // who holds one up: a share of the crowd per kind (more phones than lighters, a few lasers); always: the whole song
-  const HOLD = { lighters: 0.45, phones: 0.55, lasers: 0.3, sticks: 0.5, sparklers: 0.35 };
-  const ALWAYS = { sticks: true };
+  const HOLD = { lighters: 0.45, phones: 0.55, lasers: 0.3, sticks: 0.5, sparklers: 0.35, flags: 0.22 };
+  const ALWAYS = { sticks: true, flags: true };
   // and when, as at a real show: lighters in the calm parts; phones there (as torches) and in the big moments (filming
   // the chorus); lasers in the intense parts; sparklers only at the peaks; glow sticks all song, waved on the beat
 
@@ -164,6 +188,7 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
     lasers: { w: 0.16, h: 3.6, lift: 0, add: true },
     sticks: { w: 0.16, h: 0.85, lift: -0.25, add: true },
     sparklers: { w: 0.07, h: 0.75, lift: -0.05, add: false },
+    flags: { w: 1.0, h: 1.0, lift: -0.15, add: false },
   };
 
   // sparks off the sparklers; fireflies over the crowd (both points in the crowd's layer)
@@ -371,6 +396,10 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
           const fl = 0.55 + 0.45 * kick(frac(lp + 0.0)); pc = [fl, fl * 0.12, fl * 0.1]; glow = 0.9; gr = 1; gg = 0.15; gb = 0.1;
         } else if (lightKind === "sticks") {
           const c = STICKS[(i * 7 + 3) % STICKS.length], fl = 0.9 + 0.3 * beat; pc = [c[0] * fl, c[1] * fl, c[2] * fl]; glow = 0.7; [gr, gg, gb] = c;
+        } else if (lightKind === "flags") {
+          // waved from side to side on the gallop, wider the more into it they are; the cloth flutters
+          ang = Math.sin((bpos + p.sway) * Math.PI) * (0.18 + 0.3 * into) + p.lean;
+          pw *= 0.85 + 0.15 * Math.sin(now * 9 + i * 1.7); pc = [0.95, 0.95, 0.95]; glow = 0;
         } else if (lightKind === "sparklers") {
           ang *= 0.4; pc = [0.35, 0.33, 0.3];
           const fl = 0.75 + 0.25 * Math.abs(Math.sin(now * 31 + i * 5.3)); glow = fl; gr = 1; gg = 0.92; gb = 0.7;
@@ -430,9 +459,12 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
 
   const api = {
     layout, update, setVisible(on) { layer.visible = on; }, get count() { return people.length; },
-    /** What the crowd does: "lighters" | "phones" | "lasers" | "sticks" | "sparklers" | "strobe" | "fireflies" | "cats". */
+    /** What the crowd does: "lighters" | "phones" | "lasers" | "sticks" | "sparklers" | "flags" | "strobe" | "fireflies" | "cats". */
     setLights(kind) {
       lightKind = kind || "lighters";
+      const tr = lightKind === "flags";
+      parts.torso.material = tr ? coatBody : mat;
+      for (const k of ["upL", "foreL", "upR", "foreR"]) parts[k].material = tr ? coatArm : mat;
       const L = LOOK[lightKind];
       if (L) { propMat.map = tex(lightKind); propMat.blending = L.add ? THREE.AdditiveBlending : THREE.NormalBlending; propMat.needsUpdate = true; }
     },

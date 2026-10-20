@@ -157,6 +157,8 @@ const FLAME_FORMS = {
   bubbles: { look: [1.0, 1.7, 0.15, 0.6, 0.5, 0.04], spark: { vx: 0.6, vy: [1, 2.2], g: -0.4, life: [0.6, 1.1], n: 0.7 } },
   // antimagic: black flames (blend: drawn over, not added as light: black adds nothing) with red cracks
   antimagic: { look: [1.15, 1.9, 0.2, 0.7, 0.4, 0.04], blend: "normal", spark: { vx: 2.2, vy: [1.2, 4], g: 3, life: [0.25, 0.5], n: 1.2 } },
+  // pyramid (the Iron Maiden event, Powerslave): a stepped pyramid of golden fire, glyphs burning on its face
+  pyramid: { look: [1.25, 1.6, 0.2, 0.55, 0.42, 0.04], spark: { vx: 1.2, vy: [2.2, 4.6], g: 4, life: [0.5, 0.9], n: 1 } },
 };
 function flameFrames(form, n = 6) {
   const out = [];
@@ -274,6 +276,37 @@ function flameFrames(form, n = 6) {
           for (const [lw, c] of [[4, "rgba(255,40,50,.3)"], [1.5, "rgba(255,80,80,.9)"]]) { g.strokeStyle = c; g.lineWidth = lw; g.stroke(); }
         }
       }));
+    } else if (form === "pyramid") {
+      // a stepped pyramid of fire, white-gold at the foot, burning up to its point; on its face, glyphs of light (an eye,
+      // an ankh, a scarab's sun) that flicker frame to frame
+      out.push(canvasTex(128, 256, (g, w, h) => {
+        const base = h - 14, top = 70 + rnd(-6, 6), half = 54;
+        const glow = g.createRadialGradient(w / 2, base - 40, 0, w / 2, base - 40, 90);
+        glow.addColorStop(0, "rgba(255,170,40,.45)"); glow.addColorStop(1, "rgba(255,120,20,0)");
+        g.fillStyle = glow; g.fillRect(0, 0, w, h);
+        // the steps: five courses, each a little narrower, licked by flame at their edges
+        const steps = 5;
+        for (let k = 0; k < steps; k++) {
+          const y0 = base - (k / steps) * (base - top), y1 = base - ((k + 1) / steps) * (base - top);
+          const hw0 = half * (1 - k / steps), hw1 = half * (1 - (k + 1) / steps);
+          const lg = g.createLinearGradient(0, y0, 0, y1);
+          lg.addColorStop(0, `rgba(255,${235 - k * 18},${150 - k * 25},${0.95 - k * 0.08})`); lg.addColorStop(1, `rgba(255,${150 - k * 15},30,${0.75 - k * 0.1})`);
+          g.fillStyle = lg;
+          g.beginPath(); g.moveTo(w / 2 - hw0, y0); g.lineTo(w / 2 - hw0 + rnd(0, 3), y1); g.lineTo(w / 2 + hw0 - rnd(0, 3), y1); g.lineTo(w / 2 + hw0, y0); g.closePath(); g.fill();
+          g.fillStyle = `rgba(255,${200 - k * 20},80,.5)`; // a flame tongue off each step's corners
+          for (const sx of [-1, 1]) { const x = w / 2 + sx * hw1; g.beginPath(); g.moveTo(x - 5, y1); g.quadraticCurveTo(x + sx * rnd(2, 8), y1 - rnd(10, 22), x + 5, y1); g.fill(); }
+        }
+        // the point: a flame going up out of it
+        for (let k = 0; k < 18; k++) { const p = k / 17, y = top - p * 50, r = (1 - p) * 10 + 2; g.fillStyle = `rgba(255,${220 - p * 120},${120 - p * 100},${0.5 * (1 - p)})`; g.beginPath(); g.arc(w / 2 + Math.sin(p * 5 + f) * 4 * p, y, r, 0, 6.3); g.fill(); }
+        // the glyphs, dark lines with a hot core, some lit some not this frame
+        g.lineCap = "round"; g.lineJoin = "round";
+        const glyph = (draw) => { for (const [lw, c] of [[5, "rgba(120,30,0,.55)"], [2, rnd(0, 1) < 0.75 ? "rgba(255,255,220,.95)" : "rgba(255,200,120,.4)"]]) { g.strokeStyle = c; g.lineWidth = lw; g.beginPath(); draw(); g.stroke(); } };
+        const cy = base - 46;
+        glyph(() => { g.ellipse(w / 2, cy, 13, 7, 0, 0, 6.3); g.moveTo(w / 2 + 3, cy); g.arc(w / 2, cy, 3, 0, 6.3); g.moveTo(w / 2 - 6, cy + 7); g.lineTo(w / 2 - 10, cy + 16); }); // the eye
+        glyph(() => { g.moveTo(w / 2 - 26, base - 10); g.lineTo(w / 2 - 26, base - 26); g.moveTo(w / 2 - 33, base - 22); g.lineTo(w / 2 - 19, base - 22); g.moveTo(w / 2 - 26, base - 26); g.arc(w / 2 - 26, base - 31, 5, Math.PI / 2, Math.PI * 2.5); }); // ankh
+        glyph(() => { g.arc(w / 2 + 26, base - 22, 6, 0, 6.3); g.moveTo(w / 2 + 16, base - 12); g.lineTo(w / 2 + 36, base - 12); }); // the sun
+      }));
+
     } else {
       // bubbles: rings with a shine, boiling up
       out.push(canvasTex(128, 256, (g, w, h) => {
@@ -521,7 +554,100 @@ function makeMember(m) {
   };
   return g;
 }
-const petModels = { nero: makeNero, ...Object.fromEntries(Object.entries(MEMBERS).map(([id, m]) => [id, () => makeMember(m)])) };
+// Eddie, Iron Maiden's, as on the Killers cover (the Iron Maiden event's top gift): not one of the little band figures
+// but his own lanky self: a long skull of a head with its skin drawn tight, a heavy brow over sunken sockets and eyes
+// that glow, a hole for a nose, a grin of teeth with no lips over them, and a huge wild mane of pale hair; a dark
+// sleeveless shirt over bony arms with clawed hands, jeans, and the bloody hatchet. pose() as the others': his eyes dim
+// (lid), the hatchet goes up, the claw reaches out and his jaw drops (wing); asleep his head hangs and his eyes go out.
+function makeEddie() {
+  const g = new THREE.Group(), b = new THREE.Group(); g.add(b); g.lift = 0.3;
+  const mat = (color, roughness = 0.6, metalness = 0) => new THREE.MeshStandardMaterial({ color, roughness, metalness });
+  const add = (geo, mt, parent = b) => { const o = new THREE.Mesh(geo, mt); parent.add(o); return o; };
+  const sph = (r, ws = 18, hs = 12) => new THREE.SphereGeometry(r, ws, hs);
+  const SKIN = mat(0x9a8f74, 0.75), DARK = mat(0x140c08, 0.95), SHIRT = mat(0x2c2c32, 0.55, 0.15), JEANS = mat(0x2e3a52, 0.85);
+  const HAIR = mat(0xe2d59a, 0.7), TOOTH = mat(0xd8cfb0, 0.45), BLOOD = mat(0x8a0a0a, 0.3);
+  const GLOW = new THREE.MeshBasicMaterial({ color: 0xfff0a0 });
+  // legs: jeans, a belt, dark boots
+  for (const side of [-1, 1]) {
+    add(new THREE.CylinderGeometry(0.05, 0.042, 0.36, 12), JEANS).position.set(side * 0.06, 0.21, 0);
+    const sh = add(sph(1), mat(0x15120f, 0.5)); sh.scale.set(0.055, 0.04, 0.09); sh.position.set(side * 0.06, 0.03, 0.03);
+  }
+  add(new THREE.CylinderGeometry(0.115, 0.115, 0.035, 18), mat(0x1a1410, 0.4, 0.3)).position.y = 0.4;
+  add(new THREE.BoxGeometry(0.04, 0.03, 0.01), mat(0xb8b0a0, 0.3, 0.8)).position.set(0, 0.4, 0.118); // the buckle
+  // the shirt: sleeveless, dark, open at the neck over his ribs
+  add(new THREE.CylinderGeometry(0.13, 0.11, 0.3, 18), SHIRT).position.y = 0.56;
+  const chest = add(new THREE.CircleGeometry(0.06, 3), SKIN); chest.position.set(0, 0.67, 0.127); chest.rotation.set(-0.15, 0, Math.PI / 2 + Math.PI / 6); chest.scale.set(1, 1.4, 1);
+  for (const side of [-1, 1]) add(sph(0.05, 12, 8), SKIN).position.set(side * 0.13, 0.69, 0); // bony shoulders
+  add(new THREE.CylinderGeometry(0.035, 0.04, 0.07, 10), SKIN).position.y = 0.73;
+  // arms: bare and bony, the hands long-fingered claws
+  const arm = (side) => {
+    const p = new THREE.Group(); p.position.set(side * 0.155, 0.68, 0); b.add(p);
+    add(new THREE.CylinderGeometry(0.032, 0.026, 0.3, 8), SKIN, p).position.y = -0.15;
+    add(sph(0.032, 8, 6), SKIN, p).position.y = -0.15; // the elbow
+    const hand = new THREE.Group(); hand.position.y = -0.31; p.add(hand);
+    add(sph(0.032), SKIN, hand).scale.set(0.9, 1, 0.7);
+    for (let f = 0; f < 4; f++) { const fg = add(new THREE.ConeGeometry(0.009, 0.08, 5), SKIN, hand); fg.position.set(-0.024 + f * 0.016, -0.045, 0.012); fg.rotation.set(Math.PI - 0.4, 0, (f - 1.5) * 0.15); }
+    return p;
+  };
+  const right = arm(-1), left = arm(1);
+  // the hatchet: a wooden handle, the steel head with blood on its edge
+  const axe = new THREE.Group(); axe.position.set(0, -0.31, 0.02); right.add(axe);
+  add(new THREE.CylinderGeometry(0.011, 0.013, 0.3, 8), mat(0x6b4a2a, 0.7), axe).position.y = 0.08;
+  const head0 = add(new THREE.BoxGeometry(0.02, 0.07, 0.1), mat(0xc8ccd2, 0.3, 0.6), axe); head0.position.set(0, 0.2, 0.04);
+  add(new THREE.BoxGeometry(0.022, 0.07, 0.02), BLOOD, axe).position.set(0, 0.2, 0.09);
+  for (let i = 0; i < 3; i++) { const d = add(sph(0.008, 6, 4), BLOOD, axe); d.position.set(0, 0.16 - i * 0.035, 0.088); d.scale.set(1, 1.6, 1); } // dripping
+  // the head: a long skull with the skin drawn over it
+  const head = new THREE.Group(); head.position.y = 0.95; b.add(head);
+  const skull = add(sph(0.2, 28, 20), SKIN, head); skull.scale.set(0.92, 1.12, 1); skull.position.y = 0.03;
+  const lights = [];
+  for (const side of [-1, 1]) {
+    const brow = add(sph(1, 14, 8), mat(0x7d725c, 0.8), head); brow.scale.set(0.06, 0.018, 0.03); brow.position.set(side * 0.064, 0.045, 0.172); brow.rotation.z = side * 0.35; // heavy brows, down in a scowl
+    const sock = add(sph(0.05, 16, 12), DARK, head); sock.scale.set(1, 0.85, 0.5); sock.position.set(side * 0.068, 0.0, 0.168);
+    const eye = add(sph(0.019, 10, 8), GLOW, head); eye.position.set(side * 0.066, -0.003, 0.19); lights.push(eye);
+    const cheek = add(sph(0.04, 12, 10), SKIN, head); cheek.scale.set(0.9, 0.5, 0.6); cheek.position.set(side * 0.1, -0.055, 0.155); // high cheekbones
+    const hollow = add(sph(0.04, 12, 10), mat(0x5a4e3e, 0.9), head); hollow.scale.set(0.6, 1, 0.4); hollow.position.set(side * 0.105, -0.115, 0.13); // and hollow cheeks under them
+  }
+  const nose = add(new THREE.ConeGeometry(0.026, 0.05, 3), DARK, head); nose.position.set(0, -0.055, 0.19); nose.rotation.set(-0.35, 0, Math.PI); nose.scale.set(1, 1, 0.4); // just a hole
+  // a wide grin: the upper teeth set in the skull; the jaw, with its own, hinged so it can drop
+  add(new THREE.BoxGeometry(0.15, 0.016, 0.03), mat(0x5a1414, 0.8), head).position.set(0, -0.1, 0.158); // gums
+  for (let t = 0; t < 10; t++) { const tt = add(new THREE.BoxGeometry(0.013, 0.04, 0.012), TOOTH, head); tt.position.set(-0.068 + t * 0.0151, -0.122, 0.172 - Math.abs(t - 4.5) * 0.005); }
+  const jaw = new THREE.Group(); jaw.position.set(0, -0.1, 0.03); head.add(jaw);
+  const chin = add(sph(1, 18, 12), SKIN, jaw); chin.scale.set(0.1, 0.05, 0.11); chin.position.set(0, -0.075, 0.04);
+  add(new THREE.BoxGeometry(0.13, 0.05, 0.05), DARK, jaw).position.set(0, -0.045, 0.1); // the mouth's dark inside
+  for (let t = 0; t < 10; t++) { const tt = add(new THREE.BoxGeometry(0.012, 0.03, 0.012), TOOTH, jaw); tt.position.set(-0.063 + t * 0.014, -0.045, 0.145 - Math.abs(t - 4.5) * 0.005); }
+  // the mane: a pale mass round the back of the head, and wild spikes out of it every way but over the face
+  const mane = add(sph(0.24, 20, 14), HAIR, head); mane.scale.set(1.1, 1.05, 0.85); mane.position.set(0, 0.02, -0.09);
+  const spikes = [];
+  const crown = add(new THREE.SphereGeometry(0.205, 24, 10, 0, Math.PI * 2, 0, Math.PI * 0.45), HAIR, head); crown.rotation.x = -0.6; crown.position.y = 0.04; crown.scale.set(0.97, 1.12, 1.02); // a high forehead
+  for (let i = 2; i < 80; i++) {
+    const y = 1 - (i / 79) * 1.25, r = Math.sqrt(Math.max(0, 1 - y * y)), a = i * 2.399; // roots spread over the scalp
+    const root = new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r);
+    if ((root.z > 0.3 && root.y < 0.8) || root.y > 0.95) continue; // the face stays clear (and no lone spike on top)
+    // the top swept up and back, the sides and back falling out and down to the shoulders
+    const dir = new THREE.Vector3(root.x * 0.9, root.y * 0.7 - 0.75 * (1 - root.y), root.z * 0.8 - 0.25).normalize();
+    const len = 0.22 + (1 - root.y) * 0.22 + ((i * 7) % 5) * 0.03, s = new THREE.Group(); head.add(s);
+    s.position.copy(root).multiplyScalar(0.19).add(new THREE.Vector3(0, 0.06, -0.03));
+    s.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+    const st = add(new THREE.ConeGeometry(0.05 + (i % 3) * 0.012, len, 5), i % 4 ? HAIR : mat(0xf2ead0, 0.7), s); st.position.y = len / 2;
+    s.userData.q = s.quaternion.clone();
+    spikes.push(s);
+  }
+  const zz = napZ(); g.add(zz);
+  const shake = new THREE.Quaternion(), ax = new THREE.Euler();
+  g.pose = ({ lid, wing, sleep, now }) => {
+    const glow = sleep ? 0.12 : 1 - lid * 0.75;
+    lights.forEach((l) => { l.material.color.setRGB(glow, glow * 0.94, glow * 0.6); l.scale.setScalar(0.7 + glow * 0.4); });
+    jaw.rotation.x = sleep ? 0.2 : wing * 0.45 + Math.max(0, Math.sin(now * 3.1)) * 0.06;
+    right.rotation.z = -(0.15 + wing * 2.6); right.rotation.x = wing > 0.4 ? Math.sin(now * 12) * 0.35 : -0.25;
+    axe.rotation.x = 0.4 - wing * 0.3;
+    left.rotation.z = 0.3 + wing * 0.8 + (wing > 0.4 ? Math.sin(now * 7) * 0.2 : 0); left.rotation.x = -0.6 - wing * 0.4; // the claw reaching for you
+    spikes.forEach((s, i) => { const k = 0.04 + wing * 0.18; shake.setFromEuler(ax.set(Math.sin(now * 3 + i) * k, 0, Math.cos(now * 2.6 + i * 1.7) * k)); s.quaternion.copy(s.userData.q).multiply(shake); });
+    head.rotation.set(sleep ? 0.45 : -wing * 0.2, 0, sleep ? 0.15 : Math.sin(now * 2.1) * 0.06);
+    zz.visible = sleep; zz.position.set(0.4, 1.35 + ((now * 0.4) % 1) * 0.2, 0); zz.material.opacity = 1 - ((now * 0.4) % 1);
+  };
+  return g;
+}
+const petModels = { nero: makeNero, ...Object.fromEntries(Object.entries(MEMBERS).map(([id, m]) => [id, () => makeMember(m)])), eddie: makeEddie };
 const starDotTex = () => canvasTex(64, 64, (g) => {
   const rg = g.createRadialGradient(32, 32, 0, 32, 32, 14); rg.addColorStop(0, "rgba(255,255,255,1)"); rg.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = rg; g.fillRect(0, 0, 64, 64);
   g.fillStyle = "#fff"; g.beginPath(); g.moveTo(32, 2); g.lineTo(36, 28); g.lineTo(62, 32); g.lineTo(36, 36); g.lineTo(32, 62); g.lineTo(28, 36); g.lineTo(2, 32); g.lineTo(28, 28); g.fill();
@@ -1051,6 +1177,38 @@ export function createRenderer(canvas) {
         dome: slab(ellipse(0, -0.055, 0.075, 0.06), 0.03, 0.18, 0.015),
         ring: mergeGeometries([...hairs.map((h) => slab(h, 0.02, 0.2)), ...shine.map((s) => slab(s, 0.02, 0.21))]),
       };
+    } else if (key === "scarab") {
+      // Powerslave's sacred scarab: the lane-coloured wing cases (the band's part: they open out on the beat, renderer
+      // uWig), a golden head and thorax, the sun disk held up above it (the dome, glowing), six bronze legs (the base).
+      // It sits up like the tamarins, toward the player.
+      const slab = (shape, depth, y, bevel = 0) => {
+        const g = new THREE.ExtrudeGeometry(shape, { depth, curveSegments: 14, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel * 0.8, bevelSegments: 3 });
+        g.rotateX(-Math.PI / 2); g.translate(0, y, 0);
+        g.rotateX(0.95); g.translate(0, 0.29, 0.04); return g;
+      };
+      const ellipse = (x, y, rx, ry, rot = 0) => { const s = new THREE.Shape(); s.absellipse(x, y, rx, ry, 0, Math.PI * 2, false, rot); return s; };
+      const poly = (pts) => { const s = new THREE.Shape(); pts.forEach(([x, y], i) => (i ? s.lineTo(x, y) : s.moveTo(x, y))); return s; };
+      const leg = (pts, w) => {
+        const L = [], R = [];
+        pts.forEach(([x, y], i) => {
+          const [ax, ay] = pts[Math.max(0, i - 1)], [bx, by] = pts[Math.min(pts.length - 1, i + 1)];
+          const dx = bx - ax, dy = by - ay, l = Math.hypot(dx, dy) || 1;
+          L.push([x - (dy / l) * w / 2, y + (dx / l) * w / 2]); R.push([x + (dy / l) * w / 2, y - (dx / l) * w / 2]);
+        });
+        return poly([...L, ...R.reverse()]);
+      };
+      const legs = [-1, 1].flatMap((k) => [
+        leg([[k * 0.1, 0.06], [k * 0.24, 0.14], [k * 0.3, 0.26]], 0.035),
+        leg([[k * 0.14, -0.06], [k * 0.3, -0.05], [k * 0.38, -0.14]], 0.035),
+        leg([[k * 0.13, -0.2], [k * 0.27, -0.3], [k * 0.3, -0.42]], 0.035),
+      ]);
+      G = {
+        base: mergeGeometries([slab(ellipse(0, -0.12, 0.25, 0.3), 0.08, -0.04), ...legs.map((l) => slab(l, 0.06, -0.02))]),
+        body: mergeGeometries([slab(ellipse(0, 0.07, 0.16, 0.1), 0.12, 0.02, 0.02), slab(ellipse(0, 0.2, 0.09, 0.06), 0.1, 0.02, 0.02),
+          ...[-1, 1].map((k) => slab(poly([[k * 0.04, 0.24], [k * 0.13, 0.31], [k * 0.07, 0.22]]), 0.06, 0.04))]),
+        dome: slab(ellipse(0, 0.36, 0.085, 0.085), 0.05, 0.06, 0.02),
+        ring: mergeGeometries([-1, 1].map((k) => slab(ellipse(k * 0.085, -0.18, 0.105, 0.23, k * 0.08), 0.06, 0.06, 0.025))),
+      };
     } else if (key === "cat") {
       // a kitten's head: round, two ears, a pale muzzle (dome) and the face (the band's part, dark: eyes, nose and
       // whiskers). Flat it would be seen almost edge-on, so it sits up, tilted toward the player, its chin on the neck.
@@ -1115,7 +1273,7 @@ export function createRenderer(canvas) {
       if (Gm.halo) mix(sk.halo[i], i, Gm.halo);
     }
     sk.ringLane = Gm.ring.lane != null; sk.haloSize = Gm.halo ? Gm.halo.size : 0; sk.twinkle = !!Gm.halo?.twinkle;
-    sk.wig = Gm.shape === "titi";
+    sk.wig = Gm.shape === "titi" || Gm.shape === "scarab"; // their bands move on the beat (moustaches, wing cases)
     sk.pet = PETS[ids.pet] || null;
     const fin = (m, p, glow) => {
       m.metalness = p.metal; m.roughness = p.rough;
@@ -1131,7 +1289,7 @@ export function createRenderer(canvas) {
     // hit flames: today's fire, or white fire in a colour (per lane, or going round the colour wheel)
     const form = F.form || "fire";
     sk.form = FLAME_FORMS[form];
-    const own = form === "campfire" || form === "embers" || form === "antimagic"; // drawn in their own colours
+    const own = form === "campfire" || form === "embers" || form === "antimagic" || form === "pyramid"; // drawn in their own colours
     if (own) { sk.fire = formFrames[form] || (formFrames[form] = flameFrames(form)); sk.flame.forEach((c) => c.copy(WHITE)); }
     else if (F.tint == null && !F.lane && !F.rainbow) { sk.fire = fire; sk.flame.forEach((c) => c.copy(WHITE)); }
     else {

@@ -1229,6 +1229,10 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
   box-shadow: inset 0 0 0 1px #8a5a1a, 0 0 9px rgba(255,150,40,.3); -webkit-box-decoration-break: clone; box-decoration-break: clone;
   animation: nmMarquee 1.1s linear infinite; }
 @keyframes nmMarquee { to { background-position: .36em 0, -.36em 100%, 0 0; } }
+/* bestia (the Iron Maiden event): blood-red metal letters, dark-edged, the Beast's number after the name */
+.nm-bestia { background: linear-gradient(180deg, #ffb0a0 0%, #e8201a 38%, #6a0606 55%, #c8141c 78%, #3a0202 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  -webkit-text-stroke: .5px #1a0000; filter: drop-shadow(0 0 6px rgba(255,20,10,.5)); letter-spacing: .03em; }
+.nm-bestia::after { content: "666"; margin-left: .25em; font-size: .52em; vertical-align: .9em; letter-spacing: .05em; -webkit-text-stroke: 0; }
 .nm-estrella { color: #fff6d0; text-shadow: 0 0 8px rgba(255,214,90,.7), 0 0 18px rgba(255,170,40,.45); }
 .nm-estrella::before { content: "★"; margin-right: .25em; color: #ffd23a; text-shadow: 0 0 8px #ffb020; animation: nmTwinkle 1.6s ease-in-out infinite; display: inline-block; }
 @keyframes nmTwinkle { 50% { transform: scale(.8) rotate(20deg); opacity: .7; } }
@@ -1513,6 +1517,27 @@ body.fx-quake #stage { animation: quake .11s linear infinite; }
 .ok-gift.won .sw { position: absolute; inset: 2px; height: auto; border-radius: 4px; transform: scale(1); }
 .ok-gift.won .sw > * { transform: scale(.55); }
 .ok-gift.won small { color: #ffd23a; }
+/* the Iron Maiden event's card: dark iron, blood red, the Beast's mark */
+.beast-card { position: relative; padding-right: 74px; background: radial-gradient(ellipse at 10% 0, rgba(200,20,20,.22), transparent 60%), linear-gradient(180deg, #1c1414, #0c0808);
+  box-shadow: inset 0 0 0 1px #5a1414, 0 0 16px rgba(180,10,10,.15); }
+.beast-card .ok-head b { color: #ff3b2f; font-family: var(--rock); letter-spacing: .06em; text-shadow: 0 0 10px rgba(255,40,30,.45); }
+.beast-card .ok-count { color: #ff5a3a; } .beast-card .ok-count i { font-style: normal; font-size: .7em; margin-left: 2px; }
+.bk-mark { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; font: 700 13px var(--display); color: #ffd9d0;
+  background: radial-gradient(circle at 50% 40%, #8a0f0f, #2a0404); box-shadow: 0 0 0 2px #000, 0 0 12px rgba(255,30,20,.5); letter-spacing: .02em; }
+.beast-card .ok-bar { box-shadow: inset 0 0 0 1px #4a1010; }
+.beast-card .ok-bar > i { background: linear-gradient(90deg, #5a0606, #ff3b2f); box-shadow: 0 0 10px rgba(255,40,30,.5); }
+.beast-card .ok-gift svg { fill: #a04a3a; } .beast-card .ok-gift em { color: #ff6a4a; }
+.beast-card .ok-gift.won { box-shadow: 0 0 0 2px #000, 0 0 12px rgba(255,40,30,.6), inset 0 0 0 1px #ff3b2f; }
+.beast-card .ok-gift.won small { color: #ff6a4a; }
+.bk-secret { position: absolute; right: 12px; top: 50%; width: 46px; height: 46px; margin-top: -30px; padding: 0; border: 0; border-radius: 6px; display: grid; place-items: center;
+  background: #0b0606; box-shadow: 0 0 0 2px #000, inset 0 0 0 1px #6a1a1a; }
+.bk-secret svg { width: 26px; height: 26px; fill: #a04a3a; }
+.bk-secret em { position: absolute; font: 700 17px var(--display); font-style: normal; color: #ff6a4a; text-shadow: 0 1px 0 #000; }
+.bk-secret small { position: absolute; top: 100%; margin-top: 5px; font: 700 11px var(--display); color: var(--muted); white-space: nowrap; }
+.bk-secret.won { cursor: pointer; box-shadow: 0 0 0 2px #000, 0 0 14px rgba(255,40,30,.6), inset 0 0 0 1px #ff3b2f; }
+.bk-secret.won .sw { position: absolute; inset: 2px; height: auto; border-radius: 4px; }
+.bk-secret.won .sw > * { transform: scale(.55); }
+.bk-secret.won .sw > .member { width: 100%; height: 100%; transform: none; }
 /* the One Direction event's card: its songs with their best stars, and the surprise gift */
 .oned-card { position: relative; margin: 0 0 12px; padding: 12px 64px 12px 14px; border: 1px solid #000; border-radius: 3px;
   background: linear-gradient(135deg, rgba(40,52,84,.92), rgba(16,16,24,.95)); box-shadow: inset 0 0 0 1px #34456e, 0 0 18px rgba(90,140,255,.12); }
@@ -1542,6 +1567,18 @@ body.fx-quake #stage { animation: quake .11s linear infinite; }
 .sw-gems.g-titi i { aspect-ratio: .8; border-radius: 0; background: none; box-shadow: none; }
 .sw-gems.g-titi svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 2px 0 #000); }
 .sw-flames.fa-antimagic svg { fill: #120608; filter: drop-shadow(0 0 2px #ff2a3a) drop-shadow(0 0 7px rgba(255,30,50,.7)); }
+.sw-flames.fa-pyramid svg { width: 26%; fill: #ffb020; filter: drop-shadow(0 0 3px #ffd76a) drop-shadow(0 0 9px rgba(255,140,30,.7)); }
+.sw-gems.g-scarab i { aspect-ratio: .8; border-radius: 0; background: none; box-shadow: none; }
+.sw-gems.g-scarab svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 2px 0 #000); }
+/* The Trooper's crowd: battle flags held up */
+.cw-banderas b i, .cw-banderas b:nth-child(2n+1) i { display: block; }
+.cw-banderas i { bottom: 118%; width: 2px; height: 34px; background: #d8cfa8; transform-origin: bottom; transform: rotate(-10deg); }
+.cw-banderas i::after { content: ""; position: absolute; left: 2px; top: 0; width: 22px; height: 15px;
+  background: linear-gradient(#c8141c, #c8141c) 50% 50% / 100% 3px no-repeat, linear-gradient(#c8141c, #c8141c) 50% 50% / 3px 100% no-repeat,
+    linear-gradient(#f4f2ea, #f4f2ea) 50% 50% / 100% 6px no-repeat, linear-gradient(#f4f2ea, #f4f2ea) 50% 50% / 6px 100% no-repeat, #1a2a7a; }
+.cw-banderas b:nth-child(2n) i { transform: rotate(12deg); }
+/* in The Trooper's red coats, the white crossbelts over their backs */
+.cw-banderas b { background: linear-gradient(35deg, transparent 44%, #e8e2d4 44% 54%, transparent 54%), linear-gradient(-35deg, transparent 44%, #e8e2d4 44% 54%, transparent 54%), #7a0a10; }
 .sw-pet { background: radial-gradient(ellipse 70% 60% at 50% 100%, rgba(120,140,220,.12), transparent 70%), linear-gradient(180deg, #16141c, #0c0b10); }
 .sw-pet .nero { height: 88%; filter: drop-shadow(0 3px 0 rgba(0,0,0,.6)); }
 .sw-pet .member { height: 92%; filter: drop-shadow(0 3px 0 rgba(0,0,0,.6)); }
