@@ -163,7 +163,7 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
 
 /* library */
 .songs { display: flex; flex-direction: column; gap: 2px; max-height: min(52vh, 460px); overflow-y: auto; margin: 0 -6px; padding: 0 6px; }
-.song { display: grid; grid-template-columns: 54px 1fr auto; gap: 14px; align-items: center; background: none; border: 0; border-left: 4px solid transparent; padding: 8px 10px; text-align: left; transition: background .1s, border-color .1s; }
+.song { display: grid; grid-template-columns: 54px 1fr auto auto; gap: 14px; align-items: center; background: none; border: 0; border-left: 4px solid transparent; padding: 8px 10px; text-align: left; transition: background .1s, border-color .1s; }
 .song:hover, .song:focus-visible { background: linear-gradient(90deg, rgba(196,22,28,.35), rgba(196,22,28,0)); border-left-color: var(--fire); outline: none; }
 .song .cov { position: relative; width: 54px; height: 54px; }
 .song-play { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.35); opacity: .85; transition: opacity .15s, background .15s; cursor: pointer; }
@@ -1476,6 +1476,15 @@ body.fx-quake #stage { animation: quake .11s linear infinite; }
 .banana-res .btn svg { width: 18px; height: 18px; fill: currentColor; filter: none; }
 .banana-res .btn[hidden] { display: none; }
 .lib-tabs button.otaku { text-transform: none; letter-spacing: .03em; }
+/* favourites: the ♥ on each song and its tab */
+.song-fav { display: grid; place-items: center; width: 36px; height: 36px; margin-right: -6px; border-radius: 50%; cursor: pointer; }
+.song-fav svg { width: 20px; height: 20px; fill: none; stroke: var(--muted); stroke-width: 2; transition: fill .15s, stroke .15s, transform .15s; }
+.song-fav:hover svg, .song-fav:focus-visible svg { stroke: #ff5a7a; }
+.song-fav.on svg { fill: #ff3d68; stroke: #ff3d68; filter: drop-shadow(0 0 6px rgba(255,61,104,.5)); }
+.song-fav:active svg { transform: scale(1.25); }
+.lib-tabs button.fav svg { width: 16px; height: 16px; fill: #ff3d68; }
+.lib-tabs button.fav[aria-pressed="true"] { background: linear-gradient(180deg, #ff3d68, #8a0f2c); }
+.lib-tabs button.fav[aria-pressed="true"] svg { fill: #fff; }
 .lib-tabs button.otaku[aria-pressed="true"] { background: linear-gradient(180deg, #ffd23a, #a8660a); color: #1a1004; text-shadow: none; }
 .lib-tabs button.otaku svg { fill: #ffd23a; }
 .lib-tabs button.otaku[aria-pressed="true"] svg { fill: #1a1004; }

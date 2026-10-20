@@ -430,8 +430,12 @@ function saveSecrets(list) { try { localStorage.setItem(SECRETS_KEY, JSON.string
 const secretGroups = () => secretList().filter((x) => x.id > 0);
 const codeOfGroup = (id) => secretList().find((x) => x.id === id)?.code || "";
 const publicSongs = () => app.songs.filter((s) => !s.secret);
-const inTab = (s, tab = app.libTab) => (tab === "all" ? !s.secret : s.secret === tab);
-app.libTab = "all"; // "all" | a group's id
+// favourite songs (the ♥ on each song, the "Favoritas" tab): kept in this browser
+const FAV_KEY = "corde.favs.v1";
+const favs = new Set((() => { try { const v = JSON.parse(localStorage.getItem(FAV_KEY) || "[]"); return Array.isArray(v) ? v.filter((x) => typeof x === "string") : []; } catch { return []; } })());
+function toggleFav(id) { favs.has(id) ? favs.delete(id) : favs.add(id); try { localStorage.setItem(FAV_KEY, JSON.stringify([...favs])); } catch {} }
+const inTab = (s, tab = app.libTab) => (tab === "all" ? !s.secret : tab === "fav" ? favs.has(s.id) : s.secret === tab);
+app.libTab = "all"; // "all" | "fav" | a group's id
 // The library: the public songs, plus each group this browser has the code of
 async function loadLibrary() {
   const keys = secretList();
@@ -451,7 +455,7 @@ async function loadLibrary() {
   });
   let v1 = false; try { v1 = !!localStorage.getItem(SECRET_KEY); } catch {}
   if (v1 || JSON.stringify(next) !== JSON.stringify(keys)) saveSecrets(next);
-  if (app.libTab !== "all" && !next.some((x) => x.id === app.libTab)) app.libTab = "all";
+  if (app.libTab !== "all" && app.libTab !== "fav" && !next.some((x) => x.id === app.libTab)) app.libTab = "all";
   return out;
 }
 // the player hid a group again
@@ -509,7 +513,7 @@ $("secretForm").onsubmit = async (e) => {
 $("libTabs").onclick = (e) => {
   const b = e.target.closest("button[data-t]");
   if (!b) return;
-  const t = b.dataset.t === "all" ? "all" : Number(b.dataset.t);
+  const t = b.dataset.t === "all" || b.dataset.t === "fav" ? b.dataset.t : Number(b.dataset.t);
   if (t === app.libTab) return;
   app.libTab = t; renderSongs(); $("songList").scrollTop = 0;
 };
@@ -560,15 +564,15 @@ function renderSongs() {
   if (!online) { box.innerHTML = `<p class="empty">La biblioteca en línea aparece cuando el juego está conectado a Supabase.<br>Mientras tanto puedes tocar canciones desde tu dispositivo.</p>`; return; }
   // each secret group gets its own tab once this browser knows its code
   const groups = secretGroups();
-  if (!groups.some((x) => x.id === app.libTab)) app.libTab = "all";
-  const secretTab = app.libTab !== "all";
+  if (app.libTab !== "fav" && !groups.some((x) => x.id === app.libTab)) app.libTab = "all";
+  const secretTab = app.libTab !== "all" && app.libTab !== "fav";
   // the kittens' group (it has the miau songs): a cat face instead of the pick, and its own colour
   const catGroup = (id) => app.songs.some((s) => s.secret === id && s.miau);
   const tabs = $("libTabs");
-  tabs.hidden = !groups.length;
+  tabs.hidden = false;
   const otaku = otakuGroup();
-  tabs.innerHTML = `<button data-t="all">Biblioteca</button>` + groups.map((g) => `<button data-t="${g.id}"${catGroup(g.id) ? ` class="cat"` : g.id === otaku ? ` class="otaku"` : ""}><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#${catGroup(g.id) ? "catface" : g.id === otaku ? "banana" : "pick"}"/></svg><span></span></button>`).join("");
-  groups.forEach((g, i) => (tabs.querySelectorAll("span")[i].textContent = g.name));
+  tabs.innerHTML = `<button data-t="all">Biblioteca</button><button data-t="fav" class="fav"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#heart"/></svg><span>Favoritas</span></button>` + groups.map((g) => `<button data-t="${g.id}"${catGroup(g.id) ? ` class="cat"` : g.id === otaku ? ` class="otaku"` : ""}><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#${catGroup(g.id) ? "catface" : g.id === otaku ? "banana" : "pick"}"/></svg><span></span></button>`).join("");
+  groups.forEach((g, i) => (tabs.querySelectorAll("span")[i + 1].textContent = g.name));
   tabs.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.t === String(app.libTab))));
   $("secretLock").hidden = !secretTab;
   $("s-library").classList.toggle("secret-tab", secretTab);
@@ -577,7 +581,7 @@ function renderSongs() {
   const tab = app.songs.filter((s) => inTab(s));
   const list = tab.filter((s) => !q || `${s.name} ${s.artist}`.toLowerCase().includes(q));
   if (!list.length) {
-    box.innerHTML = `<p class="empty">${tab.length ? "Nada coincide con tu búsqueda." : secretTab ? "Todavía no hay canciones secretas." : "Todavía no hay canciones en la biblioteca."}</p>`;
+    box.innerHTML = `<p class="empty">${tab.length ? "Nada coincide con tu búsqueda." : app.libTab === "fav" ? "Toca el ♥ de una canción para guardarla aquí y repetirla cuando quieras." : secretTab ? "Todavía no hay canciones secretas." : "Todavía no hay canciones en la biblioteca."}</p>`;
     return;
   }
   box.innerHTML = "";
@@ -600,7 +604,8 @@ function renderSongs() {
     const cov = coverOf(s);
     const best = songBest(s.id);
     b.innerHTML = `<span class="cov">${cov ? `<img loading="lazy" alt="" src="${cov}">` : `<div class="ph"></div>`}<span class="song-play" role="button" tabindex="0" aria-label="Escuchar"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="pl" d="M8 5.5v13l11-6.5z"/><path class="st" d="M7 7h10v10H7z"/></svg></span></span><span><span class="t"></span><span class="a"></span></span>`
-      + `<span class="len">${best ? `<span class="best" title="Tu mejor: ${best.diff.name}">${starsHtml(best.stars)}<small>${best.diff.name}</small></span>` : ""}${fmtLen(s.duration_ms)}</span>`;
+      + `<span class="len">${best ? `<span class="best" title="Tu mejor: ${best.diff.name}">${starsHtml(best.stars)}<small>${best.diff.name}</small></span>` : ""}${fmtLen(s.duration_ms)}</span>`
+      + `<span class="song-fav${favs.has(s.id) ? " on" : ""}" role="button" tabindex="0"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#heart"/></svg></span>`;
     b.querySelector(".t").textContent = s.name;
     b.querySelector(".a").textContent = s.artist || "";
     b.onclick = () => pickLibrarySong(s);
@@ -608,6 +613,13 @@ function renderSongs() {
     pl.dataset.id = s.id;
     pl.onclick = (e) => { e.stopPropagation(); previewSong(s); };
     pl.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); previewSong(s); } };
+    // ♥: a favourite (in the "Favoritas" tab); taking it away there takes it off the list
+    const fv = b.querySelector(".song-fav");
+    const favLabel = () => { fv.classList.toggle("on", favs.has(s.id)); fv.setAttribute("aria-pressed", String(favs.has(s.id))); fv.setAttribute("aria-label", favs.has(s.id) ? "Quitar de favoritas" : "Agregar a favoritas"); };
+    favLabel();
+    const fav = (e) => { e.preventDefault(); e.stopPropagation(); toggleFav(s.id); if (app.libTab === "fav") renderSongs(); else favLabel(); };
+    fv.onclick = fav;
+    fv.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") fav(e); };
     box.appendChild(b);
   }
 }
