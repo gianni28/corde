@@ -23,6 +23,11 @@ export const forBand = (band, ids, stars) => (ids.length >= band.songs && ids.ev
 export const MAIDEN = /iron\s*maiden/i;
 export const BEAST_GIFTS = [15, 30, 50, 75, 100];
 export const BEAST_LOGROS = ["bestia-powerslave", "bestia-trooper", "bestia-piramide", "bestia-fear", "bestia-nombre"];
+// and its albums: a gift for 4 stars (Media or harder) on each of an album's songs (main.js maidenKey names them)
+export const BEAST_ALBUMS = [
+  { id: "bestia-somewhere", name: "Somewhere in Time", songs: ["caught somewhere in time", "wasted years", "alexander the great"] },
+  { id: "bestia-seventh", name: "Seventh Son", songs: ["seventh son of a seventh son", "infinite dreams", "can i play with madness"] },
+];
 export const EDDIE_STARS = 4, EDDIE_SONGS = 20; // Eddie: at least this many stars on this many Iron Maiden songs, any difficulty
 export const forBeast = (n) => BEAST_LOGROS.filter((_, i) => n >= BEAST_GIFTS[i]);
 
@@ -67,6 +72,8 @@ export const ACHIEVEMENTS = [
   { id: "bestia-piramide", name: "Pirámide", desc: `Junta ${BEAST_GIFTS[2]} estrellas de la Bestia en las canciones de Iron Maiden.`, secret: true, surprise: true },
   { id: "bestia-fear", name: "Fear of the Dark", desc: `Junta ${BEAST_GIFTS[3]} estrellas de la Bestia en las canciones de Iron Maiden.`, secret: true, surprise: true },
   { id: "bestia-nombre", name: "El número de la Bestia", desc: `Junta ${BEAST_GIFTS[4]} estrellas de la Bestia en las canciones de Iron Maiden.`, secret: true, surprise: true },
+  { id: "bestia-somewhere", name: "Somewhere in Time", desc: "Saca 4 estrellas o más en Caught Somewhere in Time, Wasted Years y Alexander the Great, en Media o más difícil.", secret: true, surprise: true },
+  { id: "bestia-seventh", name: "Seventh Son", desc: "Saca 4 estrellas o más en Seventh Son of a Seventh Son, Infinite Dreams y Can I Play With Madness, en Media o más difícil.", secret: true, surprise: true },
   { id: "bestia-eddie", name: "Killers", desc: `Saca ${EDDIE_STARS} estrellas o más en ${EDDIE_SONGS} canciones de Iron Maiden, en cualquier dificultad.`, secret: true, surprise: true },
   { id: "bts", name: "ARMY", desc: "Saca 4 estrellas o más en las 6 canciones de BTS, en Media o más difícil.", secret: true, surprise: true },
 ];

@@ -8,3 +8,9 @@ insert into public.shop_items (slot, id, price, req, sort) values
   ('name', 'bestia', 0, 'bestia-nombre', 50),
   ('pet', 'eddie', 0, 'bestia-eddie', 50)
 on conflict (slot, id) do update set price = excluded.price, req = excluded.req, sort = excluded.sort, active = true;
+
+-- its albums' gifts: 4 stars (Media or harder) on each song of Somewhere in Time and of the Seventh Son years
+insert into public.shop_items (slot, id, price, req, sort) values
+  ('gems', 'somewhere-in-time', 0, 'bestia-somewhere', 50),
+  ('flames', 'seventh-son', 0, 'bestia-seventh', 50)
+on conflict (slot, id) do update set price = excluded.price, req = excluded.req, sort = excluded.sort, active = true;

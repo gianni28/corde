@@ -12,7 +12,7 @@ import { motionAvailable, motionNeedsPermission, motionReady, requestMotion, onL
 import { settings, save, resetKeys, deviceLanes, isTouchDevice, keyLabel } from "./settings.js";
 import { accountMe, accountClaim, accountLink, accountSync, shopBuy, shopEquip, nameStyles, songRequest, myNotices, noticeSeen, noticeReply, myFulfilled, fulfilledSeen } from "./net.js";
 import { shareCard, retoUrl, readReto } from "./share.js";
-import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau, forBananas, BANANA_GIFTS, BANANA_LOGROS, BANDS, BAND_STARS, BAND_DIFF, forBand, MAIDEN, BEAST_GIFTS, BEAST_LOGROS, EDDIE_STARS, EDDIE_SONGS, forBeast } from "./achievements.js";
+import { ACHIEVEMENTS, achievementsWon, unlock, mergeAchievements, forRun, forStreak, forMiau, forBananas, BANANA_GIFTS, BANANA_LOGROS, BANDS, BAND_STARS, BAND_DIFF, forBand, MAIDEN, BEAST_GIFTS, BEAST_LOGROS, BEAST_ALBUMS, EDDIE_STARS, EDDIE_SONGS, forBeast } from "./achievements.js";
 import { online, listSongs, downloadSong, fileUrl, joinRoom, newRoomCode, adminCall, uploadSong, uploadStems, topScores, submitScore, generalBoard, dailyToday, dailyBoard, submitDaily, secretOpen, secretBoard, songById, fetchMiauProgress, roomDirectory, commentPost, myComments, myCommentReplies, commentReplySeen } from "./net.js";
 import { VENUES, TO_ENCORE, TOUR_PRIZES, TOUR_THEMES, prizesWon, savedTourDiffs, tourFor, progress as tourProgress, changes as tourChanges, nextSong as tourNextSong } from "./tour.js";
 import { findSongs, convertSong, findMp3Songs, convertMp3Song, separateExisting } from "./admin.js";
@@ -1476,7 +1476,7 @@ function celebrateAchievements(list) {
 }
 // what your saved bests already prove (players from before the logros existed get theirs without replaying), silently
 function backfillAchievements() {
-  const ids = [...forMiau(miauIds(), bestAcc), ...forBananas(bananas), ...BANDS.flatMap((b) => (bandLive(b) ? forBand(b, bandIds(b), bandStars) : [])), ...(beastLive() ? [...forBeast(beastStars()), ...(beastAll() ? ["bestia-eddie"] : [])] : [])], n = songsDone();
+  const ids = [...forMiau(miauIds(), bestAcc), ...forBananas(bananas), ...BANDS.flatMap((b) => (bandLive(b) ? forBand(b, bandIds(b), bandStars) : [])), ...(beastLive() ? [...forBeast(beastStars()), ...(beastAll() ? ["bestia-eddie"] : []), ...beastAlbums()] : [])], n = songsDone();
   // the tour's prizes for venues already cleared (before there were prizes, or on another device)
   if (publicSongs().length) for (const d of savedTourDiffs()) { const t = tourFor(d, publicSongs()); if (t) ids.push(...prizesWon(tourProgress(t, bestOf))); }
   if (n >= 1) ids.push("primer-acorde");
@@ -1892,6 +1892,7 @@ function finishGame() {
   if (app.song && MAIDEN.test(app.song.artist || "") && !sum.failed && beastLive()) {
     ids.push(...forBeast(beastStars((id) => (id === app.song.id && diffOk(app.diff) ? sum.stars : 0))));
     if (beastAll((id) => (id === app.song.id ? sum.stars : 0))) ids.push("bestia-eddie");
+    ids.push(...beastAlbums((id) => (id === app.song.id && diffOk(app.diff) ? sum.stars : 0)));
   }
   const band = bandOf(app.song);
   if (band && !sum.failed && bandLive(band)) ids.push(...forBand(band, bandIds(band), (id) => Math.max(bandStars(id), id === app.song.id && diffOk(app.diff) ? sum.stars : 0)));
@@ -2112,7 +2113,7 @@ function showNextNotice() {
     try { localStorage.setItem(BEAST_INTRO_KEY, "1"); } catch {}
     notices.go = () => { app.mode = "solo"; app.libTab = "all"; $("libSearch").value = "Iron Maiden"; openLibrary(); };
     $("noticeKicker").textContent = "Evento · La Gira de la Bestia";
-    $("noticeBody").textContent = `La Bestia sale de gira. Cada canción de Iron Maiden suma estrellas de la Bestia: tus mejores estrellas en cada una, en Media o más difícil.\n\nCon ${BEAST_GIFTS.join(", ").replace(/, (\d+)$/, " y $1")} estrellas se abren regalos sorpresa, y hay uno secreto para quien saque ${EDDIE_STARS} estrellas en ${EDDIE_SONGS} de ellas, en la dificultad que quiera. ¿Qué serán? Solo lo sabrás cuando los ganes.`;
+    $("noticeBody").textContent = `La Bestia sale de gira. Cada canción de Iron Maiden suma estrellas de la Bestia: tus mejores estrellas en cada una, en Media o más difícil.\n\nCon ${BEAST_GIFTS.join(", ").replace(/, (\d+)$/, " y $1")} estrellas se abren regalos sorpresa, hay regalos por completar algunos discos, y uno secreto para quien saque ${EDDIE_STARS} estrellas en ${EDDIE_SONGS} de ellas, en la dificultad que quiera. ¿Qué serán? Solo lo sabrás cuando los ganes.`;
     $("noticeForm").querySelector(".notice-reply").hidden = true; $("noticeGo").hidden = false; $("noticeGo").textContent = "Ir a las canciones";
     $("noticeMsg").textContent = ""; $("noticeModal").hidden = false;
     return;
@@ -2261,6 +2262,12 @@ const maidenKey = (s) => nameKey(s.name.replace(/\s*[([][^)\]]*[)\]]/g, " "));
 const maidenBest = (stars) => maidenSongs().reduce((m, s) => m.set(maidenKey(s), Math.max(m.get(maidenKey(s)) || 0, stars(s.id))), new Map());
 const beastLive = () => maidenSongs().length >= 3 && !!giftOf(BEAST_LOGROS[0]);
 const beastStars = (extra = () => 0) => [...maidenBest((id) => Math.max(bandStars(id), extra(id))).values()].reduce((n, x) => n + x, 0);
+// the albums' gifts: every one of an album's songs in the library, each with BAND_STARS on Media or harder
+const albumLive = (al) => { const have = new Set(maidenSongs().map(maidenKey)); return al.songs.every((k) => have.has(k)) && !!giftOf(al.id); };
+const beastAlbums = (extra = () => 0) => {
+  const best = maidenBest((id) => Math.max(bandStars(id), extra(id)));
+  return BEAST_ALBUMS.filter((al) => albumLive(al) && al.songs.every((k) => (best.get(k) || 0) >= BAND_STARS)).map((al) => al.id);
+};
 const anyStars = (id) => Math.max(0, ...Object.values(bests[id] || {}).map((x) => x?.stars || 0));
 const beastAll = (extra = () => 0) => {
   const best = [...maidenBest((id) => Math.max(anyStars(id), extra(id))).values()];
@@ -2278,7 +2285,12 @@ function beastCard() {
   const card = document.createElement("div"); card.className = "otaku-card beast-card";
   card.innerHTML = `<div class="ok-head"><span class="bk-mark" aria-hidden="true">666</span><div><b>La Gira de la Bestia</b><small></small></div><span class="ok-count">${n}<i>★</i></span></div>`
     + `<div class="ok-bar"><i style="width:${Math.min(100, (n / max) * 100)}%"></i>${marks}</div>`
-    + `<button type="button" class="bk-secret${eddie ? " won" : ""}" data-l="bestia-eddie" ${eddie ? "" : "disabled"}>${eddie ? `<span class="sw"></span>` : `<svg aria-hidden="true"><use href="#gift"/></svg><em>?</em>`}<small>${EDDIE_STARS}★ en ${EDDIE_SONGS}</small></button>`;
+    + `<button type="button" class="bk-secret${eddie ? " won" : ""}" data-l="bestia-eddie" ${eddie ? "" : "disabled"}>${eddie ? `<span class="sw"></span>` : `<svg aria-hidden="true"><use href="#gift"/></svg><em>?</em>`}<small>${EDDIE_STARS}★ en ${EDDIE_SONGS}</small></button>`
+    + (BEAST_ALBUMS.some(albumLive) ? `<div class="bk-albums">${BEAST_ALBUMS.filter(albumLive).map((al) => {
+      const got = !!won[al.id];
+      return `<button type="button" class="bk-album${got ? " won" : ""}" data-l="${al.id}" ${got ? "" : "disabled"}><span class="ic">${got ? `<span class="sw"></span>` : `<svg aria-hidden="true"><use href="#gift"/></svg><em>?</em>`}</span><span><b></b>${BAND_STARS}★ en sus ${al.songs.length}</span></button>`;
+    }).join("")}</div>` : "");
+  card.querySelectorAll(".bk-album b").forEach((b, i) => (b.textContent = BEAST_ALBUMS.filter(albumLive)[i].name));
   card.querySelector(".ok-head small").textContent = next == null ? "¡Ganaste todos los regalos de la Bestia! Están en la Tienda."
     : `Suma estrellas en las canciones de Iron Maiden (Media o más difícil). Faltan ${Math.max(0, next - n)} para el próximo regalo sorpresa. Y hay uno secreto si sacas ${EDDIE_STARS} estrellas en ${EDDIE_SONGS} de ellas.`;
   card.querySelectorAll("button.won").forEach((b) => {
@@ -2723,6 +2735,12 @@ const SCARAB_SVG = `<svg viewBox="-40 -50 80 100" aria-hidden="true"><g stroke="
   + `<ellipse cy="-36" rx="8.5" ry="8.5" style="fill:var(--c)" stroke="#ffd76a" stroke-width="1.5"/><ellipse cy="-19" rx="9" ry="6" fill="#d8a83a"/><ellipse cy="-7" rx="16" ry="10" fill="#e8b84a"/>`
   + `<path d="M0 3C-6 3-17 6-18 22S-8 46 0 46Z" style="fill:var(--c)" stroke="#000" stroke-width="1.2"/><path d="M0 3C6 3 17 6 18 22S8 46 0 46Z" style="fill:var(--c)" stroke="#000" stroke-width="1.2"/>`
   + `<path d="M-9 12q-3 10 0 22" stroke="rgba(255,255,255,.4)" stroke-width="2" fill="none"/></svg>`;
+// a pocket watch for the card (renderer.js gemShape "watch"): the bow and crown, the bezel in the lane colour, the
+// cream dial with its marks and hands
+const WATCH_SVG = `<svg viewBox="-40 -54 80 100" aria-hidden="true"><circle cy="-44" r="7" fill="none" stroke="#b08a3a" stroke-width="3.5"/><rect x="-5" y="-38" width="10" height="9" rx="2" fill="#b08a3a"/>`
+  + `<circle r="30" style="fill:var(--c)" stroke="#6a5020" stroke-width="2"/><circle r="24" fill="#f0e6cc"/>`
+  + [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((d) => `<rect x="-1.2" y="-21" width="2.4" height="${d % 90 ? 3.5 : 6}" fill="#b08a3a" transform="rotate(${d})"/>`).join("")
+  + `<path d="M0 2L-2.4 0 0-12 2.4 0z" fill="#14100c" transform="rotate(-120)"/><path d="M0 2L-1.8 0 0-19 1.8 0z" fill="#14100c" transform="rotate(30)"/><circle r="2.4" fill="#14100c"/></svg>`;
 // the card's little picture: the catalog's CSS, plus gems, flames, a name or a streak drawn with elements
 function fillSwatch(el, it) {
   el.className = `sw sw-${it.slot}`;
@@ -2730,7 +2748,7 @@ function fillSwatch(el, it) {
   if (it.slot === "gems") {
     el.classList.add("g-" + (it.shape || "round"));
     if (it.ring) el.style.setProperty("--ring", it.ring);
-    el.innerHTML = it.cols.map((c) => `<i style="--c:${c}">${it.shape === "titi" ? TITI_SVG : it.shape === "scarab" ? SCARAB_SVG : ""}</i>`).join("");
+    el.innerHTML = it.cols.map((c) => `<i style="--c:${c}">${it.shape === "titi" ? TITI_SVG : it.shape === "scarab" ? SCARAB_SVG : it.shape === "watch" ? WATCH_SVG : ""}</i>`).join("");
   } else if (it.slot === "flames") {
     el.classList.toggle("rainbow", !!it.rainbow);
     if (it.glow) el.style.setProperty("--glow", it.glow);
@@ -2739,6 +2757,7 @@ function fillSwatch(el, it) {
     const art = { bubbles: "<i></i>".repeat(7), embers: "<i></i>".repeat(8), nova: "<i></i>", stars: "<i></i>".repeat(5), curtain: "<i></i>".repeat(4),
       bolt: `<svg viewBox="0 0 40 60" aria-hidden="true"><path d="M24 2 9 33h11l-6 25 19-34H21z"/></svg>`,
       antimagic: [1, 2, 3].map(() => `<svg aria-hidden="true"><use href="#flame"/></svg>`).join(""),
+      frost: [1, 2, 3].map(() => `<svg viewBox="0 0 44 50" aria-hidden="true"><path d="M22 46 6 18l12 20L14 6l9 32L28 2l-1 36 12-24-9 26z" fill="#bfe4ff" stroke="#fff" stroke-width="1"/><path d="M22 47c-6-4-8-8-4-11 2-2 4-1 4 1 0-2 2-3 4-1 4 3 2 7-4 11z" fill="#c8101a"/><circle cx="22" cy="40" r="2.5" fill="#ffd27a"/></svg>`).join(""),
       pyramid: [1, 2, 3].map(() => `<svg viewBox="0 0 40 46" aria-hidden="true"><path d="M20 2c3 6-2 8 0 12h0L38 44H2L20 14c-2-4-3-6 0-12z"/><path d="M14 30h12M20 24v16M8 40h24" stroke="#fff6d0" stroke-width="1.6" fill="none" opacity=".9"/></svg>`).join("") }[it.art];
     if (art) { el.classList.add("fa-" + it.art); el.innerHTML = art; }
     else el.innerHTML = it.cols.map((c) => `<svg aria-hidden="true" style="--c:${c}"><use href="#flame"/></svg>`).join("") + (it.art === "campfire" ? "<em></em>".repeat(6) : "");

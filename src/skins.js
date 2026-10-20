@@ -733,6 +733,12 @@ export const GEMS = {
     lanes: LANE_HEX, shape: "scarab", body: { metal: 0.85, rough: 0.22, mix: 0.88, to: 0xd8a83a }, dome: { metal: 0.2, rough: 0.3, mix: 0.25, glow: 0.7 },
     ring: { lane: 0.08, metal: 0.55, rough: 0.18, emissive: 0x000000, ei: 0, glow: 0.2 }, base: { color: 0x4a3212, metal: 0.75, rough: 0.35 },
   },
+  // Somewhere in Time's pocket watches (the Iron Maiden event): a brass case and bow, the bezel in the lane colour, a
+  // cream dial with brass hour marks, dark hands that tick on with the beat (the "ring": renderer.js uTick)
+  "somewhere-in-time": {
+    lanes: LANE_HEX, shape: "watch", body: { metal: 0.8, rough: 0.2, mix: 0.1, to: 0xb08a3a }, dome: { metal: 0, rough: 0.45, mix: 0.9, to: 0xf0e6cc, glow: 0.3 },
+    ring: { color: 0x14100c, metal: 0.5, rough: 0.3, emissive: 0x000000, ei: 0 }, base: { color: 0xb08a3a, metal: 0.85, rough: 0.28 },
+  },
   // kittens: matte fur in the lane colour, a pale muzzle, a dark face (the "ring")
   gatitos: {
     lanes: LANE_HEX, shape: "cat", body: { metal: 0, rough: 0.6 }, dome: { metal: 0, rough: 0.55, mix: 0.82 },
@@ -760,8 +766,9 @@ export const FLAMES = {
   fogata: { form: "campfire" },
   brasas: { form: "embers" },
   supernova: { tint: 0xc77dff, k: 2.2, form: "nova" },
-  antimagia: { form: "antimagic" }, 
-  piramide: { form: "pyramid" }, // Powerslave's burning pyramid with its glyphs (the Iron Maiden event), in its own colours // black flames with red cracks: drawn in their own colours, not added up as light
+  antimagia: { form: "antimagic" }, // black flames with red cracks: drawn in their own colours, not added up as light
+  piramide: { form: "pyramid" }, // Powerslave's burning pyramid with its glyphs (the Iron Maiden event), in its own colours
+  "seventh-son": { form: "frost" }, // Seventh Son's fire and ice: shards of ice bursting up round a burning heart (the Iron Maiden event)
 };
 
 /* ================= strings, rails, edges ================= */
