@@ -142,6 +142,11 @@ function fireFrames(n = 6, pal = FIRE) {
   return frames;
 }
 
+// The notes shaped like something (tamarins, kittens, scarabs, watches) lean toward the player by SIT, raised so their
+// lower edge stays on the neck (SIT_LIFT: against the 0.95 they were first built at): flat they'd be seen edge-on, upright
+// they stood tall and hid the notes behind them and looked hit-ready too early; halfway, they read and stay low.
+const SIT = 0.5, SIT_LIFT = Math.sin(SIT) / Math.sin(0.95);
+
 // Hit flames that aren't a fire of another colour: each its own picture (flipbook frames) and its own sparks.
 // campfire/embers are drawn in their colours; the rest are white, tinted per skin (FLAMES' tint).
 // look: sprite size [w, h], growth over its life [gx, gy], life (s), anchor (sprite center y);
@@ -1059,19 +1064,20 @@ export function createRenderer(canvas) {
   // the white band (lane-coloured and glowing in some skins: white instance colours and no glow by default)
   const gemRingMat = glowInstance(new THREE.MeshStandardMaterial({ color: 0xf2eee6, metalness: 0.1, roughness: 0.25, emissive: 0xffffff, emissiveIntensity: 0.12 }), 0);
   // the tamarins' moustaches sway out on the beat (uWig: 0 for every other skin): the lower down the face a hair
-  // reaches, the more it flares out to its side and lifts (the gem leans 0.95 rad toward the player: "up" the face)
+  // reaches, the more it flares out to its side and lifts (the gem leans SIT toward the player: "up" the face)
   {
     const wig = (gemRingMat.userData.wig = { value: 0 }), tick = (gemRingMat.userData.tick = { value: 0 }), base = gemRingMat.onBeforeCompile;
     gemRingMat.onBeforeCompile = (s) => {
       base(s);
       s.uniforms.uWig = wig; s.uniforms.uTick = tick;
       s.vertexShader = "uniform float uWig, uTick;\n" + s.vertexShader.replace("#include <begin_vertex>",
-        "#include <begin_vertex>\n vec3 up = vec3(0.0, 0.813, -0.582);\n float droop = 1.0 - smoothstep(-0.5, -0.08, dot(position - vec3(0.0, 0.29, 0.04), up));\n"
+        `#include <begin_vertex>\n vec3 up = vec3(0.0, ${Math.sin(SIT).toFixed(4)}, ${(-Math.cos(SIT)).toFixed(4)}), sc = vec3(0.0, ${(0.29 * SIT_LIFT).toFixed(4)}, 0.04);\n`
+        + " float droop = 1.0 - smoothstep(-0.5, -0.08, dot(position - sc, up));\n"
         + " transformed += (vec3(sign(position.x) * 0.07, 0.0, 0.0) + up * 0.035) * uWig * droop;\n"
         // the pocket watches' hands turn about the dial's centre (uTick: the minute hand's angle; the hour hand, lower
         // on the dial, a twelfth of it); 0 for every other skin
-        + " vec3 nrm = vec3(0.0, 0.582, 0.813); float hgt = dot(position - vec3(0.0, 0.29, 0.04), nrm);\n"
-        + " float ta = uTick * (hgt < 0.072 ? 1.0 / 12.0 : 1.0); vec3 tc = vec3(0.0, 0.29, 0.04) + nrm * hgt, tv = transformed - tc;\n"
+        + ` vec3 nrm = vec3(0.0, ${Math.cos(SIT).toFixed(4)}, ${Math.sin(SIT).toFixed(4)}); float hgt = dot(position - sc, nrm);\n`
+        + " float ta = uTick * (hgt < 0.072 ? 1.0 / 12.0 : 1.0); vec3 tc = sc + nrm * hgt, tv = transformed - tc;\n"
         + " transformed = tc + tv * cos(ta) + cross(nrm, tv) * sin(ta) + nrm * dot(nrm, tv) * (1.0 - cos(ta));");
     };
     gemRingMat.customProgramCacheKey = () => "glow-wig";
@@ -1186,7 +1192,7 @@ export function createRenderer(canvas) {
       const slab = (shape, depth, y, bevel = 0) => {
         const g = new THREE.ExtrudeGeometry(shape, { depth, curveSegments: 14, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel * 0.8, bevelSegments: 3 });
         g.rotateX(-Math.PI / 2); g.translate(0, y, 0);
-        g.rotateX(0.95); g.translate(0, 0.29, 0.04); return g;
+        g.rotateX(SIT); g.translate(0, 0.29 * SIT_LIFT, 0.04); return g;
       };
       const ellipse = (x, y, rx, ry) => { const s = new THREE.Shape(); s.absellipse(x, y, rx, ry, 0, Math.PI * 2, false, 0); return s; };
       const poly = (pts) => { const s = new THREE.Shape(); pts.forEach(([x, y], i) => (i ? s.lineTo(x, y) : s.moveTo(x, y))); return s; };
@@ -1229,7 +1235,7 @@ export function createRenderer(canvas) {
       const slab = (shape, depth, y, bevel = 0) => {
         const g = new THREE.ExtrudeGeometry(shape, { depth, curveSegments: 14, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel * 0.8, bevelSegments: 3 });
         g.rotateX(-Math.PI / 2); g.translate(0, y, 0);
-        g.rotateX(0.95); g.translate(0, 0.29, 0.04); return g;
+        g.rotateX(SIT); g.translate(0, 0.29 * SIT_LIFT, 0.04); return g;
       };
       const ellipse = (x, y, rx, ry, rot = 0) => { const s = new THREE.Shape(); s.absellipse(x, y, rx, ry, 0, Math.PI * 2, false, rot); return s; };
       const poly = (pts) => { const s = new THREE.Shape(); pts.forEach(([x, y], i) => (i ? s.lineTo(x, y) : s.moveTo(x, y))); return s; };
@@ -1261,7 +1267,7 @@ export function createRenderer(canvas) {
       const slab = (shape, depth, y, bevel = 0) => {
         const g = new THREE.ExtrudeGeometry(shape, { depth, curveSegments: 24, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel * 0.8, bevelSegments: 3 });
         g.rotateX(-Math.PI / 2); g.translate(0, y, 0);
-        g.rotateX(0.95); g.translate(0, 0.29, 0.04); return g;
+        g.rotateX(SIT); g.translate(0, 0.29 * SIT_LIFT, 0.04); return g;
       };
       const disc = (r, hole = 0) => { const sh = new THREE.Shape(); sh.absarc(0, 0, r, 0, Math.PI * 2, false); if (hole) { const h = new THREE.Path(); h.absarc(0, 0, hole, 0, Math.PI * 2, true); sh.holes.push(h); } return sh; };
       const ringAt = (x, y, r, hole) => { const sh = new THREE.Shape(); sh.absarc(x, y, r, 0, Math.PI * 2, false); const h = new THREE.Path(); h.absarc(x, y, hole, 0, Math.PI * 2, true); sh.holes.push(h); return sh; };
@@ -1277,7 +1283,7 @@ export function createRenderer(canvas) {
       };
     } else if (key === "cat") {
       // a kitten's head: round, two ears, a pale muzzle (dome) and the face (the band's part, dark: eyes, nose and
-      // whiskers). Flat it would be seen almost edge-on, so it sits up, tilted toward the player, its chin on the neck.
+      // whiskers). Flat it would be seen almost edge-on, so it sits up (SIT), tilted toward the player, its chin on the neck.
       const rad = (d) => (d * Math.PI) / 180;
       const head = (r) => {
         const s = new THREE.Shape(), p = (d, k = 1) => [Math.cos(rad(d)) * r * k, Math.sin(rad(d)) * r * k * 0.9];
@@ -1296,7 +1302,7 @@ export function createRenderer(canvas) {
       const slab = (shape, depth, y, bevel = 0) => {
         const g = new THREE.ExtrudeGeometry(shape, { depth, curveSegments: 10, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel * 0.8, bevelSegments: 3 });
         g.rotateX(-Math.PI / 2); g.translate(0, y, 0);
-        g.rotateX(0.95); g.translate(0, 0.25, 0.04); return g;
+        g.rotateX(SIT); g.translate(0, 0.25 * SIT_LIFT, 0.04); return g;
       };
       const whisker = (x0, y0, x1, y1) => {
         const dx = x1 - x0, dy = y1 - y0, l = Math.hypot(dx, dy), nx = (-dy / l) * 0.009, ny = (dx / l) * 0.009;
