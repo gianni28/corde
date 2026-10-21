@@ -5,3 +5,4 @@ out
 .DS_Store
 .claude/worktrees/
 vite.config.js.timestamp-*
+.netlify

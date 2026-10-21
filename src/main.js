@@ -275,7 +275,7 @@ $("homePlay").onclick = () => setPlayModes($("playModes").hidden);
 document.querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => {
   if (b.dataset.mode) app.mode = b.dataset.mode;
   const to = b.dataset.go;
-  if (to === "library") openLibrary();
+  if (to === "library") { $("libSearch").value = ""; openLibrary(); } // from the menu: the whole library, not the last event's search
   else if (to === "settings") { renderSettings(); show("settings"); }
   else if (to === "tour") openTour();
   else if (to === "logros") { renderLogros(); show("logros"); }
@@ -581,6 +581,8 @@ function renderSongs() {
   $("s-library").classList.toggle("secret-tab", secretTab);
   $("s-library").classList.toggle("cat-tab", secretTab && catGroup(app.libTab));
   const q = $("libSearch").value.trim().toLowerCase();
+  // the dice says where it picks from: with a search, among what it finds
+  $("randomBtn").lastChild.textContent = q ? `Al azar: ${$("libSearch").value.trim()}` : "Canción al azar";
   const tab = app.songs.filter((s) => inTab(s));
   const list = tab.filter((s) => !q || `${s.name} ${s.artist}`.toLowerCase().includes(q));
   if (!list.length) {
@@ -593,7 +595,8 @@ function renderSongs() {
   // the Iron Maiden event's bar, on top of the library (or when looking for them)
   if (app.libTab === "all" && beastLive() && (!q || MAIDEN.test(q) || "iron maiden".includes(q))) box.appendChild(beastCard());
   // the One Direction event's card, on top of the tab that has its songs
-  for (const b of BANDS) if (secretTab && bandLive(b) && tab.some((s) => bandOf(s) === b)) box.appendChild(bandCard(b));
+  // (with a search, only the band it's looking for: opening an event searches for its band)
+  for (const b of BANDS) if (secretTab && bandLive(b) && tab.some((s) => bandOf(s) === b) && (!q || b.artist.test(q) || nameKey(b.name).includes(q))) box.appendChild(bandCard(b));
   // the kittens' challenge, on top of the tab that has the miau songs
   if (secretTab && tab.some((s) => s.miau)) {
     const p = miauProgress(), card = document.createElement("div");
@@ -663,8 +666,23 @@ function randomBox(btn, diffs, fromResults) {
     if (!b || app.loadingRandom) return;
     const diff = b.dataset.d;
     if (!app.songs.length) { try { app.songs = await loadLibrary(); } catch {} }
-    // from the tab you're in: a group's secret songs only from its own tab
-    const has = app.songs.filter((s) => (s.diffs?.[diff]?.n || 0) > 0 && inTab(s));
+    // from the tab you're in (a group's secret songs only from its own tab) and, with a search, from what it finds (an
+    // event's songs: "Iron Maiden"); if the search finds none with that difficulty, the whole tab
+    const q = $("libSearch").value.trim().toLowerCase();
+    const tab = app.songs.filter((s) => (s.diffs?.[diff]?.n || 0) > 0 && inTab(s));
+    const found = q ? tab.filter((s) => `${s.name} ${s.artist}`.toLowerCase().includes(q)) : [];
+    let has = found.length ? found : tab;
+    // an event that asks for stars on each of its songs (the Iron Maiden tour, a band's): the dice goes for what adds to
+    // it first: songs with no stars yet, then those still short of its 4, then any (for Iron Maiden a song and its live
+    // version count as one). Everywhere else it's truly random (the expedition's bananas come from any song).
+    const band = has.length > 1 && bandOf(has[0]);
+    const goal = has.length < 2 ? null
+      : beastLive() && has.every((s) => MAIDEN.test(s.artist || "")) ? { st: ((best) => (s) => best.get(maidenKey(s)) || 0)(maidenBest(bandStars)), need: EDDIE_STARS }
+      : band && bandLive(band) && has.every((s) => bandOf(s) === band) ? { st: (s) => bandStars(s.id), need: BAND_STARS } : null;
+    if (goal) {
+      const fresh = has.filter((s) => goal.st(s) === 0), short = has.filter((s) => goal.st(s) < goal.need);
+      has = fresh.length ? fresh : short.length ? short : has;
+    }
     const pool = has.length > 1 ? has.filter((s) => s.id !== app.lastRandomId && s.id !== app.song?.id) : has;
     if (!pool.length) return;
     const s = pool[Math.floor(Math.random() * pool.length)];
@@ -2105,7 +2123,7 @@ function showNextNotice() {
   if (n.kind === "reto") return showReto();
   if (n.kind === "otaku") {
     try { localStorage.setItem(OTAKU_INTRO_KEY, "1"); } catch {}
-    notices.go = () => { app.mode = "solo"; app.libTab = otakuGroup(); openLibrary(); };
+    notices.go = () => { app.mode = "solo"; app.libTab = otakuGroup(); $("libSearch").value = ""; openLibrary(); };
     $("noticeKicker").textContent = `Evento · ${secretList().find((g) => g.id === otakuGroup())?.name || "Expedición del Emperador"}`; // the group's name, whatever the admin calls it
     $("noticeBody").textContent = "¡Bienvenida a la Expedición del Emperador!\n\nEn las canciones de este evento, algunas notas traen una banana dorada encima. Tócalas para recogerlas: mientras más juntes, más regalos sorpresa vas abriendo. ¿Qué serán? Solo lo sabrás cuando los ganes.";
     $("noticeForm").querySelector(".notice-reply").hidden = true; $("noticeGo").hidden = false; $("noticeGo").textContent = "Ir a las canciones";
@@ -2124,7 +2142,7 @@ function showNextNotice() {
   if (n.kind === "band") {
     const band = BANDS.find((b) => b.id === n.band);
     try { localStorage.setItem(bandIntroKey(band), "1"); } catch {}
-    notices.go = () => { app.mode = "solo"; app.libTab = bandSongs(band)[0]?.secret ?? "all"; openLibrary(); };
+    notices.go = () => openBand(band);
     $("noticeKicker").textContent = `Evento · ${band.name}`;
     $("noticeBody").textContent = `¡Hay un evento en las canciones secretas!\n\n${bandRule(band)}, y te ganas un regalo sorpresa. ¿Qué será? Solo lo sabrás cuando lo ganes.`;
     $("noticeForm").querySelector(".notice-reply").hidden = true; $("noticeGo").hidden = false; $("noticeGo").textContent = "Ir a las canciones";
@@ -2224,6 +2242,8 @@ const bandRule = (b) => `Saca ${BAND_STARS} estrellas o más en cada una de las 
 // a song's best stars on the events' difficulty or harder
 const diffName = (key) => DIFFS.find((d) => d.key === key)?.name || key;
 const diffOk = (key) => DIFFS.findIndex((d) => d.key === key) >= DIFFS.findIndex((d) => d.key === BAND_DIFF);
+// a band's event opens its tab with its songs only (the search set to the band; both bands may share a code's tab)
+const openBand = (b) => { app.mode = "solo"; app.libTab = bandSongs(b)[0]?.secret ?? "all"; $("libSearch").value = b.name; openLibrary(); };
 const bandStars = (id) => Math.max(0, ...Object.entries(bests[id] || {}).filter(([d]) => diffOk(d)).map(([, x]) => x?.stars || 0));
 function bandCard(band) {
   const songs = bandSongs(band), won = !!achievementsWon()[band.id], gift = giftOf(band.id);
@@ -2288,12 +2308,12 @@ function beastCard() {
   card.innerHTML = `<div class="ok-head"><span class="bk-mark" aria-hidden="true">666</span><div><b>La Gira de la Bestia</b><small></small></div><span class="ok-count">${n}<i>★</i></span></div>`
     + `<div class="ok-bar"><i style="width:${Math.min(100, (n / max) * 100)}%"></i>${marks}</div>`
     // the other gifts, as chips under the bar: the secret one (Eddie) and the albums'
-    + `<div class="bk-albums">${[{ id: "bestia-eddie", name: "Secreto", rule: `${EDDIE_STARS}★ en ${EDDIE_SONGS} canciones` },
+    + `<div class="bk-albums">${[{ id: "bestia-eddie", name: "Secreto", rule: `${EDDIE_STARS}★ en ${EDDIE_SONGS}` },
       ...BEAST_ALBUMS.filter(albumLive).map((al) => ({ id: al.id, name: al.name, rule: `${BAND_STARS}★ en sus ${al.songs.length}` }))].map((x) => {
       const got = !!won[x.id];
       return `<button type="button" class="bk-album${got ? " won" : ""}${x.id === "bestia-eddie" ? " bk-eddie" : ""}" data-l="${x.id}" ${got ? "" : "disabled"}><span class="ic">${got ? `<span class="sw"></span>` : `<svg aria-hidden="true"><use href="#gift"/></svg><em>?</em>`}</span><span><b></b><small></small></span></button>`;
     }).join("")}</div>`;
-  const chips = [{ name: won["bestia-eddie"] ? "Eddie" : "Secreto", rule: `${EDDIE_STARS}★ en ${EDDIE_SONGS} canciones` }, ...BEAST_ALBUMS.filter(albumLive).map((al) => ({ name: al.name, rule: `${BAND_STARS}★ en sus ${al.songs.length}` }))];
+  const chips = [{ name: won["bestia-eddie"] ? "Eddie" : "Secreto", rule: `${EDDIE_STARS}★ en ${EDDIE_SONGS}` }, ...BEAST_ALBUMS.filter(albumLive).map((al) => ({ name: al.name, rule: `${BAND_STARS}★ en sus ${al.songs.length}` }))];
   card.querySelectorAll(".bk-album").forEach((b, i) => { b.querySelector("b").textContent = chips[i].name; b.querySelector("small").textContent = chips[i].rule; });
   card.querySelector(".ok-head small").textContent = next == null ? "¡Ganaste todos los regalos de estrellas!"
     : `Estrellas en Media o más · faltan ${Math.max(0, next - n)} para el próximo regalo`;
@@ -2321,13 +2341,13 @@ function renderHomeEvents() {
     for (const b of BANDS) if (bandLive(b)) {
       const songs = bandSongs(b), done = songs.filter((s) => bandStars(s.id) >= BAND_STARS).length;
       rows.push({ cls: "band", mark: b.badge, name: b.name, info: won[b.id] ? "¡Completado!" : `${done}/${songs.length} canciones con ${BAND_STARS}★`,
-        go: () => { app.mode = "solo"; app.libTab = songs[0]?.secret ?? "all"; openLibrary(); } });
+        go: () => openBand(b) });
     }
     const og = otakuGroup();
     if (og != null && app.songs.some((s) => s.secret === og)) {
       const next = BANANA_GIFTS.find((g, i) => !won[BANANA_LOGROS[i]]);
       rows.push({ cls: "otaku", mark: "🍌", name: secretList().find((g) => g.id === og)?.name || "Expedición del Emperador",
-        info: next == null ? `${bananas} bananas · todos los regalos` : `${bananas}/${next} bananas`, go: () => { app.mode = "solo"; app.libTab = og; openLibrary(); } });
+        info: next == null ? `${bananas} bananas · todos los regalos` : `${bananas}/${next} bananas`, go: () => { app.mode = "solo"; app.libTab = og; $("libSearch").value = ""; openLibrary(); } });
     }
   } catch { rows = []; } // the events' pieces not set up yet (the very first frame): nothing to show
   box.hidden = !rows.length;
