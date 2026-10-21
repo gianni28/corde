@@ -1593,6 +1593,7 @@ body.fx-quake #stage { animation: quake .11s linear infinite; }
     linear-gradient(#f4f2ea, #f4f2ea) 50% 50% / 100% 6px no-repeat, linear-gradient(#f4f2ea, #f4f2ea) 50% 50% / 6px 100% no-repeat, #1a2a7a; }
 .cw-banderas b:nth-child(2n) i { transform: rotate(12deg); }
 /* in The Trooper's red coats, the white crossbelts over their backs */
+.cw-banderas b::before { left: 16%; width: 68%; bottom: 62%; aspect-ratio: auto; height: 58%; background: radial-gradient(ellipse at 50% 25%, #c9a85a, #7a5e26 75%); border-radius: 50% 50% 18% 18% / 60% 60% 18% 18%; } /* Eddie's mane, seen from behind */
 .cw-banderas b { background: linear-gradient(35deg, transparent 44%, #e8e2d4 44% 54%, transparent 54%), linear-gradient(-35deg, transparent 44%, #e8e2d4 44% 54%, transparent 54%), #7a0a10; }
 .sw-pet { background: radial-gradient(ellipse 70% 60% at 50% 100%, rgba(120,140,220,.12), transparent 70%), linear-gradient(180deg, #16141c, #0c0b10); }
 .sw-pet .nero { height: 88%; filter: drop-shadow(0 3px 0 rgba(0,0,0,.6)); }

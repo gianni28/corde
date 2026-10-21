@@ -148,8 +148,19 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
   torso.onBeforeRender = (r) => r.clearDepth();
   const parts = { torso, head: mk(G.head, 61), hair: mk(G.hair, 61), upL: mk(G.upper, 61), foreL: mk(G.fore, 61), upR: mk(G.upper, 61), foreR: mk(G.fore, 61) };
   // with the flags (The Trooper) they wear Eddie's red coat: the same light, a red fill, the crossbelts on the torso
-  const coat = (defines) => new THREE.ShaderMaterial({ uniforms: { uRim: uni.uRim, uFill: { value: new THREE.Color(0x5a070b) } }, defines, vertexShader: CROWD_VS, fragmentShader: CROWD_FS, fog: false });
+  const coat = (defines, fill = 0x5a070b) => new THREE.ShaderMaterial({ uniforms: { uRim: uni.uRim, uFill: { value: new THREE.Color(fill) } }, defines, vertexShader: CROWD_VS, fragmentShader: CROWD_FS, fog: false });
   const coatBody = coat({ COAT: 1, BELTS: 1 }), coatArm = coat({ COAT: 1 });
+  // and Eddie's mane on every head (Killers' wild pale hair: public/models/crowd-hair.glb, a light version of the pet's),
+  // loaded the first time they wear it; until then their own hair
+  const wig = new THREE.InstancedMesh(new THREE.BufferGeometry(), coat({ COAT: 1 }, 0x5e4a20), alloc);
+  wig.instanceMatrix.setUsage(THREE.DynamicDrawUsage); wig.frustumCulled = false; wig.renderOrder = 61; wig.count = 0; wig.visible = false; layer.add(wig);
+  let wigLoad = null;
+  const loadWig = () => (wigLoad ??= import("three/examples/jsm/loaders/GLTFLoader.js").then(({ GLTFLoader }) => new GLTFLoader().loadAsync("/models/crowd-hair.glb")).then((gltf) => {
+    let geo = null; gltf.scene.traverse((o) => { if (o.isMesh && !geo) geo = o.geometry.clone(); });
+    // sized and placed on a crowd head (head: r 0.3 at y 0.55), its face to the stage (they're seen from behind)
+    geo.rotateY(Math.PI - 0.9); geo.scale(2.45, 2.6, 2.45); geo.translate(-0.014, 1.03, 0.06);
+    geo.deleteAttribute("uv"); wig.geometry.dispose(); wig.geometry = geo;
+  }).catch(() => { wigLoad = null; }));
 
   // what the crowd holds up (lighters, phones, lasers…), each in its own moments of the song (see "and when" below)
   const lightPos = new Float32Array(alloc * 3), lightCol = new Float32Array(alloc * 3);
@@ -165,7 +176,7 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
   let lightKind = "lighters", liftFor = 0;
   // the big moments: the wave that runs across the room when star power goes on (and again while it lasts), and the
   // whole crowd jumping together when the song bursts from quiet to loud (a chorus coming in)
-  let waveT = -99, starWas = false, dropT = -99, eSlow = 0.5;
+  let waveT = -99, starWas = false, dropT = -99, eSlow = 0.5, lastB = null, bps = 2;
   const STICKS = [[0.35, 1, 0.2], [1, 0.25, 0.75], [0.2, 0.85, 1], [1, 0.9, 0.15], [0.65, 0.3, 1], [1, 0.5, 0.1]];
   // who holds one up: a share of the crowd per kind (more phones than lighters, a few lasers); always: the whole song
   const HOLD = { lighters: 0.45, phones: 0.55, lasers: 0.3, sticks: 0.5, sparklers: 0.35, flags: 0.22 };
@@ -271,7 +282,8 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
       c.setRGB(b, b, b);
       for (const k in parts) { if (k === "hair") { if (p.hair) parts.hair.setColorAt(p.hairI, c); } else parts[k].setColorAt(i, c); }
     });
-    people.forEach((p, i) => { parts.head.getColorAt(i, c); cat.ears.setColorAt(i, c); cat.tail.setColorAt(i, c); });
+    people.forEach((p, i) => { parts.head.getColorAt(i, c); cat.ears.setColorAt(i, c); cat.tail.setColorAt(i, c); wig.setColorAt(i, c); });
+    if (wig.instanceColor) wig.instanceColor.needsUpdate = true;
     for (const k in parts) if (parts[k].instanceColor) parts[k].instanceColor.needsUpdate = true;
     for (const k in cat) if (cat[k].instanceColor) cat[k].instanceColor.needsUpdate = true;
     const ss = people.map((p) => p.s).sort((a, b) => a - b), med = ss[ss.length >> 1] || 1;
@@ -324,11 +336,18 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
     // strobes: the whole crowd flashes white on the beat, in the loud parts (harder the louder it is), not in the calm ones
     if (lightKind === "strobe") { const fl = Math.pow(kick(ph), 6) * (0.35 + 0.9 * lvl) * (0.1 + 0.9 * smooth(0.4, 0.65, E) * (1 - calm)); uni.uRim.value.lerp(tmpC.setRGB(2.4, 2.4, 2.6), clamp01(fl)); }
     const k = Math.min(1, dt * 8);
+    // the tempo (beats a second), for the flags: a fast song (a gallop) waves them every other beat, not every one
+    const db = bpos - (lastB ?? bpos); lastB = bpos;
+    if (dt > 0 && db >= 0 && db < 1) bps += (db / dt - bps) * Math.min(1, dt * 1.5);
+    const swingB = bps > 2.3 ? bpos / 2 : bpos;
+    // star power in a loud part: the whole crowd goes as one, everybody on the same beat
+    const sync = smooth(0.3, 0.9, star) * (1 - calm);
+    const trooper = lightKind === "flags" && wig.geometry.attributes.position;
     let li = 0;
     for (let i = 0; i < people.length; i++) {
       const p = people[i];
       const into = smooth(p.th - 0.12, p.th + 0.12, lvl);        // 0 = just watching, 1 = going wild
-      const lp = frac(ph + p.ph);
+      const lp = frac(ph + p.ph * (1 - sync));
       const beat = kick(lp);
       const jumpT = p.jumpy ? into * smooth(0.48, 0.78, lvl) * (1 - calm) : 0;
       let j = jumpT * 0.42 * high * Math.sin(Math.PI * lp);
@@ -346,6 +365,7 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
       T.makeTranslation(0, -0.05 * beat * (0.3 + into), -0.06 * beat * into); M.multiplyMatrices(P, T);
       parts.head.setMatrixAt(i, M);
       if (p.hair) parts.hair.setMatrixAt(p.hairI, M);
+      if (trooper) wig.setMatrixAt(i, M);
 
       // arms: targets by style and energy, eased so poses blend instead of popping
       const a = p.arms;
@@ -364,6 +384,17 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
         if (into < 1) { uL = 0.12 + (uL - 0.12) * into; uR = 0.12 + (uR - 0.12) * into; }
       } else if (holds && ALWAYS[lightKind]) { uR = 2.3; bR = 0.5; oR = 0.15 + Math.sin(now * 0.9 + p.sway) * 0.25; } // calm: held up, swaying
       // the wave goes by: both arms straight up, whatever they hold going up with them (a lighter keeps burning)
+      // a flag holder holds it up the whole song (no fist pumping with it): the arm follows the flag's swing
+      const flagger = lightKind === "flags" && holds;
+      if (flagger) {
+        const sw = (p.fa || 0) - p.lean;
+        uR = 2.25 + 0.25 * into + 0.2 * sync; bR = 0.3; oR = 0.12 - sw * 0.9;
+        // the flag swings from side to side on a spring (it has weight: it lags the arm and overshoots a little),
+        // wider the more into it they are; with star power, everyone together and all the way
+        const amp = 0.16 + 0.26 * into + 0.2 * sync, tgt = Math.sin((swingB + p.sway * (1 - sync)) * Math.PI) * amp + p.lean;
+        p.fv = (p.fv || 0) + ((tgt - (p.fa || 0)) * 38 - (p.fv || 0) * 8) * Math.min(dt, 0.05);
+        p.fa = (p.fa || 0) + p.fv * Math.min(dt, 0.05);
+      }
       if (wv > 0.02) { uL += (2.75 - uL) * wv; uR += (2.75 - uR) * wv; bL += (0.1 - bL) * wv; bR += (0.1 - bR) * wv; oL += (0.22 - oL) * wv; if (!light) oR += (0.22 - oR) * wv; }
       if (drop > 0.2 && !light) { uL = Math.max(uL, 2.3 * drop); uR = Math.max(uR, 2.3 * drop); } // and the fists up on the burst
       a.uL += (uL - a.uL) * k; a.uR += (uR - a.uR) * k; a.bL += (bL - a.bL) * k; a.bR += (bR - a.bR) * k; a.oL += (oL - a.oL) * k; a.oR += (oR - a.oR) * k;
@@ -397,9 +428,9 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
         } else if (lightKind === "sticks") {
           const c = STICKS[(i * 7 + 3) % STICKS.length], fl = 0.9 + 0.3 * beat; pc = [c[0] * fl, c[1] * fl, c[2] * fl]; glow = 0.7; [gr, gg, gb] = c;
         } else if (lightKind === "flags") {
-          // waved from side to side on the gallop, wider the more into it they are; the cloth flutters
-          ang = Math.sin((bpos + p.sway) * Math.PI) * (0.18 + 0.3 * into) + p.lean;
-          pw *= 0.85 + 0.15 * Math.sin(now * 9 + i * 1.7); pc = [0.95, 0.95, 0.95]; glow = 0;
+          // waved from side to side (its spring above); the cloth flutters, faster in the loud parts
+          ang = p.fa || 0;
+          pw *= 0.88 + 0.12 * Math.sin(now * (6 + 5 * lvl) + i * 1.7); pc = [0.95, 0.95, 0.95]; glow = 0;
         } else if (lightKind === "sparklers") {
           ang *= 0.4; pc = [0.35, 0.33, 0.3];
           const fl = 0.75 + 0.25 * Math.abs(Math.sin(now * 31 + i * 5.3)); glow = fl; gr = 1; gg = 0.92; gb = 0.7;
@@ -407,6 +438,7 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
         const sc = p.s;
         e.set(0, 0, ang); q.setFromEuler(e);
         v.y += L.lift * sc;
+        if (lightKind === "flags") { const d = 0.447 * pw * sc; v.x += Math.cos(ang) * d; v.y += Math.sin(ang) * d; }
         s.set(pw * sc, hh * sc, 1);
         props.setMatrixAt(li, M.compose(v, q, s)); props.setColorAt(li, tmpC.setRGB(pc[0], pc[1], pc[2]));
         // a glow where the light is: the flame, the screen, the stick, the sparkler's tip
@@ -426,6 +458,8 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
       }
     }
     for (const kk in parts) { parts[kk].instanceMatrix.needsUpdate = true; }
+    wig.visible = !!trooper; wig.count = trooper ? people.length : 0; parts.hair.visible = !trooper;
+    if (trooper) wig.instanceMatrix.needsUpdate = true;
     lgeo.setDrawRange(0, li);
     lgeo.attributes.position.needsUpdate = true; lgeo.attributes.color.needsUpdate = true;
     const shown = ALWAYS[lightKind] ? 1 : smooth(0.4, 0.75, up);
@@ -463,6 +497,7 @@ export function createCrowd(bg, camera, { max = 80, room = 1, dotTex }) {
     setLights(kind) {
       lightKind = kind || "lighters";
       const tr = lightKind === "flags";
+      if (tr) loadWig();
       parts.torso.material = tr ? coatBody : mat;
       for (const k of ["upL", "foreL", "upR", "foreR"]) parts[k].material = tr ? coatArm : mat;
       const L = LOOK[lightKind];
