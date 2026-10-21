@@ -25,8 +25,8 @@ export const BEAST_GIFTS = [15, 30, 50, 75, 100];
 export const BEAST_LOGROS = ["bestia-powerslave", "bestia-trooper", "bestia-piramide", "bestia-fear", "bestia-nombre"];
 // and its albums: a gift for 4 stars (Media or harder) on each of an album's songs (main.js maidenKey names them)
 export const BEAST_ALBUMS = [
-  { id: "bestia-somewhere", name: "Somewhere in Time", songs: ["caught somewhere in time", "wasted years", "alexander the great"] },
   { id: "bestia-seventh", name: "Seventh Son", songs: ["seventh son of a seventh son", "infinite dreams", "can i play with madness"] },
+  { id: "bestia-somewhere", name: "Somewhere in Time", songs: ["caught somewhere in time", "wasted years", "alexander the great"] },
 ];
 export const EDDIE_STARS = 4, EDDIE_SONGS = 20; // Eddie: at least this many stars on this many Iron Maiden songs, any difficulty
 export const forBeast = (n) => BEAST_LOGROS.filter((_, i) => n >= BEAST_GIFTS[i]);

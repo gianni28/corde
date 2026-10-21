@@ -1562,6 +1562,7 @@ body.fx-quake #stage { animation: quake .11s linear infinite; }
 .bk-albums { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 40px; }
 .bk-album { display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border: 0; border-radius: 6px; background: rgba(0,0,0,.35); box-shadow: inset 0 0 0 1px #4a1010;
   color: var(--muted); font: 600 12px/1.15 var(--display); text-align: left; }
+.bk-album > span:last-child { min-width: 0; }
 .bk-album b { display: block; color: #ff6a4a; font-size: 13px; letter-spacing: .03em; }
 .bk-album small { display: block; font: 600 12px var(--display); color: var(--muted); }
 .bk-album.won small { color: #ffd9d0; }
