@@ -671,7 +671,18 @@ function randomBox(btn, diffs, fromResults) {
     const q = $("libSearch").value.trim().toLowerCase();
     const tab = app.songs.filter((s) => (s.diffs?.[diff]?.n || 0) > 0 && inTab(s));
     const found = q ? tab.filter((s) => `${s.name} ${s.artist}`.toLowerCase().includes(q)) : [];
-    const has = found.length ? found : tab;
+    let has = found.length ? found : tab;
+    // an event that asks for stars on each of its songs (the Iron Maiden tour, a band's): the dice goes for what adds to
+    // it first: songs with no stars yet, then those still short of its 4, then any (for Iron Maiden a song and its live
+    // version count as one). Everywhere else it's truly random (the expedition's bananas come from any song).
+    const band = has.length > 1 && bandOf(has[0]);
+    const goal = has.length < 2 ? null
+      : beastLive() && has.every((s) => MAIDEN.test(s.artist || "")) ? { st: ((best) => (s) => best.get(maidenKey(s)) || 0)(maidenBest(bandStars)), need: EDDIE_STARS }
+      : band && bandLive(band) && has.every((s) => bandOf(s) === band) ? { st: (s) => bandStars(s.id), need: BAND_STARS } : null;
+    if (goal) {
+      const fresh = has.filter((s) => goal.st(s) === 0), short = has.filter((s) => goal.st(s) < goal.need);
+      has = fresh.length ? fresh : short.length ? short : has;
+    }
     const pool = has.length > 1 ? has.filter((s) => s.id !== app.lastRandomId && s.id !== app.song?.id) : has;
     if (!pool.length) return;
     const s = pool[Math.floor(Math.random() * pool.length)];
