@@ -1539,6 +1539,17 @@ body.fx-quake #stage { animation: quake .11s linear infinite; }
 .bk-secret.won .sw { position: absolute; inset: 2px; height: auto; border-radius: 4px; }
 .bk-secret.won .sw > * { transform: scale(.55); }
 .bk-secret.won .sw > .member { width: 100%; height: 100%; transform: none; }
+/* its albums' gifts, under the bar */
+.bk-albums { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 42px; }
+.bk-album { display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border: 0; border-radius: 6px; background: rgba(0,0,0,.35); box-shadow: inset 0 0 0 1px #4a1010;
+  color: var(--muted); font: 600 12px/1.15 var(--display); text-align: left; }
+.bk-album b { display: block; color: #ff6a4a; font-size: 13px; letter-spacing: .03em; }
+.bk-album .ic { position: relative; flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 4px; background: #120a0a; overflow: hidden; }
+.bk-album .ic svg { width: 20px; height: 20px; fill: #a04a3a; }
+.bk-album .ic em { position: absolute; font: 700 14px var(--display); font-style: normal; color: #ff6a4a; text-shadow: 0 1px 0 #000; }
+.bk-album.won { cursor: pointer; color: #ffd9d0; box-shadow: inset 0 0 0 1px #ff3b2f, 0 0 10px rgba(255,40,30,.4); }
+.bk-album.won .sw { position: absolute; inset: 0; height: auto; }
+.bk-album.won .sw > * { transform: scale(.6); }
 /* the One Direction event's card: its songs with their best stars, and the surprise gift */
 .oned-card { position: relative; margin: 0 0 12px; padding: 12px 64px 12px 14px; border: 1px solid #000; border-radius: 3px;
   background: linear-gradient(135deg, rgba(40,52,84,.92), rgba(16,16,24,.95)); box-shadow: inset 0 0 0 1px #34456e, 0 0 18px rgba(90,140,255,.12); }
@@ -1568,6 +1579,9 @@ body.fx-quake #stage { animation: quake .11s linear infinite; }
 .sw-gems.g-titi i { aspect-ratio: .8; border-radius: 0; background: none; box-shadow: none; }
 .sw-gems.g-titi svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 2px 0 #000); }
 .sw-flames.fa-antimagic svg { fill: #120608; filter: drop-shadow(0 0 2px #ff2a3a) drop-shadow(0 0 7px rgba(255,30,50,.7)); }
+.sw-gems.g-watch i { aspect-ratio: .8; border-radius: 0; background: none; box-shadow: none; }
+.sw-gems.g-watch svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 2px 0 #000); }
+.sw-flames.fa-frost svg { width: 28%; filter: drop-shadow(0 0 3px #bfe4ff) drop-shadow(0 0 8px rgba(80,160,255,.7)); }
 .sw-flames.fa-pyramid svg { width: 26%; fill: #ffb020; filter: drop-shadow(0 0 3px #ffd76a) drop-shadow(0 0 9px rgba(255,140,30,.7)); }
 .sw-gems.g-scarab i { aspect-ratio: .8; border-radius: 0; background: none; box-shadow: none; }
 .sw-gems.g-scarab svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 2px 0 #000); }

@@ -159,6 +159,8 @@ const FLAME_FORMS = {
   antimagic: { look: [1.15, 1.9, 0.2, 0.7, 0.4, 0.04], blend: "normal", spark: { vx: 2.2, vy: [1.2, 4], g: 3, life: [0.25, 0.5], n: 1.2 } },
   // pyramid (the Iron Maiden event, Powerslave): a stepped pyramid of golden fire, glyphs burning on its face
   pyramid: { look: [1.25, 1.6, 0.2, 0.55, 0.42, 0.04], spark: { vx: 1.2, vy: [2.2, 4.6], g: 4, life: [0.5, 0.9], n: 1 } },
+  // frost (the Iron Maiden event, Seventh Son): shards of ice bursting up round a burning heart; ice dust falling
+  frost: { look: [1.3, 1.7, 0.15, 0.45, 0.42, 0.04], spark: { vx: 2.2, vy: [1.5, 4.2], g: 7, life: [0.4, 0.8], n: 1.1, star: true } },
 };
 function flameFrames(form, n = 6) {
   const out = [];
@@ -307,6 +309,36 @@ function flameFrames(form, n = 6) {
         glyph(() => { g.arc(w / 2 + 26, base - 22, 6, 0, 6.3); g.moveTo(w / 2 + 16, base - 12); g.lineTo(w / 2 + 36, base - 12); }); // the sun
       }));
 
+    } else if (form === "frost") {
+      // Seventh Son of a Seventh Son: a crown of ice shards bursting up and out, white at their edges and blue in their
+      // depths, and in their midst the burning heart Eddie holds up on the cover, its fire licking up between them
+      out.push(canvasTex(160, 256, (g, w, h) => {
+        const base = h - 12, cx = w / 2;
+        const glow = g.createRadialGradient(cx, base - 30, 0, cx, base - 30, 70);
+        glow.addColorStop(0, "rgba(255,90,30,.55)"); glow.addColorStop(1, "rgba(255,40,10,0)");
+        g.fillStyle = glow; g.fillRect(0, 0, w, h);
+        // the shards: long thin blades, the middle ones tallest, fanning out
+        const shards = [[-0.62, 0.5], [-0.38, 0.72], [-0.16, 0.95], [0.05, 1], [0.24, 0.85], [0.45, 0.66], [0.66, 0.46]];
+        for (const [a0, len0] of shards) {
+          const a = a0 + rnd(-0.05, 0.05), len = (h - 40) * len0 * rnd(0.9, 1.05), bw = rnd(9, 14);
+          const tx = cx + Math.sin(a) * len, ty = base - Math.cos(a) * len, px = Math.cos(a) * bw, py = Math.sin(a) * bw;
+          const lg = g.createLinearGradient(cx, base, tx, ty);
+          lg.addColorStop(0, "rgba(60,130,255,.85)"); lg.addColorStop(0.6, "rgba(150,210,255,.75)"); lg.addColorStop(1, "rgba(240,250,255,.95)");
+          g.fillStyle = lg;
+          g.beginPath(); g.moveTo(cx - px, base + py * 0.3); g.lineTo(tx, ty); g.lineTo(cx + px, base - py * 0.3); g.closePath(); g.fill();
+          g.strokeStyle = "rgba(255,255,255,.9)"; g.lineWidth = 1.5; g.beginPath(); g.moveTo(cx - px * 0.2, base); g.lineTo(tx, ty); g.stroke(); // the bright edge
+        }
+        // the heart's fire, up between the shards
+        for (let k = 0; k < 16; k++) { const p = k / 15, y = base - 18 - p * 70, r = (1 - p) * 16 + 3; g.fillStyle = `rgba(255,${200 - p * 150},${80 - p * 70},${0.55 * (1 - p)})`; g.beginPath(); g.arc(cx + Math.sin(p * 6 + f * 1.3) * 7 * p, y, r, 0, 6.3); g.fill(); }
+        // the heart: dark red, glowing at its core
+        const hy = base - 22, hr = 13;
+        g.fillStyle = "rgba(170,10,10,.95)";
+        g.beginPath(); g.moveTo(cx, hy + hr); g.bezierCurveTo(cx - hr * 1.5, hy, cx - hr * 0.9, hy - hr * 1.1, cx, hy - hr * 0.4); g.bezierCurveTo(cx + hr * 0.9, hy - hr * 1.1, cx + hr * 1.5, hy, cx, hy + hr); g.fill();
+        const core = g.createRadialGradient(cx, hy - 2, 0, cx, hy - 2, hr);
+        core.addColorStop(0, `rgba(255,${210 + rnd(0, 40)},120,.95)`); core.addColorStop(1, "rgba(255,60,20,0)");
+        g.fillStyle = core; g.fillRect(cx - hr, hy - hr * 1.2, hr * 2, hr * 2.2);
+        for (let k = 0; k < 14; k++) glowDot(g, cx + rnd(-60, 60), rnd(20, base - 20), rnd(1.5, 3), "220,240,255", 0.9); // frost glittering
+      }));
     } else {
       // bubbles: rings with a shine, boiling up
       out.push(canvasTex(128, 256, (g, w, h) => {
@@ -1029,13 +1061,18 @@ export function createRenderer(canvas) {
   // the tamarins' moustaches sway out on the beat (uWig: 0 for every other skin): the lower down the face a hair
   // reaches, the more it flares out to its side and lifts (the gem leans 0.95 rad toward the player: "up" the face)
   {
-    const wig = (gemRingMat.userData.wig = { value: 0 }), base = gemRingMat.onBeforeCompile;
+    const wig = (gemRingMat.userData.wig = { value: 0 }), tick = (gemRingMat.userData.tick = { value: 0 }), base = gemRingMat.onBeforeCompile;
     gemRingMat.onBeforeCompile = (s) => {
       base(s);
-      s.uniforms.uWig = wig;
-      s.vertexShader = "uniform float uWig;\n" + s.vertexShader.replace("#include <begin_vertex>",
+      s.uniforms.uWig = wig; s.uniforms.uTick = tick;
+      s.vertexShader = "uniform float uWig, uTick;\n" + s.vertexShader.replace("#include <begin_vertex>",
         "#include <begin_vertex>\n vec3 up = vec3(0.0, 0.813, -0.582);\n float droop = 1.0 - smoothstep(-0.5, -0.08, dot(position - vec3(0.0, 0.29, 0.04), up));\n"
-        + " transformed += (vec3(sign(position.x) * 0.07, 0.0, 0.0) + up * 0.035) * uWig * droop;");
+        + " transformed += (vec3(sign(position.x) * 0.07, 0.0, 0.0) + up * 0.035) * uWig * droop;\n"
+        // the pocket watches' hands turn about the dial's centre (uTick: the minute hand's angle; the hour hand, lower
+        // on the dial, a twelfth of it); 0 for every other skin
+        + " vec3 nrm = vec3(0.0, 0.582, 0.813); float hgt = dot(position - vec3(0.0, 0.29, 0.04), nrm);\n"
+        + " float ta = uTick * (hgt < 0.072 ? 1.0 / 12.0 : 1.0); vec3 tc = vec3(0.0, 0.29, 0.04) + nrm * hgt, tv = transformed - tc;\n"
+        + " transformed = tc + tv * cos(ta) + cross(nrm, tv) * sin(ta) + nrm * dot(nrm, tv) * (1.0 - cos(ta));");
     };
     gemRingMat.customProgramCacheKey = () => "glow-wig";
   }
@@ -1217,6 +1254,27 @@ export function createRenderer(canvas) {
         dome: slab(ellipse(0, 0.36, 0.085, 0.085), 0.05, 0.06, 0.02),
         ring: mergeGeometries([-1, 1].map((k) => slab(ellipse(k * 0.085, -0.18, 0.105, 0.23, k * 0.08), 0.06, 0.06, 0.025))),
       };
+    } else if (key === "watch") {
+      // Somewhere in Time's pocket watch: the brass case back, its crown and bow on top and the hour marks (the base),
+      // the bezel in the lane colour (the body), the cream dial (the dome) and the hands (the ring: they tick on with
+      // the beat, renderer uTick). It sits up like the scarabs, toward the player.
+      const slab = (shape, depth, y, bevel = 0) => {
+        const g = new THREE.ExtrudeGeometry(shape, { depth, curveSegments: 24, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel * 0.8, bevelSegments: 3 });
+        g.rotateX(-Math.PI / 2); g.translate(0, y, 0);
+        g.rotateX(0.95); g.translate(0, 0.29, 0.04); return g;
+      };
+      const disc = (r, hole = 0) => { const sh = new THREE.Shape(); sh.absarc(0, 0, r, 0, Math.PI * 2, false); if (hole) { const h = new THREE.Path(); h.absarc(0, 0, hole, 0, Math.PI * 2, true); sh.holes.push(h); } return sh; };
+      const ringAt = (x, y, r, hole) => { const sh = new THREE.Shape(); sh.absarc(x, y, r, 0, Math.PI * 2, false); const h = new THREE.Path(); h.absarc(x, y, hole, 0, Math.PI * 2, true); sh.holes.push(h); return sh; };
+      const rect = (cx, cy, w, h, rot = 0) => { const sh = new THREE.Shape(), c = Math.cos(rot), sn = Math.sin(rot); [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]].forEach(([x, y], i) => { const px = cx + x * c - y * sn, py = cy + x * sn + y * c; i ? sh.lineTo(px, py) : sh.moveTo(px, py); }); return sh; };
+      const hand = (len, w, rot) => { const sh = new THREE.Shape(), c = Math.cos(rot), sn = Math.sin(rot); [[0, -0.04], [w, 0], [0, len], [-w, 0]].forEach(([x, y], i) => { const px = x * c - y * sn, py = x * sn + y * c; i ? sh.lineTo(px, py) : sh.moveTo(px, py); }); return sh; };
+      const marks = Array.from({ length: 12 }, (_, i) => { const a = (i / 12) * Math.PI * 2, big = i % 3 === 0, r = big ? 0.195 : 0.205; return rect(Math.sin(a) * r, Math.cos(a) * r, big ? 0.03 : 0.016, big ? 0.06 : 0.035, -a); });
+      G = {
+        base: mergeGeometries([slab(disc(0.3), 0.06, -0.03), slab(rect(0, 0.325, 0.07, 0.07), 0.05, -0.02), slab(ringAt(0, 0.4, 0.075, 0.045), 0.035, -0.01, 0.01),
+          ...marks.map((m) => slab(m, 0.012, 0.045))]),
+        body: slab(disc(0.31, 0.245), 0.06, 0.0, 0.015),
+        dome: slab(disc(0.25), 0.02, 0.02),
+        ring: mergeGeometries([slab(hand(0.13, 0.028, 2.1), 0.012, 0.06), slab(hand(0.2, 0.02, -0.5), 0.012, 0.075), slab(disc(0.025), 0.02, 0.06)]),
+      };
     } else if (key === "cat") {
       // a kitten's head: round, two ears, a pale muzzle (dome) and the face (the band's part, dark: eyes, nose and
       // whiskers). Flat it would be seen almost edge-on, so it sits up, tilted toward the player, its chin on the neck.
@@ -1282,6 +1340,7 @@ export function createRenderer(canvas) {
     }
     sk.ringLane = Gm.ring.lane != null; sk.haloSize = Gm.halo ? Gm.halo.size : 0; sk.twinkle = !!Gm.halo?.twinkle;
     sk.wig = Gm.shape === "titi" || Gm.shape === "scarab"; // their bands move on the beat (moustaches, wing cases)
+    sk.tick = Gm.shape === "watch"; // the watches' hands tick on with the beat
     sk.pet = PETS[ids.pet] || null;
     const fin = (m, p, glow) => {
       m.metalness = p.metal; m.roughness = p.rough;
@@ -1297,7 +1356,7 @@ export function createRenderer(canvas) {
     // hit flames: today's fire, or white fire in a colour (per lane, or going round the colour wheel)
     const form = F.form || "fire";
     sk.form = FLAME_FORMS[form];
-    const own = form === "campfire" || form === "embers" || form === "antimagic" || form === "pyramid"; // drawn in their own colours
+    const own = form === "campfire" || form === "embers" || form === "antimagic" || form === "pyramid" || form === "frost"; // drawn in their own colours
     if (own) { sk.fire = formFrames[form] || (formFrames[form] = flameFrames(form)); sk.flame.forEach((c) => c.copy(WHITE)); }
     else if (F.tint == null && !F.lane && !F.rainbow) { sk.fire = fire; sk.flame.forEach((c) => c.copy(WHITE)); }
     else {
@@ -1524,6 +1583,12 @@ export function createRenderer(canvas) {
       const zOf = (time) => -(time - t) * speed;
       strikeLight.intensity = 1.4 + pulse * 0.8;
       gemRingMat.userData.wig.value = sk.wig ? pulse * 1.1 + Math.sin(now * 3) * 0.15 : 0; // the tamarins' moustaches, on the beat
+      // the watches' minute hands: a twelfth of the dial on every beat, snapping on like a clock's (clockwise to us)
+      if (sk.tick) {
+        if (pulse > 0.75 && !h.tickArmed) { h.ticks = (h.ticks || 0) + 1; h.tickArmed = true; } else if (pulse < 0.35) h.tickArmed = false;
+        h.tickA = (h.tickA || 0) + (-(h.ticks || 0) * (Math.PI / 6) - (h.tickA || 0)) * Math.min(1, dt * 20);
+        gemRingMat.userData.tick.value = h.tickA;
+      } else gemRingMat.userData.tick.value = 0;
       // the pet: bobs on the beat, bored; asleep after a few misses in a row; flapping happy on a long streak; flying
       // above the neck with star power
       if (pet.id !== sk.pet) {
