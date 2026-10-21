@@ -247,7 +247,7 @@ function show(name, push = true) {
   SCREENS.forEach((s) => ($("s-" + s).hidden = s !== name));
   $("hud").hidden = !(app.game && ["play", "pause", "settings"].includes(name));
   if (name === "play") $("hud").hidden = false;
-  if (name === "home") { renderHomeBoard(); renderDailyCard(); renderHomeEvents(); if (online && !daily.day) loadDaily(); }
+  if (name === "home") { setPlayModes(false); renderHomeBoard(); renderDailyCard(); renderHomeEvents(); if (online && !daily.day) loadDaily(); }
   // a room: the host starts everyone's song, no tap of theirs, so the motion is settled as soon as they're in
   if (name === "lobby" && motionNeeded()) setTimeout(() => { if (app.screen === "lobby" && $("motionModal").hidden) withMotion(() => {}); }, 400);
   if (name === "library") renderSongs(); // back from a song: its stars, the bananas and the events' cards up to date
@@ -269,6 +269,9 @@ function back() {
   show(prev, false);
 }
 document.querySelectorAll("[data-back]").forEach((b) => (b.onclick = back));
+// Jugar opens its three ways to play (songs, the tour, multiplayer) right under it
+const setPlayModes = (open) => { $("playModes").hidden = !open; $("homePlay").setAttribute("aria-expanded", String(open)); $("homePlay").classList.toggle("open", open); };
+$("homePlay").onclick = () => setPlayModes($("playModes").hidden);
 document.querySelectorAll("[data-go]").forEach((b) => (b.onclick = () => {
   if (b.dataset.mode) app.mode = b.dataset.mode;
   const to = b.dataset.go;
@@ -2281,18 +2284,19 @@ function beastCard() {
     return `<button type="button" class="ok-gift${got ? " won" : ""}" style="left:${(g / max) * 100}%" data-l="${BEAST_LOGROS[i]}" ${got ? "" : "disabled"} aria-label="${got ? it?.name || "Regalo" : "Regalo sorpresa"}">`
       + (got ? `<span class="sw"></span>` : `<svg aria-hidden="true"><use href="#gift"/></svg><em>?</em>`) + `<small>${g}</small></button>`;
   }).join("");
-  const eddie = !!won["bestia-eddie"];
   const card = document.createElement("div"); card.className = "otaku-card beast-card";
   card.innerHTML = `<div class="ok-head"><span class="bk-mark" aria-hidden="true">666</span><div><b>La Gira de la Bestia</b><small></small></div><span class="ok-count">${n}<i>★</i></span></div>`
     + `<div class="ok-bar"><i style="width:${Math.min(100, (n / max) * 100)}%"></i>${marks}</div>`
-    + `<button type="button" class="bk-secret${eddie ? " won" : ""}" data-l="bestia-eddie" ${eddie ? "" : "disabled"}>${eddie ? `<span class="sw"></span>` : `<svg aria-hidden="true"><use href="#gift"/></svg><em>?</em>`}<small>${EDDIE_STARS}★ en ${EDDIE_SONGS}</small></button>`
-    + (BEAST_ALBUMS.some(albumLive) ? `<div class="bk-albums">${BEAST_ALBUMS.filter(albumLive).map((al) => {
-      const got = !!won[al.id];
-      return `<button type="button" class="bk-album${got ? " won" : ""}" data-l="${al.id}" ${got ? "" : "disabled"}><span class="ic">${got ? `<span class="sw"></span>` : `<svg aria-hidden="true"><use href="#gift"/></svg><em>?</em>`}</span><span><b></b>${BAND_STARS}★ en sus ${al.songs.length}</span></button>`;
-    }).join("")}</div>` : "");
-  card.querySelectorAll(".bk-album b").forEach((b, i) => (b.textContent = BEAST_ALBUMS.filter(albumLive)[i].name));
-  card.querySelector(".ok-head small").textContent = next == null ? "¡Ganaste todos los regalos de la Bestia! Están en la Tienda."
-    : `Suma estrellas en las canciones de Iron Maiden (Media o más difícil). Faltan ${Math.max(0, next - n)} para el próximo regalo sorpresa. Y hay uno secreto si sacas ${EDDIE_STARS} estrellas en ${EDDIE_SONGS} de ellas.`;
+    // the other gifts, as chips under the bar: the secret one (Eddie) and the albums'
+    + `<div class="bk-albums">${[{ id: "bestia-eddie", name: "Secreto", rule: `${EDDIE_STARS}★ en ${EDDIE_SONGS} canciones` },
+      ...BEAST_ALBUMS.filter(albumLive).map((al) => ({ id: al.id, name: al.name, rule: `${BAND_STARS}★ en sus ${al.songs.length}` }))].map((x) => {
+      const got = !!won[x.id];
+      return `<button type="button" class="bk-album${got ? " won" : ""}${x.id === "bestia-eddie" ? " bk-eddie" : ""}" data-l="${x.id}" ${got ? "" : "disabled"}><span class="ic">${got ? `<span class="sw"></span>` : `<svg aria-hidden="true"><use href="#gift"/></svg><em>?</em>`}</span><span><b></b><small></small></span></button>`;
+    }).join("")}</div>`;
+  const chips = [{ name: won["bestia-eddie"] ? "Eddie" : "Secreto", rule: `${EDDIE_STARS}★ en ${EDDIE_SONGS} canciones` }, ...BEAST_ALBUMS.filter(albumLive).map((al) => ({ name: al.name, rule: `${BAND_STARS}★ en sus ${al.songs.length}` }))];
+  card.querySelectorAll(".bk-album").forEach((b, i) => { b.querySelector("b").textContent = chips[i].name; b.querySelector("small").textContent = chips[i].rule; });
+  card.querySelector(".ok-head small").textContent = next == null ? "¡Ganaste todos los regalos de estrellas!"
+    : `Estrellas en Media o más · faltan ${Math.max(0, next - n)} para el próximo regalo`;
   card.querySelectorAll("button.won").forEach((b) => {
     const it = giftOf(b.dataset.l); if (!it) return;
     fillSwatch(b.querySelector(".sw"), it);
