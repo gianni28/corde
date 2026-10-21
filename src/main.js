@@ -247,7 +247,7 @@ function show(name, push = true) {
   SCREENS.forEach((s) => ($("s-" + s).hidden = s !== name));
   $("hud").hidden = !(app.game && ["play", "pause", "settings"].includes(name));
   if (name === "play") $("hud").hidden = false;
-  if (name === "home") { renderHomeBoard(); renderDailyCard(); if (online && !daily.day) loadDaily(); }
+  if (name === "home") { renderHomeBoard(); renderDailyCard(); renderHomeEvents(); if (online && !daily.day) loadDaily(); }
   // a room: the host starts everyone's song, no tap of theirs, so the motion is settled as soon as they're in
   if (name === "lobby" && motionNeeded()) setTimeout(() => { if (app.screen === "lobby" && $("motionModal").hidden) withMotion(() => {}); }, 400);
   if (name === "library") renderSongs(); // back from a song: its stars, the bananas and the events' cards up to date
@@ -360,7 +360,7 @@ renderHomeBoard();
 Promise.resolve().then(() => {
   if (!online) return;
   loadLibrary()
-    .then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); backfillAchievements(); queueMiauIntro(); queueOtakuIntro(); queueBandIntros(); queueBeastIntro(); refreshMiau(); })
+    .then((list) => { if (!app.songs.length) app.songs = list; music.setSongs(list.filter((s) => !s.secret)); syncMenuMusic(); backfillAchievements(); queueMiauIntro(); queueOtakuIntro(); queueBandIntros(); queueBeastIntro(); refreshMiau(); renderHomeEvents(); })
     .catch((e) => console.warn("library:", e.message))
     .finally(() => loadDaily());
 });
@@ -2301,6 +2301,38 @@ function beastCard() {
   return card;
 }
 const BEAST_INTRO_KEY = "corde.beast.intro.v1";
+// The events this player can play, on the home screen: each a row (its mark, its name, how far along) that opens its
+// songs. Only what they can see: the Beast's tour for everyone, a band's or the expedition only with its code.
+function renderHomeEvents() {
+  const box = $("homeEvents"), list = $("homeEventList");
+  if (!box) return;
+  let rows = [];
+  try {
+    const won = achievementsWon();
+    if (beastLive()) {
+      const n = beastStars(), next = BEAST_GIFTS.find((g, i) => !won[BEAST_LOGROS[i]]);
+      rows.push({ cls: "beast", mark: "666", name: "La Gira de la Bestia", info: next == null ? `${n}★ · todos los regalos` : `${n}★ · próximo regalo a ${next}★`,
+        go: () => { app.mode = "solo"; app.libTab = "all"; $("libSearch").value = "Iron Maiden"; openLibrary(); } });
+    }
+    for (const b of BANDS) if (bandLive(b)) {
+      const songs = bandSongs(b), done = songs.filter((s) => bandStars(s.id) >= BAND_STARS).length;
+      rows.push({ cls: "band", mark: b.badge, name: b.name, info: won[b.id] ? "¡Completado!" : `${done}/${songs.length} canciones con ${BAND_STARS}★`,
+        go: () => { app.mode = "solo"; app.libTab = songs[0]?.secret ?? "all"; openLibrary(); } });
+    }
+    const og = otakuGroup();
+    if (og != null && app.songs.some((s) => s.secret === og)) {
+      const next = BANANA_GIFTS.find((g, i) => !won[BANANA_LOGROS[i]]);
+      rows.push({ cls: "otaku", mark: "🍌", name: secretList().find((g) => g.id === og)?.name || "Expedición del Emperador",
+        info: next == null ? `${bananas} bananas · todos los regalos` : `${bananas}/${next} bananas`, go: () => { app.mode = "solo"; app.libTab = og; openLibrary(); } });
+    }
+  } catch { rows = []; } // the events' pieces not set up yet (the very first frame): nothing to show
+  box.hidden = !rows.length;
+  list.innerHTML = rows.map((r) => `<button type="button" class="ev-row ev-${r.cls}"><span class="ev-mark" aria-hidden="true"></span><span class="ev-text"><b></b><small></small></span><span class="ev-go" aria-hidden="true">›</span></button>`).join("");
+  [...list.children].forEach((el, i) => {
+    el.querySelector(".ev-mark").textContent = rows[i].mark; el.querySelector("b").textContent = rows[i].name; el.querySelector("small").textContent = rows[i].info;
+    el.onclick = rows[i].go;
+  });
+}
 function queueBeastIntro(delay = 0) {
   let seen = false; try { seen = !!localStorage.getItem(BEAST_INTRO_KEY); } catch {}
   if (seen || !beastLive() || [notices.current, ...notices.queue].some((x) => x?.kind === "beast")) return;
