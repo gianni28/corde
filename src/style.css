@@ -82,6 +82,17 @@ button { cursor: pointer; }
 .menu button { position: relative; background: none; border: 0; padding: 5px 22px 5px 18px; text-align: left; font: 700 clamp(32px, 4.6vw, 40px)/1.05 var(--display); text-transform: uppercase; letter-spacing: .03em; color: var(--ink); text-shadow: 0 2px 0 #000; isolation: isolate; transition: transform .12s, color .12s; }
 .menu button::before { content: ""; position: absolute; inset: 0; z-index: -1; transform: skewX(-14deg) scaleX(0); transform-origin: left;
   background: linear-gradient(90deg, var(--fire) 0 6px, #7a0606 6px, var(--red) 55%, rgba(196,22,28,0) 100%); box-shadow: 0 0 24px rgba(196,22,28,.45); transition: transform .14s ease-out; }
+/* Jugar's three ways to play, smaller, indented under it */
+.menu-modes[hidden] { display: none; }
+.menu-modes { display: flex; flex-direction: column; gap: 0; margin: 0 0 6px 30px; padding-left: 12px; border-left: 3px solid var(--red, #c4161c); }
+.menu .menu-modes button { font-size: clamp(22px, 3vw, 28px); padding: 3px 18px 3px 12px; color: #ffd9b8; }
+#homePlay::after { content: "▾"; display: inline-block; margin-left: 12px; font-size: .5em; vertical-align: middle; color: #ff8a3a; transition: transform .15s; }
+#homePlay.open::after { transform: rotate(180deg); }
+/* the rest, small, in one row */
+.menu-sub { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 0 18px; }
+.menu .menu-sub button { padding: 2px 0; font: 700 15px var(--display); letter-spacing: .14em; color: var(--muted); text-shadow: 0 1px 0 #000; }
+.menu .menu-sub button::before { display: none; }
+.menu .menu-sub button:hover, .menu .menu-sub button:focus-visible { color: var(--ink); transform: none; text-decoration: underline; text-underline-offset: 4px; }
 .menu button:hover, .menu button:focus-visible { color: #fff; transform: translateX(8px); outline: none; }
 .menu button:hover::before, .menu button:focus-visible::before { transform: skewX(-14deg) scaleX(1); }
 .foot { font: 500 13px/1.4 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0; max-width: 46ch; }
@@ -1536,9 +1547,9 @@ body.fx-quake #stage { animation: quake .11s linear infinite; }
 .ok-gift.won .sw > * { transform: scale(.55); }
 .ok-gift.won small { color: #ffd23a; }
 /* the Iron Maiden event's card: dark iron, blood red, the Beast's mark */
-.beast-card { position: relative; padding-right: 74px; background: radial-gradient(ellipse at 10% 0, rgba(200,20,20,.22), transparent 60%), linear-gradient(180deg, #1c1414, #0c0808);
+.beast-card { position: relative; background: radial-gradient(ellipse at 10% 0, rgba(200,20,20,.22), transparent 60%), linear-gradient(180deg, #1c1414, #0c0808);
   box-shadow: inset 0 0 0 1px #5a1414, 0 0 16px rgba(180,10,10,.15); }
-.beast-card .ok-head b { color: #ff3b2f; font-family: var(--rock); letter-spacing: .06em; text-shadow: 0 0 10px rgba(255,40,30,.45); }
+.beast-card .ok-head b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #ff3b2f; font-family: var(--rock); letter-spacing: .06em; text-shadow: 0 0 10px rgba(255,40,30,.45); }
 .beast-card .ok-count { color: #ff5a3a; } .beast-card .ok-count i { font-style: normal; font-size: .7em; margin-left: 2px; }
 .bk-mark { flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; font: 700 13px var(--display); color: #ffd9d0;
   background: radial-gradient(circle at 50% 40%, #8a0f0f, #2a0404); box-shadow: 0 0 0 2px #000, 0 0 12px rgba(255,30,20,.5); letter-spacing: .02em; }
@@ -1547,20 +1558,14 @@ body.fx-quake #stage { animation: quake .11s linear infinite; }
 .beast-card .ok-gift svg { fill: #a04a3a; } .beast-card .ok-gift em { color: #ff6a4a; }
 .beast-card .ok-gift.won { box-shadow: 0 0 0 2px #000, 0 0 12px rgba(255,40,30,.6), inset 0 0 0 1px #ff3b2f; }
 .beast-card .ok-gift.won small { color: #ff6a4a; }
-.bk-secret { position: absolute; right: 12px; top: 50%; width: 46px; height: 46px; margin-top: -30px; padding: 0; border: 0; border-radius: 6px; display: grid; place-items: center;
-  background: #0b0606; box-shadow: 0 0 0 2px #000, inset 0 0 0 1px #6a1a1a; }
-.bk-secret svg { width: 26px; height: 26px; fill: #a04a3a; }
-.bk-secret em { position: absolute; font: 700 17px var(--display); font-style: normal; color: #ff6a4a; text-shadow: 0 1px 0 #000; }
-.bk-secret small { position: absolute; top: 100%; margin-top: 5px; font: 700 11px var(--display); color: var(--muted); white-space: nowrap; }
-.bk-secret.won { cursor: pointer; box-shadow: 0 0 0 2px #000, 0 0 14px rgba(255,40,30,.6), inset 0 0 0 1px #ff3b2f; }
-.bk-secret.won .sw { position: absolute; inset: 2px; height: auto; border-radius: 4px; }
-.bk-secret.won .sw > * { transform: scale(.55); }
-.bk-secret.won .sw > .member { width: 100%; height: 100%; transform: none; }
 /* its albums' gifts, under the bar */
-.bk-albums { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 42px; }
+.bk-albums { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 40px; }
 .bk-album { display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border: 0; border-radius: 6px; background: rgba(0,0,0,.35); box-shadow: inset 0 0 0 1px #4a1010;
   color: var(--muted); font: 600 12px/1.15 var(--display); text-align: left; }
 .bk-album b { display: block; color: #ff6a4a; font-size: 13px; letter-spacing: .03em; }
+.bk-album small { display: block; font: 600 12px var(--display); color: var(--muted); }
+.bk-album.won small { color: #ffd9d0; }
+.bk-album.won .sw > .member { width: 100%; height: 100%; transform: none; }
 .bk-album .ic { position: relative; flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 4px; background: #120a0a; overflow: hidden; }
 .bk-album .ic svg { width: 20px; height: 20px; fill: #a04a3a; }
 .bk-album .ic em { position: absolute; font: 700 14px var(--display); font-style: normal; color: #ff6a4a; text-shadow: 0 1px 0 #000; }
@@ -1622,3 +1627,19 @@ body.fx-quake #stage { animation: quake .11s linear infinite; }
 .shop-back { display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .shop-back .sb-arrow { font: 700 46px/1 var(--display); color: var(--muted); }
 .sw-pet .pet-none { width: 46%; height: 6px; border-radius: 3px; background: #3a3430; box-shadow: 0 0 0 1px #000; }
+
+/* the Beast's card on a phone: everything a little smaller so the bar's gifts and their marks fit */
+@media (max-width: 520px) {
+  .beast-card { padding: 10px 10px 12px; }
+  .beast-card .ok-head b { font-size: 14px; }
+  .beast-card .ok-head small { font-size: 12px; }
+  .beast-card .ok-count { font-size: 22px; }
+  .beast-card .bk-mark { width: 32px; height: 32px; font-size: 11px; }
+  .beast-card .ok-bar { margin: 20px 18px 0 16px; }
+  .beast-card .ok-gift { width: 32px; height: 32px; margin: -16px 0 0 -16px; }
+  .beast-card .ok-gift svg { width: 20px; height: 20px; }
+  .bk-albums { margin-top: 36px; gap: 6px; }
+  .bk-album { flex: 1 1 calc(50% - 6px); min-width: 0; }
+  .bk-album b, .bk-album small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+@media (max-width: 520px) { .menu-sub { gap: 6px 12px; } .menu .menu-sub button { font-size: 14px; letter-spacing: .06em; } }

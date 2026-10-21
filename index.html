@@ -181,14 +181,19 @@
         <h1 data-text="Corde">Corde</h1>
       </div>
       <nav class="menu">
-        <button data-go="library" data-mode="solo">Jugar</button>
-        <button data-go="tour">Gira</button>
-        <button data-go="mp">Multijugador</button>
+        <button id="homePlay" aria-expanded="false" aria-controls="playModes">Jugar</button>
+        <div class="menu-modes" id="playModes" hidden>
+          <button data-go="library" data-mode="solo">Canciones</button>
+          <button data-go="tour">Gira</button>
+          <button data-go="mp">Multijugador</button>
+        </div>
         <button data-go="tienda">Tienda<span class="menu-picks" id="homePicks" hidden><svg aria-hidden="true"><use href="#pick"/></svg><b></b></span></button>
         <button data-go="logros">Logros</button>
-        <button id="openRequest">Pedir canciones</button>
-        <button data-go="comments">Comentarios</button>
-        <button data-go="settings">Ajustes</button>
+        <div class="menu-sub">
+          <button id="openRequest">Pedir canciones</button>
+          <button data-go="comments">Comentarios</button>
+          <button data-go="settings">Ajustes</button>
+        </div>
       </nav>
       <button class="daily-card" id="dailyCard" hidden>
         <span class="dc-art"><svg aria-hidden="true"><use href="#flame"/></svg><img id="dcCover" alt=""></span>
