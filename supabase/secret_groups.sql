@@ -90,9 +90,7 @@ revoke all on function public.songs_miau_flag() from public, anon, authenticated
 drop trigger if exists songs_miau_flag on public.songs;
 create trigger songs_miau_flag before insert or update on public.songs for each row execute function public.songs_miau_flag();
 
--- the kittens' songs have their own code (created 2026-10-16): "(cat's version)"
-insert into public.secret_groups (name, code_hash) values ('(cat''s version)', encode(sha256(convert_to('(cat''s version)', 'UTF8')), 'hex'))
-on conflict (code_hash) do nothing;
+-- the kittens' songs have their own group (created 2026-10-16); its code is set from the admin panel, never written here
 
 -- the kittens' challenge from the boards: this player's best accuracy on each miau song (any difficulty, any device)
 create or replace function public.miau_progress(p_name text) returns json
