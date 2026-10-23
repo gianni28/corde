@@ -3165,6 +3165,8 @@ const pointerUp = (e) => {
 function makeHud(root) {
   const q = (sel) => root.querySelector(sel);
   const ring = q(".mult-ring");
+  // the pop's class goes once it has played: left on, the hud showing again (the next song) would play it again
+  q(".star-pop").addEventListener("animationend", (e) => e.currentTarget.classList.remove("show"));
   ring.innerHTML = Array.from({ length: 10 }, (_, i) => {
     const a0 = (i / 10) * Math.PI * 2 + 0.09, a1 = ((i + 1) / 10) * Math.PI * 2 - 0.09, r = 26;
     const pt = (a) => `${32 + r * Math.cos(a)} ${32 + r * Math.sin(a)}`;

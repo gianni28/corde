@@ -17,6 +17,7 @@ language sql volatile security definer set search_path = public as $$
       where not g.hidden and g.id not in (select y.song_id from daily y where y.day > d - 30 and y.day < d + 30 and y.day <> d)
       order by (g.charter is distinct from 'Corde (automático)') desc,
                (coalesce((g.diffs -> 'easy' ->> 'n')::int, 0) > 0 and coalesce((g.diffs -> 'expert' ->> 'n')::int, 0) > 0) desc,
+               (select max(y.day) from daily y where y.song_id = g.id and y.day <> d) asc nulls first, -- never the song of the day before, or the longest ago
                random()
       limit 1),
     (select g.id from songs g where not g.hidden order by random() limit 1)); -- fewer songs than days
