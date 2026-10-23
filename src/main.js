@@ -1132,6 +1132,8 @@ async function openDaily(push = true) {
   }
   renderDaily();
   refreshDailyBoard();
+  // its chorus starts in place of the menu's random song, like a song picked in the library
+  if (online && !app.game) previewSong(dailySong(), false);
 }
 const fmtDay = (day) => new Date(day + "T12:00:00Z").toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
 // the board a run goes to: the strings really used (a 5-string run of a chart without the 5th string is a 4-string run)
