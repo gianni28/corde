@@ -2109,7 +2109,7 @@ async function checkNotices() {
   notices.asked = true;
   try {
     // the songs they asked for that are in now go first, then the admin's messages
-    const [songs, list, answers] = await Promise.all([myFulfilled(playerSecret()).catch(() => []), myNotices(playerSecret()), myCommentReplies(playerSecret()).catch(() => [])]);
+    const [songs, list, answers] = await Promise.all([myFulfilled(playerSecret(), secretList().map((k) => k.code)).catch(() => []), myNotices(playerSecret()), myCommentReplies(playerSecret()).catch(() => [])]);
     if (Array.isArray(songs)) notices.queue.push(...songs.filter((r) => r && r.id && r.song?.id).map((r) => ({ ...r, kind: "song" })));
     if (Array.isArray(answers)) notices.queue.push(...answers.filter((c) => c && c.id && c.reply).map((c) => ({ ...c, kind: "comment" })));
     if (Array.isArray(list)) notices.queue.push(...list.filter((n) => n && n.id && n.body));
@@ -4181,7 +4181,7 @@ function renderRequests(list) {
     li.innerHTML = `<span class="n"><b></b><small></small><span class="req-body"></span><small class="req-song"></small></span><span class="req-act"><button type="button"></button><button type="button">Borrar</button></span><span class="req-pick" hidden></span>`;
     li.querySelector("b").textContent = x.name; li.querySelector("small").textContent = ` · ${shortDate(x.at)}`;
     li.querySelector(".req-body").textContent = x.body;
-    if (x.done && x.song) li.querySelector(".req-song").textContent = `→ ${x.song.name}${x.song.artist ? ` · ${x.song.artist}` : ""} · ${x.announced ? "ya le salió el anuncio" : "le saldrá el anuncio al entrar"}`;
+    if (x.done && x.song) li.querySelector(".req-song").textContent = `→ ${x.song.name}${x.song.artist ? ` · ${x.song.artist}` : ""} · ${x.announced ? "ya le salió el anuncio" : x.song.hidden ? "es secreta: le saldrá el anuncio al entrar solo si tiene el código" : "le saldrá el anuncio al entrar"}`;
     const [bDone, bDel] = li.querySelectorAll(".req-act button");
     bDone.textContent = x.done ? "Pendiente" : "Hecho";
     // done: which song of the library answers it (its player gets "¡Ya está tu canción!"), or none

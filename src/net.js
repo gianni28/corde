@@ -352,7 +352,8 @@ export const noticeSeen = (secret, id) => rpcJson("notice_seen_by", { p_secret: 
 /** An answer to a notice → { ok } | { error } */
 export const noticeReply = (secret, id, body) => rpcJson("notice_reply", { p_secret: secret, p_id: id, p_body: body });
 /** This account's requests that now have their song → [{ id, body, song: { id, name, artist, has_cover } }] */
-export const myFulfilled = (secret) => rpcJson("my_fulfilled", { p_secret: secret });
+// codes: the secret codes this browser has (a request answered with a secret song is announced only with its code)
+export const myFulfilled = (secret, codes = []) => rpcJson("my_fulfilled", { p_secret: secret, p_codes: codes.slice(0, 8) });
 export const fulfilledSeen = (secret, id) => rpcJson("fulfilled_seen", { p_secret: secret, p_id: id });
 
 /* ---------------- comments to the admin, private (comments.sql, comments_private.sql) ---------------- */
