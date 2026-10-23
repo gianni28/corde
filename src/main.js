@@ -584,7 +584,7 @@ function renderSongs() {
   // the dice says where it picks from: with a search, among what it finds
   $("randomBtn").lastChild.textContent = q ? `Al azar: ${$("libSearch").value.trim()}` : "Canción al azar";
   const tab = app.songs.filter((s) => inTab(s));
-  const list = tab.filter((s) => !q || `${s.name} ${s.artist}`.toLowerCase().includes(q));
+  const list = tab.filter((s) => !q || nameKey(`${s.name} ${s.artist}`).includes(nameKey(q))); // "mago" finds Mägo de Oz
   if (!list.length) {
     box.innerHTML = `<p class="empty">${tab.length ? "Nada coincide con tu búsqueda." : app.libTab === "fav" ? "Toca el ♥ de una canción para guardarla aquí y repetirla cuando quieras." : secretTab ? "Todavía no hay canciones secretas." : "Todavía no hay canciones en la biblioteca."}</p>`;
     return;
@@ -670,7 +670,7 @@ function randomBox(btn, diffs, fromResults) {
     // event's songs: "Iron Maiden"); if the search finds none with that difficulty, the whole tab
     const q = $("libSearch").value.trim().toLowerCase();
     const tab = app.songs.filter((s) => (s.diffs?.[diff]?.n || 0) > 0 && inTab(s));
-    const found = q ? tab.filter((s) => `${s.name} ${s.artist}`.toLowerCase().includes(q)) : [];
+    const found = q ? tab.filter((s) => nameKey(`${s.name} ${s.artist}`).includes(nameKey(q))) : [];
     let has = found.length ? found : tab;
     // an event that asks for stars on each of its songs (the Iron Maiden tour, a band's): the dice goes for what adds to
     // it first: songs with no stars yet, then those still short of its 4, then any (for Iron Maiden a song and its live
@@ -4336,6 +4336,7 @@ async function loadAutoList() {
   if (!online) return;
   let lib = [];
   try { lib = await adminLibrary(); } catch { return; }
+  loadDailyPlan();
   renderSecretAdmin();
   renderSplit();
   const auto = lib.filter((x) => x.charter === AUTO_CHARTER);
@@ -4479,6 +4480,72 @@ $("splitGo").onclick = async () => {
 // the database reads a curly apostrophe (a phone's) as a straight one: the codes are saved straight
 const plainCode = (c) => c.replace(/[’‘`´]/g, "'").replace(/[“”]/g, '"');
 const groupLabel = (x) => (!x.hidden ? "Biblioteca" : adm.groups.find((g) => g.id === x.secret_group)?.name || "Escondida");
+// the song of the day's calendar (admin-upload daily_plan / daily_set): the last days and the next three weeks; any day
+// from tomorrow on can get a song chosen here (searching the library, secret songs aside) or go back to automatic
+const DP_WD = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"], DP_MO = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+async function loadDailyPlan() {
+  const code = $("adminCode").value.trim();
+  if (!code) return;
+  try { adm.daily = await adminCall({ code, action: "daily_plan" }); $("dailyStatus").textContent = ""; }
+  catch (e) { $("dailyStatus").textContent = e.message; return; }
+  renderDailyPlan();
+}
+function renderDailyPlan() {
+  const r = adm.daily, ul = $("dailyPlan");
+  ul.innerHTML = "";
+  if (!r) return;
+  const songOf = (id) => (adm.lib || app.songs).find((s) => s.id === id);
+  for (const d of r.days) {
+    const off = Math.round((Date.parse(d.day) - Date.parse(r.today)) / 86400000), dt = new Date(`${d.day}T12:00:00Z`);
+    const s = songOf(d.song_id), li = document.createElement("li");
+    li.className = off < 0 ? "dp-past" : off === 0 ? "dp-today" : "";
+    li.innerHTML = `<span class="dp-day"></span><span class="n"><span class="t"></span> <span class="a"></span></span><span class="dp-act"></span>`;
+    li.querySelector(".dp-day").textContent = off === 0 ? "Hoy" : off === 1 ? "Mañana" : `${DP_WD[dt.getUTCDay()]} ${dt.getUTCDate()} ${DP_MO[dt.getUTCMonth()]}`;
+    li.querySelector(".t").textContent = s?.name || d.song_id;
+    li.querySelector(".a").textContent = (s?.artist ? `· ${s.artist}` : "") + (d.manual ? " · elegida por ti" : "");
+    if (off >= 1) {
+      const act = li.querySelector(".dp-act");
+      act.innerHTML = `<button type="button" data-a="pick">Cambiar</button>${d.manual ? `<button type="button" data-a="auto">Automática</button>` : ""}`;
+      act.onclick = (e) => {
+        const a = e.target.closest("button")?.dataset.a;
+        if (a === "auto") setDailySong(d.day, null);
+        else if (a === "pick") dailyPicker(li, d.day);
+      };
+    }
+    ul.appendChild(li);
+  }
+}
+// under a day: a search over the library; a tap on a song makes it that day's
+function dailyPicker(li, day) {
+  if (li.nextElementSibling?.classList.contains("dp-pick")) { li.nextElementSibling.remove(); return; }
+  document.querySelectorAll("#dailyPlan .dp-pick").forEach((x) => x.remove());
+  const box = document.createElement("li"); box.className = "dp-pick";
+  box.innerHTML = `<input type="search" placeholder="Busca la canción para ese día" autocomplete="off"><div class="dp-res"></div>`;
+  li.after(box);
+  const inp = box.querySelector("input"), res = box.querySelector(".dp-res");
+  inp.oninput = () => {
+    const q = inp.value.trim().toLowerCase();
+    res.innerHTML = "";
+    if (q.length < 2) return;
+    for (const s of (adm.lib || app.songs).filter((x) => !x.hidden && nameKey(`${x.name} ${x.artist || ""}`).includes(nameKey(q))).slice(0, 8)) {
+      const b = document.createElement("button"); b.type = "button";
+      b.textContent = `${s.name}${s.artist ? ` · ${s.artist}` : ""}`;
+      b.onclick = () => setDailySong(day, s.id);
+      res.appendChild(b);
+    }
+    if (!res.children.length) res.innerHTML = `<p class="hint">Ninguna canción coincide.</p>`;
+  };
+  inp.focus();
+}
+async function setDailySong(day, songId) {
+  const code = adminCodeOr("dailyStatus"); if (!code) return;
+  $("dailyStatus").textContent = "Guardando…";
+  try {
+    await adminCall({ code, action: "daily_set", day, song_id: songId });
+    await loadDailyPlan();
+    $("dailyStatus").textContent = songId ? "Listo: esa canción será la del día." : "Listo: ese día vuelve a elegirse solo.";
+  } catch (e) { $("dailyStatus").textContent = e.message; }
+}
 function adminCodeOr(el) {
   const code = $("adminCode").value.trim();
   if (!code) $(el).textContent = "Escribe el código de administrador.";
@@ -4530,7 +4597,7 @@ function renderSecretAdmin() {
   const ul = $("secretList"); ul.innerHTML = "";
   const lib = adm.lib || [];
   const q = $("secretFind").value.trim().toLowerCase();
-  const list = q ? lib.filter((x) => `${x.name} ${x.artist || ""}`.toLowerCase().includes(q)).slice(0, 60) : lib.filter((x) => x.hidden);
+  const list = q ? lib.filter((x) => nameKey(`${x.name} ${x.artist || ""}`).includes(nameKey(q))).slice(0, 60) : lib.filter((x) => x.hidden);
   $("secretEmpty").textContent = !adm.lib ? "Escribe el código de administrador para ver la biblioteca." : list.length ? "" : q ? "Ninguna canción coincide." : "Todavía no hay canciones secretas. Búscalas aquí para moverlas a un código, o súbelas eligiendo el código.";
   for (const x of list) {
     const li = document.createElement("li");

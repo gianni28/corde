@@ -256,5 +256,39 @@ Deno.serve(async (req) => {
     return json({ ok: true });
   }
 
+  // the song of the day's calendar (daily_plan.sql): the next three weeks picked ahead; any day from tomorrow on can
+  // get the song the admin chooses (manual) or go back to an automatic pick. Today's never changes (its board).
+  const today = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 10); // Colombia: UTC−5, no summer time
+  const dayOffset = (d: string) => Math.round((Date.parse(d) - Date.parse(today)) / 86400000);
+  if (body.action === "daily_plan") {
+    const { error: fe } = await admin.rpc("daily_fill", { p_days: 21 });
+    if (fe) return json({ error: fe.message }, 500);
+    const from = new Date(Date.parse(today) - 3 * 86400000).toISOString().slice(0, 10);
+    const { data, error } = await admin.from("daily").select("day, song_id, manual").gte("day", from).order("day");
+    if (error) return json({ error: error.message }, 500);
+    return json({ today, days: data });
+  }
+  if (body.action === "daily_set") {
+    const day = typeof body.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.day) ? body.day : "";
+    const off = day ? dayOffset(day) : 0;
+    if (!day || off < 1 || off > 60) return json({ error: "Solo se puede cambiar de mañana en adelante" }, 400);
+    if (body.song_id === null) {
+      // back to automatic: a new pick for that day
+      const { error } = await admin.from("daily").delete().eq("day", day);
+      if (error) return json({ error: error.message }, 500);
+    } else {
+      if (!validId(body.song_id)) return json({ error: "Datos inválidos" }, 400);
+      const { data: song } = await admin.from("songs").select("id, hidden").eq("id", body.song_id).maybeSingle();
+      if (!song || song.hidden) return json({ error: "Esa canción no existe o es secreta" }, 400);
+      const { error } = await admin.from("daily").upsert({ day, song_id: body.song_id, manual: true });
+      if (error) return json({ error: error.message }, 500);
+      // the same song picked automatically for another upcoming day gives way to a new pick there
+      await admin.from("daily").delete().eq("song_id", body.song_id).eq("manual", false).gt("day", today);
+    }
+    const { error: fe } = await admin.rpc("daily_fill", { p_days: Math.max(21, off + 1) });
+    if (fe) return json({ error: fe.message }, 500);
+    return json({ ok: true });
+  }
+
   return json({ error: "Acción desconocida" }, 400);
 });

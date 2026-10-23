@@ -684,6 +684,24 @@ input[type=range] { width: 100%; accent-color: var(--red-hi); }
   background: linear-gradient(100deg, rgba(196,22,28,.55), rgba(40,14,10,.85) 55%, rgba(14,10,9,.9)); border: 1px solid #000; border-radius: 4px;
   box-shadow: inset 0 0 0 1px rgba(255,140,60,.35), 0 10px 30px rgba(0,0,0,.5); color: var(--ink); transition: transform .12s, filter .12s; }
 .daily-card:hover, .daily-card:focus-visible { transform: translateX(6px); filter: brightness(1.12); outline: none; }
+/* the admin's song of the day calendar */
+.daily-plan li { grid-template-columns: 72px minmax(0, 1fr) auto; }
+.daily-plan .dp-day { font: 700 13px var(--display); letter-spacing: .06em; text-transform: uppercase; color: #ffb27a; }
+.daily-plan .dp-today { box-shadow: inset 3px 0 0 #ff8a3a; }
+.daily-plan .dp-today .dp-day { color: #ffd27a; }
+.daily-plan .dp-past { opacity: .5; }
+.daily-plan .n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.daily-plan .dp-act { display: flex; gap: 6px; }
+.daily-plan li.dp-pick { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.dp-pick input { width: 100%; }
+.daily-plan .dp-res { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.daily-plan .dp-res button { width: 100%; margin: 0; text-align: left; text-transform: none; letter-spacing: 0; font: 500 14px var(--body); }
+/* a phone: the buttons go under the song, so its name has the whole width */
+@media (max-width: 520px) {
+  .daily-plan li { grid-template-columns: 64px minmax(0, 1fr); row-gap: 6px; }
+  .daily-plan .dp-act { grid-column: 2; }
+  .daily-plan .dp-act:empty { display: none; }
+}
 /* the events this player can play */
 .events-card { pointer-events: auto; display: flex; flex-direction: column; gap: 6px; width: min(380px, 100%); padding: 8px 10px 10px; color: var(--ink);
   background: linear-gradient(100deg, rgba(60,10,10,.8), rgba(14,10,9,.9)); border: 1px solid #000; border-radius: 4px; box-shadow: inset 0 0 0 1px rgba(255,80,60,.3), 0 10px 30px rgba(0,0,0,.5); }
